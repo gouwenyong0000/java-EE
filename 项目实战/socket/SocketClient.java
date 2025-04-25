@@ -1,19 +1,38 @@
 package socket;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.net.*;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import java.util.regex.Pattern;
 
+/**
+ * SocketClient 和 MessageReceiver 是一个完整的客户端通信解决方案，前者负责连接管理和消息发送，后者负责异步接收消息。
+ * 设计特点：
+ * 使用多线程技术实现异步消息接收。
+ * 提供了重连机制和心跳机制，确保连接的稳定性。
+ * 日志记录详细且灵活，便于监控和维护。
+ */
 public class SocketClient {
+
+    private static final Logger log = LoggerFactory.getLogger(SocketClient.class);
+
+    // Socket 客户端相关属性和变量
     private Socket socket;
     private OutputStream out;
     private InputStream in;
     private Thread receiveThread;
     private final AtomicBoolean running = new AtomicBoolean(false);
+
+    // host 和 port
     private final String host;
     private final int port;
+
+    // 用于存储接收到的数据
     private final ByteArrayOutputStream receivedData = new ByteArrayOutputStream();
 
     /**
@@ -37,7 +56,7 @@ public class SocketClient {
         if (client.connect()) {
             Scanner scanner = new Scanner(System.in);
             while (true) {
-                System.out.print("Enter message: ");
+                System.out.println("Enter message: ");
                 String message = scanner.nextLine();
                 if (message.equals("bye")) {
                     break;
@@ -45,6 +64,8 @@ public class SocketClient {
                 String response = client.sendMessageAndWaitForResponse(message.getBytes(), "gwy", 50000);
                 System.out.println("Received response: " + response);
             }
+        } else {
+            System.out.println("连接失败");
         }
     }
 
@@ -56,13 +77,19 @@ public class SocketClient {
     public boolean connect() {
         try {
             socket = new Socket(host, port);
-            socket.setSoTimeout(5000); // 设置超时时间为5秒
             out = socket.getOutputStream();
             in = socket.getInputStream();
             startReceiveThread();
+            log.info("Successfully connected to server at {}:{}", host, port); // 新增：记录成功连接的日志
             return true;
+        } catch (ConnectException e) {
+            log.warn("Connection refused: The server is not available or the port is incorrect. Host: {}, Port: {}", host, port); // 修改：使用 warn 级别并添加上下文信息
+            return false;
+        } catch (SocketTimeoutException e) {
+            log.error("Connection timed out: The server did not respond within the timeout period. Host: {}, Port: {}", host, port); // 修改：增强日志内容，明确超时原因
+            return false;
         } catch (IOException e) {
-            System.err.println("Connection failed: " + e.getMessage());
+            log.error("An unexpected I/O error occurred while connecting to server at {}:{}. Error: {}", host, port, e.getMessage()); // 修改：增强日志内容
             return false;
         }
     }
@@ -80,16 +107,29 @@ public class SocketClient {
      * 发送消息到服务器。
      *
      * @param message 要发送的消息字节数组
+     * @return 如果消息发送成功返回true，否则返回false
      */
-    public void sendMessage(byte[] message) {
+    public boolean sendMessage(byte[] message) {
         // 连接状态检查
         if (socket == null || !isConnected() && !reconnect()) {
-            System.err.println("Failed to connect to the server, cannot send message.");
-            return;
+            log.error("Failed to connect to the server, cannot send message. Host: {}, Port: {}", host, port);
+            return false; // 连接失败，返回false
+        }
+
+        // 检查接收线程是否存活
+        if (receiveThread == null || !receiveThread.isAlive()) {
+            log.warn("Receive thread is not alive, attempting to restart...");
+            startReceiveThread();
+            if (receiveThread == null || !receiveThread.isAlive()) {
+                log.error("Failed to restart receive thread, cannot send message.");
+                return false; // 接收线程重启失败，返回false
+            }
         }
 
         // 清空之前接收的数据
         synchronized (receivedData) {
+            String dataToClear = receivedData.toString();
+            log.debug("Clearing received data before sending new message. Host: {}, Port: {}, Data to clear: {}", host, port, dataToClear); // 增加清空的具体内容
             receivedData.reset();
         }
 
@@ -97,8 +137,22 @@ public class SocketClient {
             // 发送消息
             out.write(message);
             out.flush();
+            log.debug("Message sent successfully. Host: {}, Port: {}, Message: {}", host, port, new String(message)); // 记录发送成功的消息内容
+            return true; // 消息发送成功，返回true
         } catch (IOException e) {
-            System.err.println("Error occurred while sending message: " + e.getMessage());
+            log.error("Error occurred while sending message to server at {}:{}. Error: {}", host, port, e.getMessage());
+            // 增加重试逻辑
+            if (reconnect()) {
+                try {
+                    out.write(message);
+                    out.flush();
+                    log.debug("Message sent successfully after retry. Host: {}, Port: {}, Message: {}", host, port, new String(message)); // 记录重试后发送成功的消息内容
+                    return true; // 重试后消息发送成功，返回true
+                } catch (IOException retryException) {
+                    log.error("Retry failed: The server did not accept the message after reconnection. Host: {}, Port: {}. Error: {}", host, port, retryException.getMessage());
+                }
+            }
+            return false; // 消息发送失败，返回false
         }
     }
 
@@ -111,41 +165,42 @@ public class SocketClient {
      * @return 匹配的响应字符串，超时或失败时返回null
      */
     public String sendMessageAndWaitForResponse(byte[] message, String regexPattern, long timeoutMillis) {
-        // 连接状态检查
-        if (socket == null || !isConnected() && !reconnect()) {
-            System.err.println("Failed to connect to the server, cannot send message.");
-            return null;
+        // 调用 sendMessage 方法发送消息
+        boolean sendMessageResult = sendMessage(message);
+        if (!sendMessageResult) {
+            log.error("Message sending failed, cannot wait for response.");
+            return null; // 如果消息发送失败，直接返回null
         }
 
-        // 清空之前接收的数据
-        synchronized (receivedData) {
-            receivedData.reset();
-        }
-
+        // 移除超时限制，改为无限等待
         try {
-            // 发送消息
-            out.write(message);
-            out.flush();
-
-            // 等待响应
-            long startTime = System.currentTimeMillis();
-            Pattern pattern = Pattern.compile(regexPattern);
-            while (System.currentTimeMillis() - startTime < timeoutMillis) {
-                synchronized (receivedData) {
-                    String response = receivedData.toString();
-                    if (pattern.matcher(response).find()) {
-                        return response;
-                    }
-                }
-                Thread.sleep(100); // 间隔检查
-            }
-
-            System.err.println("Timeout waiting for response matching the pattern.");
-            return null;
-        } catch (IOException | InterruptedException e) {
-            System.err.println("Error occurred while sending message or waiting for response: " + e.getMessage());
+            socket.setSoTimeout(0); // 设置为无限等待
+        } catch (SocketException e) {
+            log.error("Failed to set socket timeout to infinite: {}", e.getMessage());
             return null;
         }
+
+        // 等待响应
+        long startTime = System.currentTimeMillis();
+        Pattern pattern = Pattern.compile(regexPattern);
+        while (System.currentTimeMillis() - startTime < timeoutMillis) {
+            synchronized (receivedData) {
+                String response = receivedData.toString();
+                if (pattern.matcher(response).find()) {
+                    return response; // 匹配到正则表达式，返回响应
+                }
+            }
+            try {
+                Thread.sleep(100); // 间隔检查
+            } catch (InterruptedException e) {
+                log.error("Error occurred while waiting for response: {}", e.getMessage());
+                Thread.currentThread().interrupt(); // 恢复中断状态
+                return null;
+            }
+        }
+
+        log.error("Timeout waiting for response matching the pattern: {}", regexPattern);
+        return null;
     }
 
     /**
@@ -155,7 +210,7 @@ public class SocketClient {
      */
     private boolean reconnect() {
         disconnect();
-        System.out.println("Attempting to reconnect...");
+        log.info("Attempting to reconnect...");
         return connect();
     }
 
@@ -166,26 +221,64 @@ public class SocketClient {
      */
     public boolean isConnected() {
         // 增强连接状态检查逻辑
-        return socket != null && !socket.isClosed() && socket.isConnected()
-                && !socket.isInputShutdown() && !socket.isOutputShutdown();
+        return socket != null && !socket.isClosed() && socket.isConnected() && !socket.isInputShutdown() && !socket.isOutputShutdown();
     }
 
     /**
      * 断开与服务器的连接。
      */
     public void disconnect() {
+        log.info("Attempting to disconnect from server at {}:{}", host, port); // 新增：记录断开连接的开始
         running.set(false);
+
         try {
             if (receiveThread != null) {
+                log.debug("Interrupting receive thread...");
                 receiveThread.interrupt(); // 中断接收线程
-                receiveThread.join();
+                receiveThread.join(5000); // 等待线程终止，最多等待5秒
+                if (receiveThread.isAlive()) {
+                    log.warn("Receive thread did not terminate within the timeout period.");
+                } else {
+                    log.debug("Receive thread terminated successfully.");
+                }
             }
-            if (out != null) out.close();
-            if (in != null) in.close();
-            if (socket != null) socket.close();
-        } catch (IOException | InterruptedException e) {
-            System.err.println("Disconnect error: " + e.getMessage());
+        } catch (InterruptedException e) {
+            log.error("Thread interruption occurred while closing resources: {}", e.getMessage());
+            Thread.currentThread().interrupt(); // 恢复中断状态
         }
+
+        // 优化资源关闭顺序，确保先关闭输入输出流，再关闭套接字
+        try {
+            if (out != null) {
+                log.debug("Closing output stream...");
+                out.close();
+                out = null;
+            }
+        } catch (IOException e) {
+            log.error("Error occurred while closing output stream: {}", e.getMessage());
+        }
+
+        try {
+            if (in != null) {
+                log.debug("Closing input stream...");
+                in.close();
+                in = null;
+            }
+        } catch (IOException e) {
+            log.error("Error occurred while closing input stream: {}", e.getMessage());
+        }
+
+        try {
+            if (socket != null) {
+                log.debug("Closing socket connection...");
+                socket.close();
+                socket = null;
+            }
+        } catch (IOException e) {
+            log.error("Error occurred while closing socket: {}", e.getMessage());
+        }
+
+        log.info("Disconnected from server at {}:{}", host, port); // 新增：记录断开连接的完成
     }
 
     /**
@@ -206,43 +299,3 @@ public class SocketClient {
     }
 }
 
-/**
- * 消息接收器，用于异步接收服务器消息。
- */
-class MessageReceiver implements Runnable {
-    private final InputStream in;
-    private final AtomicBoolean running;
-    private final ByteArrayOutputStream receivedData;
-
-    /**
-     * 构造函数，初始化接收器。
-     *
-     * @param in           输入流
-     * @param running      运行状态标志
-     * @param receivedData 接收到的数据缓冲区
-     */
-    public MessageReceiver(InputStream in, AtomicBoolean running, ByteArrayOutputStream receivedData) {
-        this.in = in;
-        this.running = running;
-        this.receivedData = receivedData;
-    }
-
-    /**
-     * 接收线程的运行逻辑，持续读取消息并存储到缓冲区。
-     */
-    @Override
-    public void run() {
-        byte[] buffer = new byte[1024];
-        try {
-            while (running.get()) {
-                int bytesRead = in.read(buffer);
-                if (bytesRead != -1) {
-                    receivedData.write(buffer, 0, bytesRead);
-                }
-                Thread.sleep(100); // 间隔读取
-            }
-        } catch (IOException | InterruptedException e) {
-            System.err.println("Receive error: " + e.getMessage());
-        }
-    }
-}
