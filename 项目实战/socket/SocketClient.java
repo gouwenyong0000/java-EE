@@ -25,7 +25,9 @@ public class SocketClient {
     private Socket socket;
     private OutputStream out;
     private InputStream in;
+    // 接收线程
     private Thread receiveThread;
+    // 接受线程运行状态
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     // host 和 port
@@ -64,8 +66,9 @@ public class SocketClient {
                 String response = client.sendMessageAndWaitForResponse(message.getBytes(), "gwy", 50000);
                 System.out.println("Received response: " + response);
             }
+            client.disconnect();
         } else {
-            System.out.println("连接失败");
+            log.error("连接失败");
         }
     }
 
@@ -77,16 +80,25 @@ public class SocketClient {
     public boolean connect() {
         try {
             socket = new Socket(host, port);
+
             out = socket.getOutputStream();
             in = socket.getInputStream();
-            startReceiveThread();
+
+            startReceiveThread();// 启动接收线程
+
             log.info("Successfully connected to server at {}:{}", host, port); // 新增：记录成功连接的日志
             return true;
         } catch (ConnectException e) {
             log.warn("Connection refused: The server is not available or the port is incorrect. Host: {}, Port: {}", host, port); // 修改：使用 warn 级别并添加上下文信息
             return false;
         } catch (SocketTimeoutException e) {
-            log.error("Connection timed out: The server did not respond within the timeout period. Host: {}, Port: {}", host, port); // 修改：增强日志内容，明确超时原因
+            log.error("Connection timed out: The server did not respond within the timeout period. Host: {}, Port: {}", host, port);
+            return false;
+        } catch (UnknownHostException e) {
+            log.error("Unknown host: Unable to resolve hostname '{}'. Error: {}", host, e.getMessage());
+            return false;
+        } catch (SecurityException e) {
+            log.error("Security error: Permission denied when connecting to host '{}'. Error: {}", host, e.getMessage());
             return false;
         } catch (IOException e) {
             log.error("An unexpected I/O error occurred while connecting to server at {}:{}. Error: {}", host, port, e.getMessage()); // 修改：增强日志内容
@@ -96,12 +108,18 @@ public class SocketClient {
 
     /**
      * 启动接收线程，用于异步接收服务器消息。
+     * 如果接收线程已经存在且正在运行，则不会重复启动。
      */
     private void startReceiveThread() {
+        log.debug("Attempting to start receive thread.");
         running.set(true);
-        receiveThread = new Thread(new MessageReceiver(in, running, receivedData));
+        MessageReceiver messageReceiver = new MessageReceiver(socket, in, running, receivedData, 300000);
+        receiveThread = new Thread(messageReceiver);
         receiveThread.start();
+
+        log.info("Receive thread started successfully.");
     }
+
 
     /**
      * 发送消息到服务器。
@@ -226,16 +244,17 @@ public class SocketClient {
 
     /**
      * 断开与服务器的连接。
+     * 该方法会确保所有资源被正确关闭，并记录每一步的操作日志。
      */
     public void disconnect() {
-        log.info("Attempting to disconnect from server at {}:{}", host, port); // 新增：记录断开连接的开始
+        log.info("Attempting to disconnect from server at {}:{}", host, port);
         running.set(false);
 
         try {
             if (receiveThread != null) {
                 log.debug("Interrupting receive thread...");
-                receiveThread.interrupt(); // 中断接收线程
-                receiveThread.join(5000); // 等待线程终止，最多等待5秒
+                receiveThread.interrupt();
+                receiveThread.join(5000);
                 if (receiveThread.isAlive()) {
                     log.warn("Receive thread did not terminate within the timeout period.");
                 } else {
@@ -244,56 +263,57 @@ public class SocketClient {
             }
         } catch (InterruptedException e) {
             log.error("Thread interruption occurred while closing resources: {}", e.getMessage());
-            Thread.currentThread().interrupt(); // 恢复中断状态
+            Thread.currentThread().interrupt();
         }
 
-        // 优化资源关闭顺序，确保先关闭输入输出流，再关闭套接字
+        // 显式关闭所有资源，确保正确的关闭顺序
         try {
             if (out != null) {
-                log.debug("Closing output stream...");
                 out.close();
-                out = null;
+                log.debug("OutputStream closed successfully");
             }
         } catch (IOException e) {
-            log.error("Error occurred while closing output stream: {}", e.getMessage());
+            log.error("Error closing OutputStream: {}", e.getMessage());
         }
 
         try {
             if (in != null) {
-                log.debug("Closing input stream...");
                 in.close();
-                in = null;
+                log.debug("InputStream closed successfully");
             }
         } catch (IOException e) {
-            log.error("Error occurred while closing input stream: {}", e.getMessage());
+            log.error("Error closing InputStream: {}", e.getMessage());
         }
 
         try {
-            if (socket != null) {
-                log.debug("Closing socket connection...");
+            if (socket != null && !socket.isClosed()) {
                 socket.close();
-                socket = null;
+                log.debug("Socket closed successfully");
             }
         } catch (IOException e) {
-            log.error("Error occurred while closing socket: {}", e.getMessage());
+            log.error("Error closing Socket: {}", e.getMessage());
         }
 
-        log.info("Disconnected from server at {}:{}", host, port); // 新增：记录断开连接的完成
+        log.info("Disconnected from server at {}:{}", host, port);
     }
 
     /**
      * 发送心跳消息以保持连接活跃。
+     * 如果心跳发送失败，会尝试重新连接。
      */
     private void sendHeartbeat() {
+        log.debug("Attempting to send heartbeat."); // 新增：记录心跳发送的尝试
         if (socket == null || !isConnected()) {
-            System.err.println("Socket is not connected, cannot send heartbeat.");
+            log.warn("Socket is not connected, cannot send heartbeat.");
+            reconnect();
             return;
         }
         try {
             out.write("HEARTBEAT".getBytes());
             out.flush();
+            log.debug("Heartbeat sent successfully.");
         } catch (IOException e) {
-            System.err.println("Heartbeat failed: " + e.getMessage());
+            log.error("Heartbeat failed: {}", e.getMessage());
             reconnect();
         }
     }
