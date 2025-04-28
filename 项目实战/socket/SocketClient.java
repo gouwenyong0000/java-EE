@@ -7,7 +7,6 @@ import java.io.*;
 import java.net.*;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import java.util.regex.Pattern;
 
 /**
@@ -68,7 +67,7 @@ public class SocketClient {
             }
             client.disconnect();
         } else {
-            log.error("连接失败");
+            log.error("connect failed");
         }
     }
 
@@ -79,8 +78,15 @@ public class SocketClient {
      */
     public boolean connect() {
         try {
-            socket = new Socket(host, port);
-
+            //  socket
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(host, port), 5000); // 5秒超时
+            
+            // 设置socket选项
+            socket.setTcpNoDelay(true);
+            socket.setKeepAlive(true);
+            socket.setSoTimeout(30000); // 30秒读取超时
+            
             out = socket.getOutputStream();
             in = socket.getInputStream();
 
@@ -128,8 +134,9 @@ public class SocketClient {
      * @return 如果消息发送成功返回true，否则返回false
      */
     public boolean sendMessage(byte[] message) {
-        // 连接状态检查
-        if (socket == null || !isConnected() && !reconnect()) {
+        // 连接状态检查 条件判断逻辑错误，因运算符优先级导致
+        if ((socket == null || !isConnected()) && !reconnect()) {
+
             log.error("Failed to connect to the server, cannot send message. Host: {}, Port: {}", host, port);
             return false; // 连接失败，返回false
         }
@@ -201,13 +208,30 @@ public class SocketClient {
         // 等待响应
         long startTime = System.currentTimeMillis();
         Pattern pattern = Pattern.compile(regexPattern);
-        while (System.currentTimeMillis() - startTime < timeoutMillis) {
-            synchronized (receivedData) {
-                String response = receivedData.toString();
-                if (pattern.matcher(response).find()) {
-                    return response; // 匹配到正则表达式，返回响应
+        long remaining = timeoutMillis;
+
+        synchronized (receivedData) {
+            while (remaining > 0) {
+                try {
+                    String currentData = receivedData.toString("UTF-8");
+                    if (pattern.matcher(currentData).find()) {
+                        return currentData;
+                    }
+
+                    receivedData.wait(remaining);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return "等待中断";
+                } catch (UnsupportedEncodingException e) {
+                    throw new RuntimeException(e);
                 }
+                remaining = timeoutMillis - (System.currentTimeMillis() - startTime);
             }
+
+        }
+
+        while (System.currentTimeMillis() - startTime < timeoutMillis) {
+
             try {
                 Thread.sleep(100); // 间隔检查
             } catch (InterruptedException e) {
@@ -227,9 +251,22 @@ public class SocketClient {
      * @return 如果重新连接成功返回true，否则返回false
      */
     private boolean reconnect() {
-        disconnect();
-        log.info("Attempting to reconnect...");
-        return connect();
+
+        int attempts = 0;
+        while (attempts < 3) {
+            try {
+                Thread.sleep(1000 * attempts); // 递增间隔
+                disconnect();
+                log.info("Attempting to reconnect...");
+                if (connect()) return true;
+                attempts++;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
+
     }
 
     /**

@@ -1,6 +1,5 @@
 package socket;
 
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +64,7 @@ class MessageReceiver implements Runnable {
                     //  同步写入数据
                     synchronized (receivedData) {
                         receivedData.write(buffer, 0, bytesRead);
+                        receivedData.notifyAll();
                     }
 
                     // 打印 dump 十六进制 和 ascii
@@ -89,11 +89,11 @@ class MessageReceiver implements Runnable {
         } catch (IOException e) {
             log.error("Receive error: {}", e.getMessage());
         } finally {
-            log.debug("MessageReceiver thread exiting."); // 新增：记录线程退出日志
+            log.debug("MessageReceiver thread exiting.");
             // 确保资源释放
-            closeQuietly(socket);
-            closeQuietly(in);
             running.set(false);
+            closeQuietly(in);
+            closeQuietly(socket);
         }
     }
 
