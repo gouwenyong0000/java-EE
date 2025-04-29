@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.*;
+
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
@@ -35,6 +36,7 @@ public class SocketClient {
 
     // 用于存储接收到的数据
     private final ByteArrayOutputStream receivedData = new ByteArrayOutputStream();
+    private int readTimeOut;
 
     /**
      * 构造函数，初始化客户端连接信息。
@@ -59,6 +61,7 @@ public class SocketClient {
             while (true) {
                 System.out.println("Enter message: ");
                 String message = scanner.nextLine();
+                client.readTimeOut = 300000;
                 if (message.equals("bye")) {
                     break;
                 }
@@ -81,12 +84,12 @@ public class SocketClient {
             //  socket
             socket = new Socket();
             socket.connect(new InetSocketAddress(host, port), 5000); // 5秒超时
-            
+
             // 设置socket选项
             socket.setTcpNoDelay(true);
             socket.setKeepAlive(true);
-            socket.setSoTimeout(30000); // 30秒读取超时
-            
+            socket.setSoTimeout(readTimeOut); // 0表示无限等待，可以设置其他值以设置超时时间
+
             out = socket.getOutputStream();
             in = socket.getInputStream();
 
@@ -96,20 +99,16 @@ public class SocketClient {
             return true;
         } catch (ConnectException e) {
             log.warn("Connection refused: The server is not available or the port is incorrect. Host: {}, Port: {}", host, port); // 修改：使用 warn 级别并添加上下文信息
-            return false;
         } catch (SocketTimeoutException e) {
             log.error("Connection timed out: The server did not respond within the timeout period. Host: {}, Port: {}", host, port);
-            return false;
         } catch (UnknownHostException e) {
             log.error("Unknown host: Unable to resolve hostname '{}'. Error: {}", host, e.getMessage());
-            return false;
         } catch (SecurityException e) {
             log.error("Security error: Permission denied when connecting to host '{}'. Error: {}", host, e.getMessage());
-            return false;
         } catch (IOException e) {
             log.error("An unexpected I/O error occurred while connecting to server at {}:{}. Error: {}", host, port, e.getMessage()); // 修改：增强日志内容
-            return false;
         }
+        return false;
     }
 
     /**
@@ -119,7 +118,7 @@ public class SocketClient {
     private void startReceiveThread() {
         log.debug("Attempting to start receive thread.");
         running.set(true);
-        MessageReceiver messageReceiver = new MessageReceiver(socket, in, running, receivedData, 300000);
+        MessageReceiver messageReceiver = new MessageReceiver(socket, in, running, receivedData, readTimeOut);
         receiveThread = new Thread(messageReceiver);
         receiveThread.start();
 
@@ -136,7 +135,6 @@ public class SocketClient {
     public boolean sendMessage(byte[] message) {
         // 连接状态检查 条件判断逻辑错误，因运算符优先级导致
         if ((socket == null || !isConnected()) && !reconnect()) {
-
             log.error("Failed to connect to the server, cannot send message. Host: {}, Port: {}", host, port);
             return false; // 连接失败，返回false
         }
@@ -197,51 +195,39 @@ public class SocketClient {
             return null; // 如果消息发送失败，直接返回null
         }
 
-        // 移除超时限制，改为无限等待
+        // 设置合理的最大等待时间限制
+        long maxWaitTime = Math.min(timeoutMillis, 300000); // 最大限制5分钟
         try {
-            socket.setSoTimeout(0); // 设置为无限等待
+            socket.setSoTimeout((int) maxWaitTime); // 设置为实际等待时间
         } catch (SocketException e) {
-            log.error("Failed to set socket timeout to infinite: {}", e.getMessage());
+            log.error("Failed to set socket timeout: {}", e.getMessage());
             return null;
         }
 
         // 等待响应
         long startTime = System.currentTimeMillis();
         Pattern pattern = Pattern.compile(regexPattern);
-        long remaining = timeoutMillis;
 
         synchronized (receivedData) {
-            while (remaining > 0) {
+            while (System.currentTimeMillis() - startTime < maxWaitTime) {
                 try {
                     String currentData = receivedData.toString("UTF-8");
                     if (pattern.matcher(currentData).find()) {
                         return currentData;
                     }
 
-                    receivedData.wait(remaining);
+                    receivedData.wait(100); // 避免长时间阻塞
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                    log.warn("Waiting interrupted while waiting for response", e);
                     return "等待中断";
                 } catch (UnsupportedEncodingException e) {
-                    throw new RuntimeException(e);
+                    throw new RuntimeException("UTF-8 encoding not supported", e);
                 }
-                remaining = timeoutMillis - (System.currentTimeMillis() - startTime);
-            }
-
-        }
-
-        while (System.currentTimeMillis() - startTime < timeoutMillis) {
-
-            try {
-                Thread.sleep(100); // 间隔检查
-            } catch (InterruptedException e) {
-                log.error("Error occurred while waiting for response: {}", e.getMessage());
-                Thread.currentThread().interrupt(); // 恢复中断状态
-                return null;
             }
         }
 
-        log.error("Timeout waiting for response matching the pattern: {}", regexPattern);
+        log.error("Timeout waiting for response matching the pattern: {}. Elapsed: {}ms", regexPattern, (System.currentTimeMillis() - startTime));
         return null;
     }
 
@@ -251,22 +237,27 @@ public class SocketClient {
      * @return 如果重新连接成功返回true，否则返回false
      */
     private boolean reconnect() {
-
         int attempts = 0;
-        while (attempts < 3) {
+        int totalTimes = 3;
+        long initialDelay = 1000; // 初始延迟1秒
+        while (attempts < totalTimes) {
             try {
-                Thread.sleep(1000 * attempts); // 递增间隔
+                long delay = (long) Math.pow(2, attempts) * initialDelay; // 指数退避
+                Thread.sleep(delay);
                 disconnect();
-                log.info("Attempting to reconnect...");
-                if (connect()) return true;
+                log.info("Attempting to reconnect {}/{}", attempts + 1, totalTimes);
+                if (connect()) {
+                    return true;
+                }
                 attempts++;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                log.warn("Interrupted during reconnection attempt {}/{}", attempts + 1, totalTimes, e);
                 return false;
             }
         }
+        log.error("Failed to reconnect after {} attempts.", totalTimes);
         return false;
-
     }
 
     /**
@@ -275,8 +266,10 @@ public class SocketClient {
      * @return 如果连接有效返回true，否则返回false
      */
     public boolean isConnected() {
-        // 增强连接状态检查逻辑
-        return socket != null && !socket.isClosed() && socket.isConnected() && !socket.isInputShutdown() && !socket.isOutputShutdown();
+        return socket != null
+                && !socket.isClosed()
+                && socket.isConnected()
+                && !socket.isInputShutdown(); // 移除outputShutdown检查，允许单向通信
     }
 
     /**

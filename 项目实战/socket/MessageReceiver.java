@@ -16,11 +16,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 class MessageReceiver implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(MessageReceiver.class);
 
-    private final Socket socket;
-    private final InputStream in;
-    private final AtomicBoolean running;
-    private final ByteArrayOutputStream receivedData;
-    private final long timeoutMillis;
+    private Socket socket;
+    private InputStream in;
+    private AtomicBoolean running;
+    private ByteArrayOutputStream receivedData;
+    private long timeoutMillis;
+
 
     /**
      * 构造函数，初始化接收器。
@@ -45,23 +46,27 @@ class MessageReceiver implements Runnable {
     @Override
     public void run() {
         log.debug("MessageReceiver thread started.");
-        long start = System.currentTimeMillis();
+        socket.setPerformancePreferences(0, 2, 1); // 优化网络性能参数
 
         byte[] buffer = new byte[1024];
         try {
-            // 检测服务器是否挂死 超过 一定时间 断开连接
-            socket.setSoTimeout((int) timeoutMillis);
+            // 初始化时验证连接有效性
+            if (!validateSocketState()) {
+                return;
+            }
+            socket.setSoTimeout((int) timeoutMillis);//设置超时时间，如果读取数据超时，则抛出
 
             while (running.get()) {
-                // 判断 socket 输入是否关闭或连接是否断开
-                if (socket.isClosed() || socket.isInputShutdown() || !socket.isConnected()) {
-                    log.warn("Socket input is shutdown or connection is closed. Exiting loop.");
+
+                // 实时校验socket状态
+                if (!validateSocketState()) {
                     break;
                 }
 
-                int bytesRead = in.read(buffer);
+                int bytesRead = in.read(buffer, 0, buffer.length);
                 if (bytesRead > 0) {
-                    //  同步写入数据
+
+                    // 同步写入数据
                     synchronized (receivedData) {
                         receivedData.write(buffer, 0, bytesRead);
                         receivedData.notifyAll();
@@ -74,18 +79,18 @@ class MessageReceiver implements Runnable {
                     log.debug("Received {} bytes of data. ASCII Dump: {}", bytesRead, asciiDump);
 
                 } else if (bytesRead == -1) {
-                    log.info("End of stream reached. Stopping receiver.");
+                    log.info("End of stream reached. Connection might be closed by server.");
                     break;
                 }
 
-                // 休眠以减少 CPU 占用
-                Thread.sleep(100);
+                // 动态调整休眠时间
+                Thread.sleep(Math.min(100, timeoutMillis / 10));
             }
-        } catch (InterruptedException e) {
-            log.info("Receive thread interrupted");
-            Thread.currentThread().interrupt(); // 恢复中断状态
         } catch (SocketTimeoutException e) {
-            log.error("Socket read timed out: {}", e.getMessage());
+            log.warn("Socket read timed out after {}ms: {}", timeoutMillis, e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Thread interruption occurred: {}", e.getMessage());
         } catch (IOException e) {
             log.error("Receive error: {}", e.getMessage());
         } finally {
@@ -97,6 +102,26 @@ class MessageReceiver implements Runnable {
         }
     }
 
+    private boolean validateSocketState() throws IOException {
+        if (socket == null || socket.isClosed() || !socket.isConnected() || socket.isInputShutdown()) {
+            log.warn("Invalid socket state detected. Socket: {}, Connected: {}, InputShutdown: {}",
+                    socket != null ? "Active" : "Null",
+                    socket != null && socket.isConnected(),
+                    socket != null && socket.isInputShutdown());
+            return false;
+        }
+
+        if (in == null) {
+            log.warn("InputStream is null, attempting to reinitialize...");
+            in = socket.getInputStream();
+            if (in == null) {
+                log.error("Failed to reinitialize InputStream");
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /**
      * 生成十六进制表示形式的字符串。
