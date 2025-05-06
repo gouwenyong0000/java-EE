@@ -1329,25 +1329,62 @@ erDiagram
 执行的命令被称为 CommandLine，可使用该类的 addArgument() 方法为其添加参数，parse() 方法将你提供的命令包装好一个可执行的命令。命令是由执行器 Executor 类来执行的，DefaultExecutor 类的 execute() 方法执行命令，exitValue 也可以通过该方法返回接收。设置 ExecuteWatchdog 可指定进程在出错后多长时间结束，这样有效防止了 run-away 的进程。此外 common-exec 还支持异步执行，Executor 通过设置一个 ExecuteResultHandler 类，该类的实例会接收住错误异常和退出代码。
 
 ```java
-CommandLine cmdLine = new CommandLine("AcroRd32.exe");
-cmdLine.addArgument("/p");
-    cmdLine.addArgument("/h");
-    cmdLine.addArgument("${file}");
-    HashMap map = new HashMap();
-    map.put("file", new File("invoice.pdf"));
-    commandLine.setSubstitutionMap(map);
+import org.apache.commons.exec.*;
+import org.apache.commons.exec.CommandLine;
+import org.apache.commons.exec.DefaultExecutor;
+import org.apache.commons.exec.ExecuteWatchdog;
+import java.io.File;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.HashMap;
 
-    DefaultExecuteResultHandler resultHandler = new DefaultExecuteResultHandler();
+/**
+ * ExecExample类演示如何使用Apache Commons Exec库执行外部命令并处理执行结果。
+ * 该示例通过调用AcroRd32.exe实现PDF文件打印功能。
+ */
+public class ExecExample {
+    public static void main(String[] args) {
+        try {
+            // 创建命令行对象并配置打印参数
+            // 使用AcroRd32.exe的/p参数进行打印，/h参数隐藏界面
+            CommandLine cmdLine = new CommandLine("AcroRd32.exe");
+            cmdLine.addArgument("/p");
+            cmdLine.addArgument("/h");
+            cmdLine.addArgument("${file}");
+            
+            // 设置文件路径替换映射
+            // 将${file}变量替换为实际PDF文件路径
+            HashMap map = new HashMap();
+            map.put("file", new File("invoice.pdf"));
+            cmdLine.setSubstitutionMap(map);
 
-    ExecuteWatchdog watchdog = new ExecuteWatchdog(60*1000);
-    Executor executor = new DefaultExecutor();
-    executor.setExitValue(1);
-    executor.setWatchdog(watchdog);
-    executor.execute(cmdLine, resultHandler);
+            // 创建异步结果处理器
+            DefaultExecuteResultHandler resultHandler = new DefaultExecuteResultHandler();
 
-    // some time later the result handler callback was invoked so we
-    // can safely request the exit value
-    int exitValue = resultHandler.waitFor();
+            // 构建执行看门狗并设置60秒超时限制
+            ExecuteWatchdog watchdog = ExecuteWatchdog.builder().setTimeout(Duration.ofSeconds(60)).get();
+            
+            // 配置执行器参数
+            // 设置预期退出值为1，绑定看门狗监控
+            Executor executor = DefaultExecutor.builder().get();
+            executor.setExitValue(1);
+            executor.setWatchdog(watchdog);
+            
+            // 异步执行外部命令
+            // 通过结果处理器接收执行结果
+            executor.execute(cmdLine, resultHandler);
+
+            // 阻塞等待命令执行完成
+            // 获取进程退出状态码
+            resultHandler.waitFor();
+            int exitValue = resultHandler.getExitValue();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
 ```
 
 
