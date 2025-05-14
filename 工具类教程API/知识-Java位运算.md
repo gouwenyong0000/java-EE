@@ -479,7 +479,9 @@ public class DecimalToBinary {
 
 
 
-# 基本数据类型
+# 数据类型
+
+## 8种基本数据类型
 
 8种基本数据类型：boolean、byte、char、short、int、long、float、double，及对应包装类型如下：
 
@@ -494,7 +496,282 @@ public class DecimalToBinary {
 | `char`    | 2      | 0 到 65535                                  |
 | `boolean` | 1      | `true` 或 `false`                           |
 
-对应包装类型的常量缓存以及自动装箱拆箱的坑参见上篇博客：
+## ✅ Java 包装类方法汇总（JDK 标准类库中）
+
+> 包装类的完整定义在 `java.lang` 包中。大多数数值包装类都继承自抽象类 `Number`，因此具有相同的类型转换方法。
+
+------
+
+### 🔷 1. Boolean 类
+
+| 方法                                       | 返回类型  | 描述                                                         |
+| ------------------------------------------ | --------- | ------------------------------------------------------------ |
+| `parseBoolean(String s)`                   | `boolean` | 将字符串转换为 boolean（忽略大小写，"true" 返回 true，其它 false） |
+| `valueOf(boolean b)` / `valueOf(String s)` | `Boolean` | 返回 Boolean 对象                                            |
+| `booleanValue()`                           | `boolean` | 返回基本 boolean 值                                          |
+| `compare(boolean x, boolean y)`            | `int`     | 比较两个 boolean，true > false                               |
+| `logicalAnd/Or/Xor(boolean a, boolean b)`  | `boolean` | 逻辑与/或/异或（JDK 1.8 起）                                 |
+| `toString(boolean b)`                      | `String`  | 转换为字符串                                                 |
+| `hashCode(boolean value)`                  | `int`     | 返回布尔值的哈希码（true 为 1231，false 为 1237）            |
+
+------
+
+### 🔷 2. Character 类
+
+#### 📌 一、基本方法
+
+| 方法名                             | 返回类型  | 作用                              |
+| ---------------------------------- | --------- | --------------------------------- |
+| `charValue()`                      | `char`    | 返回此 Character 对象中的 char 值 |
+| `compare(char x, char y)`          | `int`     | 比较两个字符大小（按 Unicode 值） |
+| `equals(Object obj)`               | `boolean` | 比较两个 Character 对象是否相等   |
+| `toString()` / `toString(char ch)` | `String`  | 转换为字符串                      |
+
+
+
+------
+
+#### 📌 二、字符类型判断（isXxx）
+
+| 方法                                | 返回类型  | 描述                                 |
+| ----------------------------------- | --------- | ------------------------------------ |
+| `isDigit(char ch)`                  | `boolean` | 判断是否为数字字符（0-9）            |
+| `isLetter(char ch)`                 | `boolean` | 判断是否为字母                       |
+| `isLetterOrDigit(char ch)`          | `boolean` | 判断是否为字母或数字                 |
+| `isLowerCase(char ch)`              | `boolean` | 判断是否为小写字母                   |
+| `isUpperCase(char ch)`              | `boolean` | 判断是否为大写字母                   |
+| `isWhitespace(char ch)`             | `boolean` | 判断是否为空白字符（空格、制表符等） |
+| `isSpaceChar(char ch)`              | `boolean` | 判断是否为 Unicode 空格              |
+| `isJavaIdentifierStart(char ch)`    | `boolean` | 是否可作为 Java 标识符首字符         |
+| `isJavaIdentifierPart(char ch)`     | `boolean` | 是否可作为 Java 标识符的一部分       |
+| `isUnicodeIdentifierStart(char ch)` | `boolean` | 是否可作为 Unicode 标识符首字符      |
+| `isUnicodeIdentifierPart(char ch)`  | `boolean` | 是否可作为 Unicode 标识符的一部分    |
+| `isDefined(char ch)`                | `boolean` | 是否为定义的 Unicode 字符            |
+| `isISOControl(char ch)`             | `boolean` | 是否为 ISO 控制字符                  |
+| `isMirrored(char ch)`               | `boolean` | 是否为镜像字符（如括号）             |
+
+
+
+------
+
+#### 📌 三、字符类型获取
+
+| 方法                         | 返回类型 | 描述                                                        |
+| ---------------------------- | -------- | ----------------------------------------------------------- |
+| `getType(char ch)`           | `int`    | 获取字符的 Unicode 类型，如 `Character.UPPERCASE_LETTER` 等 |
+| `getDirectionality(char ch)` | `byte`   | 获取字符的书写方向（LTR、RTL）                              |
+| `getNumericValue(char ch)`   | `int`    | 获取字符的数值（'1' → 1，'Ⅻ' → 12）                         |
+| `getName(int codePoint)`     | `String` | 获取 Unicode 名称（JDK 9+）                                 |
+
+
+
+------
+
+#### 📌 四、字符转换
+
+| 方法                    | 返回类型 | 描述                         |
+| ----------------------- | -------- | ---------------------------- |
+| `toLowerCase(char ch)`  | `char`   | 转为小写字母                 |
+| `toUpperCase(char ch)`  | `char`   | 转为大写字母                 |
+| `toTitleCase(char ch)`  | `char`   | 转为标题形式（如大写首字母） |
+| `reverseBytes(char ch)` | `char`   | 字节反转                     |
+
+
+
+------
+
+#### 📌 五、Unicode 扩展（codePoint 支持）
+
+> 用于处理 Unicode 较大范围字符（辅助平面）
+
+| 方法                                           | 返回类型  | 描述                              |
+| ---------------------------------------------- | --------- | --------------------------------- |
+| `codePointAt(CharSequence seq, int index)`     | `int`     | 返回指定位置的 Unicode 码点       |
+| `codePointBefore(CharSequence seq, int index)` | `int`     | 获取 index 前的字符码点           |
+| `codePointCount(...)`                          | `int`     | 计算给定范围内的 Unicode 码点数量 |
+| `isSupplementaryCodePoint(int codePoint)`      | `boolean` | 是否为增补字符                    |
+| `toChars(int codePoint)`                       | `char[]`  | 将码点转换为字符数组              |
+| `charCount(int codePoint)`                     | `int`     | 指定码点所需的 char 数（1 或 2）  |
+| `highSurrogate(int codePoint)`                 | `char`    | 获取高位代理项（辅助平面）        |
+| `lowSurrogate(int codePoint)`                  | `char`    | 获取低位代理项                    |
+
+##### 🔹 示例 1：`codePointAt` 和 `codePointBefore`
+
+```java
+public class UnicodeExample1 {
+    public static void main(String[] args) {
+        String text = "A𝄞Z"; // 𝄞 是 U+1D11E（音乐符号），需要两个 char 存储
+
+        System.out.println("charAt(1): " + text.charAt(1)); // 打印代理对的高位代理
+        int codePoint = Character.codePointAt(text, 1);
+        System.out.println("codePointAt(1): " + Integer.toHexString(codePoint)); // 输出 1d11e
+    }
+}
+```
+
+------
+
+##### 🔹 示例 2：`charCount`：判断一个 codePoint 是一个字符还是代理对
+
+```java
+public class UnicodeExample2 {
+    public static void main(String[] args) {
+        int basicChar = 'A';         // U+0041
+        int supplementaryChar = 0x1F600; // 😀 表情，U+1F600
+
+        System.out.println("charCount for 'A': " + Character.charCount(basicChar)); // 1
+        System.out.println("charCount for 😀: " + Character.charCount(supplementaryChar)); // 2
+    }
+}
+```
+
+------
+
+##### 🔹 示例 3：`toChars(int codePoint)`：将 codePoint 转换为字符数组（代理对）
+
+```java
+public class UnicodeExample3 {
+    public static void main(String[] args) {
+        int codePoint = 0x1F602; // 😂 表情
+
+        char[] chars = Character.toChars(codePoint);
+        String emoji = new String(chars);
+        System.out.println("Emoji: " + emoji); // 输出 😂
+    }
+}
+```
+
+------
+
+##### 🔹 示例 4：`codePointCount`：统计 Unicode 字符数（非 char 数）
+
+```java
+public class UnicodeExample4 {
+    public static void main(String[] args) {
+        String text = "A𝄞B😂C"; // 包含多个代理对字符
+
+        int unicodeCharCount = text.codePointCount(0, text.length());
+        System.out.println("Unicode 字符数: " + unicodeCharCount); // 输出 5
+        System.out.println("char 长度: " + text.length()); // 输出 7
+    }
+}
+```
+
+------
+
+##### 🔹 示例 5：迭代每个 Unicode 字符（使用 codePoint）
+
+```java
+public class UnicodeExample5 {
+    public static void main(String[] args) {
+        String text = "A😂C";
+
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            System.out.println("字符: " + new String(Character.toChars(cp)) + "  码点: U+" + Integer.toHexString(cp));
+            i += Character.charCount(cp); // 移动一个 Unicode 字符长度
+        }
+    }
+}
+```
+
+------
+
+
+
+#### 🧪 示例代码
+
+```java
+char ch = 'A';
+
+System.out.println(Character.isLetter(ch)); // true
+System.out.println(Character.toLowerCase(ch)); // 'a'
+System.out.println(Character.getType(ch)); // 1 (UPPERCASE_LETTER)
+```
+
+------
+
+#### 📚 小贴士
+
+- `Character.getType(char)` 返回的 int 可以与 `Character.UPPERCASE_LETTER` 等常量对比。
+- 对于 Unicode 字符（如 emoji），应使用 `codePoint` 相关方法处理。
+- `isJavaIdentifierStart()` 是判断合法变量名字符的常用工具。
+
+
+
+------
+
+### 🔷 3. Byte / Short / Integer / Long 类（整型包装类）
+
+> 这些类都具有类似的方法结构，仅类型名不同（如 int、long）
+
+| 方法                                      | 返回类型 | 描述                                    |
+| ----------------------------------------- | -------- | --------------------------------------- |
+| `parseXxx(String s)`                      | 基本类型 | 将字符串解析为对应类型，如 `parseInt()` |
+| `valueOf(String s)` / `valueOf(基本类型)` | 包装类   | 返回包装类对象                          |
+| `xxxValue()`                              | 基本类型 | 转换为 byte/short/int/long 等           |
+| `compare(x, y)`                           | `int`    | 比较大小                                |
+| `toString(x)`                             | `String` | 转换为字符串                            |
+| `toBinaryString(int i)`                   | `String` | 转为二进制                              |
+| `toHexString(int i)`                      | `String` | 转为十六进制                            |
+| `toOctalString(int i)`                    | `String` | 转为八进制                              |
+| `decode(String nm)`                       | 包装类   | 解析字符串（支持 0x、0、十进制）        |
+| `reverseBytes(int i)`                     | `int`    | 字节序反转                              |
+| `highestOneBit(int i)`                    | `int`    | 返回最高位的 1                          |
+| `lowestOneBit(int i)`                     | `int`    | 返回最低位的 1                          |
+| `bitCount(int i)`                         | `int`    | 返回 1 的个数                           |
+| `rotateLeft/Right(int i, int distance)`   | `int`    | 位左移或右移                            |
+| `signum(int i)`                           | `int`    | 返回 -1, 0, 1 表示负数、零、正数        |
+
+------
+
+### 🔷 4. Float / Double 类（浮点型包装类）
+
+> `Float` 和 `Double` 继承 `Number`，支持浮点操作。
+
+| 方法                                                   | 返回类型    | 描述                        |
+| ------------------------------------------------------ | ----------- | --------------------------- |
+| `parseXxx(String s)`                                   | 基本类型    | 将字符串解析为 float/double |
+| `valueOf(String s)` / `valueOf(float f)`               | 包装类      | 返回 Float/Double 对象      |
+| `xxxValue()`                                           | 基本类型    | 转换为 int、long、short 等  |
+| `compare(float x, float y)`                            | `int`       | 比较两个值                  |
+| `isNaN(float v)`                                       | `boolean`   | 是否为 NaN                  |
+| `isInfinite(float v)`                                  | `boolean`   | 是否为正无穷或负无穷        |
+| `toString(float f)`                                    | `String`    | 转为字符串                  |
+| `sum(a, b)`                                            | 同类型      | 求和（JDK 1.8 起）          |
+| `max(a, b)` / `min(a, b)`                              | 同类型      | 取最大/最小                 |
+| `hashCode(float f)`                                    | `int`       | 获取哈希码                  |
+| `floatToIntBits(float f)` / `intBitsToFloat(int bits)` | `int/float` | 浮点数与位之间转换          |
+| `doubleToLongBits(double d)`                           | `long`      | 类似上面，用于 double       |
+
+------
+
+### 🔷 5. 通用方法（来自 `Number` 抽象类）
+
+适用于所有数值包装类（不含 Boolean 和 Character）
+
+| 方法            | 返回类型 | 描述        |
+| --------------- | -------- | ----------- |
+| `byteValue()`   | `byte`   | 转为 byte   |
+| `shortValue()`  | `short`  | 转为 short  |
+| `intValue()`    | `int`    | 转为 int    |
+| `longValue()`   | `long`   | 转为 long   |
+| `floatValue()`  | `float`  | 转为 float  |
+| `doubleValue()` | `double` | 转为 double |
+
+------
+
+### 📝 说明
+
+- `parseXxx()` 返回 **基本类型**，如 `int`
+- `valueOf()` 返回 **包装类对象**，如 `Integer`
+- `xxxValue()` 返回 **基本类型值**
+- `compare()` 用于数值排序时的比较操作
+- 所有包装类都是不可变的（immutable）
+
+------
+
+
 
 
 
@@ -2091,114 +2368,6 @@ public class LocaleExample {
 
 
 好的，以下是 **Java 中8个包装类（Wrapper Classes）**：`Boolean`, `Byte`, `Short`, `Integer`, `Long`, `Float`, `Double`, `Character` 的 **所有主要方法及其作用的详细汇总表格**。
-
-------
-
-# ✅ Java 包装类方法汇总（JDK 标准类库中）
-
-> 包装类的完整定义在 `java.lang` 包中。大多数数值包装类都继承自抽象类 `Number`，因此具有相同的类型转换方法。
-
-------
-
-### 🔷 1. Boolean 类
-
-| 方法                                       | 返回类型  | 描述                                                         |
-| ------------------------------------------ | --------- | ------------------------------------------------------------ |
-| `parseBoolean(String s)`                   | `boolean` | 将字符串转换为 boolean（忽略大小写，"true" 返回 true，其它 false） |
-| `valueOf(boolean b)` / `valueOf(String s)` | `Boolean` | 返回 Boolean 对象                                            |
-| `booleanValue()`                           | `boolean` | 返回基本 boolean 值                                          |
-| `compare(boolean x, boolean y)`            | `int`     | 比较两个 boolean，true > false                               |
-| `logicalAnd/Or/Xor(boolean a, boolean b)`  | `boolean` | 逻辑与/或/异或（JDK 1.8 起）                                 |
-| `toString(boolean b)`                      | `String`  | 转换为字符串                                                 |
-| `hashCode(boolean value)`                  | `int`     | 返回布尔值的哈希码（true 为 1231，false 为 1237）            |
-
-------
-
-### 🔷 2. Character 类
-
-| 方法                                            | 返回类型  | 描述                      |
-| ----------------------------------------------- | --------- | ------------------------- |
-| `charValue()`                                   | `char`    | 返回基本 char 值          |
-| `compare(char x, char y)`                       | `int`     | 比较两个 char             |
-| `isDigit(char ch)`                              | `boolean` | 判断是否为数字            |
-| `isLetter(char ch)`                             | `boolean` | 判断是否为字母            |
-| `isLetterOrDigit(char ch)`                      | `boolean` | 是否为字母或数字          |
-| `isUpperCase(char ch)` / `isLowerCase(char ch)` | `boolean` | 是否为大写/小写           |
-| `toUpperCase(char ch)` / `toLowerCase(char ch)` | `char`    | 转换为大/小写             |
-| `isWhitespace(char ch)`                         | `boolean` | 是否为空白字符            |
-| `toString(char c)`                              | `String`  | 转为字符串                |
-| `getType(char ch)`                              | `int`     | 获取 Unicode 类型         |
-| `isDefined(char ch)`                            | `boolean` | 是否为 Unicode 定义的字符 |
-
-------
-
-### 🔷 3. Byte / Short / Integer / Long 类（整型包装类）
-
-> 这些类都具有类似的方法结构，仅类型名不同（如 int、long）
-
-| 方法                                      | 返回类型 | 描述                                    |
-| ----------------------------------------- | -------- | --------------------------------------- |
-| `parseXxx(String s)`                      | 基本类型 | 将字符串解析为对应类型，如 `parseInt()` |
-| `valueOf(String s)` / `valueOf(基本类型)` | 包装类   | 返回包装类对象                          |
-| `xxxValue()`                              | 基本类型 | 转换为 byte/short/int/long 等           |
-| `compare(x, y)`                           | `int`    | 比较大小                                |
-| `toString(x)`                             | `String` | 转换为字符串                            |
-| `toBinaryString(int i)`                   | `String` | 转为二进制                              |
-| `toHexString(int i)`                      | `String` | 转为十六进制                            |
-| `toOctalString(int i)`                    | `String` | 转为八进制                              |
-| `decode(String nm)`                       | 包装类   | 解析字符串（支持 0x、0、十进制）        |
-| `reverseBytes(int i)`                     | `int`    | 字节序反转                              |
-| `highestOneBit(int i)`                    | `int`    | 返回最高位的 1                          |
-| `lowestOneBit(int i)`                     | `int`    | 返回最低位的 1                          |
-| `bitCount(int i)`                         | `int`    | 返回 1 的个数                           |
-| `rotateLeft/Right(int i, int distance)`   | `int`    | 位左移或右移                            |
-| `signum(int i)`                           | `int`    | 返回 -1, 0, 1 表示负数、零、正数        |
-
-------
-
-### 🔷 4. Float / Double 类（浮点型包装类）
-
-> `Float` 和 `Double` 继承 `Number`，支持浮点操作。
-
-| 方法                                                   | 返回类型    | 描述                        |
-| ------------------------------------------------------ | ----------- | --------------------------- |
-| `parseXxx(String s)`                                   | 基本类型    | 将字符串解析为 float/double |
-| `valueOf(String s)` / `valueOf(float f)`               | 包装类      | 返回 Float/Double 对象      |
-| `xxxValue()`                                           | 基本类型    | 转换为 int、long、short 等  |
-| `compare(float x, float y)`                            | `int`       | 比较两个值                  |
-| `isNaN(float v)`                                       | `boolean`   | 是否为 NaN                  |
-| `isInfinite(float v)`                                  | `boolean`   | 是否为正无穷或负无穷        |
-| `toString(float f)`                                    | `String`    | 转为字符串                  |
-| `sum(a, b)`                                            | 同类型      | 求和（JDK 1.8 起）          |
-| `max(a, b)` / `min(a, b)`                              | 同类型      | 取最大/最小                 |
-| `hashCode(float f)`                                    | `int`       | 获取哈希码                  |
-| `floatToIntBits(float f)` / `intBitsToFloat(int bits)` | `int/float` | 浮点数与位之间转换          |
-| `doubleToLongBits(double d)`                           | `long`      | 类似上面，用于 double       |
-
-------
-
-### 🔷 5. 通用方法（来自 `Number` 抽象类）
-
-适用于所有数值包装类（不含 Boolean 和 Character）
-
-| 方法            | 返回类型 | 描述        |
-| --------------- | -------- | ----------- |
-| `byteValue()`   | `byte`   | 转为 byte   |
-| `shortValue()`  | `short`  | 转为 short  |
-| `intValue()`    | `int`    | 转为 int    |
-| `longValue()`   | `long`   | 转为 long   |
-| `floatValue()`  | `float`  | 转为 float  |
-| `doubleValue()` | `double` | 转为 double |
-
-------
-
-### 📝 说明
-
-- `parseXxx()` 返回 **基本类型**，如 `int`
-- `valueOf()` 返回 **包装类对象**，如 `Integer`
-- `xxxValue()` 返回 **基本类型值**
-- `compare()` 用于数值排序时的比较操作
-- 所有包装类都是不可变的（immutable）
 
 ------
 
