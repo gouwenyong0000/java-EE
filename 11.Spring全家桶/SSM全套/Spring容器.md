@@ -160,15 +160,60 @@
 ##### `@Bean`方法在`@Configuration`类中的使用
 
 - 通常，`@Bean`方法是在`@Configuration`类中声明的。
+
 - 在这种情况下，bean方法可以通过直接调用同一类中的其他`@Bean`方法来引用它们。这确保了bean之间的引用是强类型且可导航的。
+
 - 所谓的“inter-bean references”（内部bean引用）会尊重作用域和AOP语义，就像`getBean()`查找一样。
+
+  - 默认情况下，Spring 会对 `@Configuration` 类进行 CGLIB 子类化，以拦截 `@Bean` 方法的调用。这样做的目的是为了保证单例作用域下的 Bean 实例共享。如果你不希望这种行为，可以通过设置 `proxyBeanMethods = false` 来禁用此功能，这在配置类主要作为简单的工厂 Bean 时特别有用。
+
 - 为了实现这一点，`@Configuration`类及其工厂方法不能标记为final或private。
+
+  
 
 ##### `@Bean` Lite模式
 
 - `@Bean`方法也可以在未用`@Configuration`注解的类中声明。这被称为“lite”模式。
 - 在lite模式下，bean方法将被容器视为普通的工厂方法（类似于XML中的`factory-method`声明），并正确应用作用域和生命周期回调。
 - 与`@Configuration`类中的bean方法不同，lite模式下的“inter-bean references”不受支持。
+
+##### **`@Configuration` 模式 vs. Lite 模式**
+
+主要的区别在于 Spring 如何处理包含 `@Bean` 方法的类：
+
+- **完整 `@Configuration` 模式 (Full Mode):**
+  - 当 `@Bean` 方法在用 `@Configuration` 注解的类中声明时，Spring 会在运行时使用 CGLIB 对这个配置类进行**增强**（子类化）。
+  - 这种增强的目的是**拦截**对配置类内部其他 `@Bean` 方法的调用。例如，如果在同一个 `@Configuration` 类中，`beanA()` 方法调用了 `beanB()` 方法（这被称为“bean 间引用”或 "inter-bean reference"），Spring 会拦截这个调用。
+  - 通过拦截，Spring 能够确保返回的是由 Spring 容器管理的正确的 Bean 实例，并遵循其作用域（如单例、原型等）和AOP代理。例如，多次调用一个单例的 `@Bean` 方法将始终返回同一个由 Spring 管理的 Bean 实例。
+- **`@Bean` Lite 模式 (Lite Mode):**
+  - 如果 `@Bean` 方法声明在一个**没有**用 `@Configuration` 注解的类中（例如，一个用 `@Component` 注解的类，或者一个普通的 Java 对象 POJO，这个 POJO 本身也是一个 Bean），Spring 会以 Lite 模式处理这些 `@Bean` 方法。
+  - 在这种情况下，包含 `@Bean` 方法的类**不会**被 CGLIB 增强。
+  - 因此，在这类 Lite 模式的类中，一个 `@Bean` 方法直接调用另一个 `@Bean` 方法，会被视为**普通的 Java 方法调用**。
+  - 这意味着，如果 `beanA()` 方法直接调用 `beanB()` 方法，`beanB()` 将像普通 Java 方法一样执行。如果 `beanB()` 方法的实现是创建一个新对象（例如 `return new MyService();`），那么每次从 `beanA()` 调用它时，都会创建一个新的 `MyService` 实例，而不是返回 Spring 容器管理的那个单例 Bean 实例（如果 `beanB()` 声明为单例的话）。
+
+**Lite 模式的主要特点和影响：**
+
+1. **没有 CGLIB 子类化：** 包含 `@Bean` 方法的类仍然是一个普通的 Java 类，Spring 不会为其创建运行时的子类来进行方法拦截。
+1. **Bean 间引用是标准的 Java 方法调用：** 这是最核心的区别。在 Lite 模式的类中，如果一个 `@Bean` 方法 `methodA` 调用了同一个类中的另一个 `@Bean` 方法 `methodB`，那么 `methodB` 会像普通方法一样执行。这意味着它可能不会返回 Spring 管理的那个 Bean 实例，而是执行方法体并可能创建一个新的实例。
+1. **Bean 的作用域和生命周期仍然受 Spring 管理：** 尽管 Bean 间调用的行为不同，但在 Lite 模式下声明的 Bean 仍然会遵循其声明的作用域（例如 `@Scope("prototype")`）和 Spring Bean 的生命周期回调（例如 `@PostConstruct`, `@PreDestroy`）。一旦这些 Bean 被注册到应用上下文中，Spring 容器就会像管理其他 Bean 一样管理它们。
+1. 何时使用 Lite 模式？
+   - 当 `@Bean` 方法定义在用 `@Component`、`@Service`、`@Repository` 等注解的类中时。
+   - 当 `@Bean` 方法存在于普通的 Java 类中，并且这些类本身也被注册为 Bean 时（例如通过组件扫描或编程式注册）。
+   - 当在 `@Configuration` 类上显式设置 `proxyBeanMethods = false` 属性时。这实际上是将一个 `@Configuration` 类的行为模式切换到类似于 Lite 模式，在 Bean 间调用方面放弃了 CGLIB 代理。这样做通常是为了在不需要或不依赖 Bean 间调用返回 Spring 管理实例的场景下获得轻微的性能提升。
+
+**什么时候考虑使用 Lite 模式 (或者 `@Configuration(proxyBeanMethods = false)`)：**
+
+- **简单的配置场景：** 如果你的配置类没有依赖于 Spring 拦截的 Bean 间调用（也就是说，你不在配置类内部通过直接调用其他 `@Bean` 方法来注入依赖），那么 Lite 模式或 `proxyBeanMethods = false` 可以因为避免了 CGLIB 代理而带来轻微的性能优势。
+- **避免 CGLIB 的限制：** CGLIB 子类化会带来一些限制，例如配置类及其 `@Bean` 方法不能是 `final` 或 `private` 的。Lite 模式可以避免这些限制。
+- **与现有代码集成：** 有时你可能想在现有的 `@Component` 中通过 `@Bean` 方法暴露一些 Bean，Lite 模式使得这成为可能，而无需将该组件重构为 `@Configuration` 类。
+
+**总结：**
+
+`@Bean` Lite 模式提供了一种在非 `@Configuration` 类（或设置了 `proxyBeanMethods = false` 的 `@Configuration` 类）中声明 Bean 的灵活方式。关键的区别在于 **Bean 间方法调用的行为**：它们会变成普通的 Java 方法调用，从而绕过了在完整 `@Configuration` 模式下 Spring 通过 CGLIB 增强所提供的拦截机制（该机制确保了在此类调用中返回容器管理的单例 Bean）。
+
+理解这种差异对于正确设计 Spring 应用程序的配置至关重要，尤其是在处理配置类内部的 Bean 依赖关系时，可以避免因错误的调用方式导致非预期的行为（例如意外创建了多个实例而不是共享同一个单例）。简单来说，如果你需要在配置类内部通过方法调用来保证获取的是 Spring 管理的 Bean 实例，那么应该使用完整的 `@Configuration` 模式（即不设置 `proxyBeanMethods = false`）。如果不需要这种保证，或者希望获得轻微的性能提升并避免 CGLIB 的限制，Lite 模式或 `@Configuration(proxyBeanMethods = false)` 是一个可行的选择。
+
+
 
 ##### 启动和配置
 
@@ -180,6 +225,12 @@
 - 因为`BeanFactoryPostProcessor`对象必须在容器生命周期的非常早期实例化，它们可能会干扰`@Autowired`、`@Value`和`@PostConstruct`等注解的处理。
 - 为了避免这些生命周期问题，应将返回`BeanFactoryPostProcessor`的`@Bean`方法标记为static。
 - 通过将方法标记为static，可以在不导致声明它的`@Configuration`类实例化的情况下调用它，从而避免上述生命周期冲突。
+
+
+
+
+
+
 
 ##### 总结
 
@@ -296,6 +347,38 @@ public class PersonConfig {
 
 }
 ```
+
+##### 详细说明
+
+`@Configuration` 是 Spring 框架中的一个核心注解，主要用于定义配置类。这些配置类可以包含一个或多个方法，每个方法通过 `@Bean` 注解来定义并注册一个或多个 Spring 容器管理的 Bean。使用 `@Configuration` 和 `@Bean` 注解的方式提供了一种替代传统的 XML 配置文件的方法来配置 Spring 应用程序上下文。下面是关于 `@Configuration` 注解的详细说明：
+
+###### 主要用途
+
+- **声明配置类**：`@Configuration` 注解用于标记一个类作为 Spring 的配置类。这种类通常包含一个或多个 `@Bean` 注解的方法，用来定义如何创建和配置应用中需要的 Bean。
+
+###### 工作原理
+
+- 当 Spring 上下文启动时，它会扫描被 `@Configuration` 注解标注的类，并处理这些类中所有带有 `@Bean` 注解的方法。每个这样的方法都会被调用一次（默认情况下），其返回值将作为一个 Spring Bean 被注册到应用上下文中。
+
+###### 特性
+
+1. **Bean 方法调用**
+   - 在配置类内部，如果你直接调用其他 `@Bean` 方法，Spring 将确保总是返回同一个实例（对于单例作用域的 Bean）。这是因为 Spring 使用了 CGLIB 来增强配置类，使得每次调用 `@Bean` 方法时都能返回正确的 Bean 实例。
+1. **代理机制**
+   - 默认情况下，Spring 会对 `@Configuration` 类进行 CGLIB 子类化，以拦截 `@Bean` 方法的调用。这样做的目的是为了保证单例作用域下的 Bean 实例共享。如果你不希望这种行为，可以通过设置 `proxyBeanMethods = false` 来禁用此功能，这在配置类主要作为简单的工厂 Bean 时特别有用。
+1. **组件扫描**
+   - `@Configuration` 注解本身也包含了 `@Component` 注解，这意味着被 `@Configuration` 标记的类也会被组件扫描机制识别为 Spring 组件的一部分。
+1. **环境抽象**
+   - 可以与 `@Profile` 结合使用，根据不同的环境条件（如开发、测试、生产等）激活不同的配置类或特定的 Bean 定义。
+
+###### 关键属性
+
+- proxyBeanMethods
+  - 类型：`boolean`
+  - 默认值：`true`
+  - 描述：指定是否应该对 `@Bean` 方法的调用进行代理处理。如果设置为 `false`，则不会代理 `@Bean` 方法，从而提高某些场景下的性能。适用于不需要跨方法调用共享 Bean 实例的情况。
+
+
 
 #### 实验4-7：@Controller、@Service、@Repository、@Component - mvc分层注解
 
@@ -1343,64 +1426,247 @@ public class MyBean {
 
 #### 实验9：@PropertySource
 
-`PropertySource` 在 Java 中，特别是在使用 Spring 框架时，是一个非常重要的概念。它通常与 `@PropertySource` 注解一起使用，用于指定属性文件的位置，这样 Spring 容器就可以在启动时加载这些属性文件，并将它们**作为环境属性**的一部分。
+`@PropertySource` 是 Spring 框架中一个非常实用的注解，它允许你将外部属性文件中的属性加载到 Spring 的 `Environment` 中。这样，你就可以在应用程序中轻松地访问这些配置属性了。
 
-##### @PropertySource 注解
+以下是 `@PropertySource` 的使用示例和调用方式的详细说明：
 
-`@PropertySource` 是一个类级别的注解，它允许你指定一个或多个属性文件的位置。这些属性文件可以包含配置信息，比如数据库连接详情、应用设置等。Spring 容器会在创建 bean 之前加载这些属性文件，并将它们添加到 Spring 的 `Environment` 抽象中。
+**核心功能：**
 
-##### 使用方式
+- 将指定属性文件中的键值对加载到 Spring 环境中。
+- 通常与 `@Configuration` 注解一起使用。
+- 可以通过 `@Value` 注解或 `Environment` 对象来访问加载的属性。
 
-以下是一个简单的使用 `@PropertySource` 注解的示例：
+**基本使用示例：**
+
+假设你有一个名为 `app.properties` 的属性文件，位于 `src/main/resources` 目录下：
+
+```Properties
+# app.properties
+app.name=My Spring Application
+app.version=1.0.0
+db.url=jdbc:mysql://localhost:3306/mydb
+db.username=root
+db.password=secret
+```
+
+你可以创建一个配置类来加载这个属性文件：
 
 ```Java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.env.Environment;
+
 @Configuration
-@PropertySource("classpath:app.properties")
-// 或者使用 @PropertySources 来指定多个属性文件
-//@PropertySources({
-//    @PropertySource("classpath:app1.properties"),
-//    @PropertySource("classpath:app2.properties")
-//})
+@PropertySource("classpath:app.properties") // 指定属性文件的位置
 public class AppConfig {
-    // 配置类内容
+
+    @Autowired
+    private Environment env; // 使用方式一：注入 Environment 对象
+
+    // 使用方式二：使用 @Value 注解注入单个属性
+    @Value("${app.name}")
+    private String appName;
+
+    @Value("${app.version}")
+    private String appVersion;
+
+    @Value("${db.url}")
+    private String dbUrl;
+
+    // 示例 Bean，演示如何使用加载的属性
+    @Bean
+    public MyService myService() {
+        MyService service = new MyService();
+        // 通过 Environment 对象获取属性
+        service.setDatabaseUrl(env.getProperty("db.url"));
+        service.setUsername(env.getProperty("db.username"));
+        System.out.println("Database URL from env: " + env.getProperty("db.url"));
+
+        // 直接使用 @Value 注入的属性
+        System.out.println("App Name from @Value: " + appName);
+        System.out.println("App Version from @Value: " + appVersion);
+        System.out.println("DB URL from @Value: " + dbUrl); // 注意：dbUrl 也能通过 @Value 获取
+
+        return service;
+    }
+
+    // 一个简单的服务类，用于演示
+    public static class MyService {
+        private String databaseUrl;
+        private String username;
+
+        public void setDatabaseUrl(String databaseUrl) {
+            this.databaseUrl = databaseUrl;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public void displayConfig() {
+            System.out.println("Configured Database URL: " + databaseUrl);
+            System.out.println("Configured Username: " + username);
+        }
+    }
 }
 ```
 
-在这个例子中，`@PropertySource("classpath:app.properties")` 注解告诉 Spring 容器从类路径下的 `app.properties` 文件中加载属性。
+**调用（访问）加载的属性：**
 
-##### 注入属性
+主要有两种方式来访问 `@PropertySource` 加载的属性：
 
-一旦属性文件被加载，你就可以使用 `@Value` 注解来注入这些属性了。例如：
+1. **通过 `Environment` 对象：**
+
+   - `Environment` 接口提供了访问属性的方法，如 `getProperty(String key)`。
+   - 你可以将 `Environment` 对象自动注入到任何 Spring管理的 Bean 中。
+   - **优点：** 灵活，可以动态获取属性，检查属性是否存在等。
+
+   
+
+   ```Java
+   import org.springframework.beans.factory.annotation.Autowired;
+   import org.springframework.core.env.Environment;
+   import org.springframework.stereotype.Component;
+   
+   @Component
+   public class PropertyReader {
+   
+       @Autowired
+       private Environment environment;
+   
+       public String getAppName() {
+           return environment.getProperty("app.name");
+       }
+   
+       public String getDbUsername() {
+           return environment.getProperty("db.username");
+       }
+   
+       // 可以提供默认值
+       public String getNonExistentProperty() {
+           return environment.getProperty("non.existent.property", "defaultValue");
+       }
+   }
+   ```
+
+1. **通过 `@Value` 注解：**
+
+   - `@Value` 注解可以直接将属性值注入到 Bean 的字段、方法参数或构造函数参数中。
+   - 使用占位符 `${property.key}` 来引用属性。
+   - 可以为属性提供默认值，格式为 `${property.key:defaultValue}`。
+   - **优点：** 代码简洁，直接明了。
 
 ```java
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 @Component
-public class SomeBean {
+public class AppDetails {
 
-    @Value("${some.property}")
-    private String someProperty;
+    @Value("${app.name}")
+    private String applicationName;
 
-    // Getter and Setter
-    public String getSomeProperty() {
-        return someProperty;
-    }
+    @Value("${app.version}")
+    private String applicationVersion;
 
-    public void setSomeProperty(String someProperty) {
-        this.someProperty = someProperty;
+    @Value("${db.password}")
+    private String dbPassword;
+
+    // 属性不存在时使用默认值
+    @Value("${app.description:This is a default description.}")
+    private String appDescription;
+
+    public void displayAppInfo() {
+        System.out.println("Application Name: " + applicationName);
+        System.out.println("Application Version: " + applicationVersion);
+        System.out.println("Database Password: " + dbPassword);
+        System.out.println("Application Description: " + appDescription);
     }
 }
 ```
 
-在这个例子中，`someProperty` 字段将通过 `@Value("${some.property}")` 注解从 `app.properties` 文件中注入对应的属性值（假设该文件中有一个键为 `some.property` 的条目）。
+**重要属性和特性：**
 
-##### PropertySource 接口
+- `value` (或默认属性)：
 
-除了 `@PropertySource` 注解外，Spring 还提供了一个 `PropertySource<?>` 接口。这个接口用于表示一个属性源，它允许你以编程方式添加属性到 Spring 的 `Environment` 抽象中。这通常在你需要以非标准方式（比如从数据库或远程服务中）加载属性时非常有用。
+   指定一个或多个属性文件的位置。
 
-##### 实现自定义 PropertySource
+  - 可以使用 `classpath:` 前缀从类路径加载。
+  - 可以使用 `file:` 前缀从文件系统加载。
+  - 例如: `@PropertySource("classpath:config/app.properties")` 或 `@PropertySource("file:/etc/app/config.properties")`
 
-要实现一个自定义的 `PropertySource`，你需要创建一个实现该接口的类，并重写 `getProperty(String name)` 和 `getPropertyNames()` 方法。然后，你可以使用 `ConfigurableEnvironment` 的 `getPropertySources().addLast(PropertySource<?> propertySource)` 方法将这个自定义属性源添加到环境中。
+- `ignoreResourceNotFound`： (布尔类型, 默认为 `false`)
 
-然而，需要注意的是，直接使用 `PropertySource<?>` 接口和相关的 `ConfigurableEnvironment` API 通常是高级用法，更多时候，`@PropertySource` 注解和标准的属性文件加载方式已经足够满足大多数需求。
+  - 如果设置为 `true`，当指定的属性文件未找到时，Spring 不会抛出 `FileNotFoundException` 异常，而是会静默忽略。
+  - 例如: `@PropertySource(value = "classpath:optional.properties", ignoreResourceNotFound = true)`
+
+- `encoding`： 指定属性文件的字符编码。
+
+  - 例如: `@PropertySource(value = "classpath:app.properties", encoding = "UTF-8")`
+
+- **`name`：** 为此属性源指定一个名称。如果省略，将根据资源描述自动生成一个名称。
+
+- **`factory`：** (从 Spring 4.3 开始) 允许指定一个自定义的 `PropertySourceFactory`，用于解析非标准格式的属性文件（例如 YAML 文件，但这通常需要额外的依赖和实现）。
+
+**加载多个属性文件：**
+
+你有两种方式来加载多个属性文件：
+
+1. **使用 `@PropertySources` 注解 (Java 8 之前的版本)：**
+
+   ```Java
+   import org.springframework.context.annotation.Configuration;
+   import org.springframework.context.annotation.PropertySource;
+   import org.springframework.context.annotation.PropertySources;
+   
+   @Configuration
+   @PropertySources({
+       @PropertySource("classpath:app.properties"),
+       @PropertySource("classpath:db.properties")
+   })
+   public class MultiplePropertiesConfig {
+       // ...
+   }
+   ```
+
+1. 重复使用 @PropertySource 注解 (Java 8 及更高版本)：
+
+   `@PropertySource` 注解在 Java 8 中变成了可重复注解。
+
+   ```Java
+   import org.springframework.context.annotation.Configuration;
+   import org.springframework.context.annotation.PropertySource;
+   
+   @Configuration
+   @PropertySource("classpath:app.properties")
+   @PropertySource("classpath:db.properties")
+   public class MultiplePropertiesConfigJava8 {
+       // ...
+   }
+   ```
+
+**属性覆盖：**
+
+如果多个属性文件定义了相同的属性键，则最后一个加载的属性文件中的值将覆盖前面加载的值。加载顺序取决于 `@PropertySource` 注解声明的顺序。
+
+**使用占位符：**
+
+你可以在属性文件中使用占位符来引用其他属性，甚至是系统属性：
+
+```Properties
+# app.properties
+app.base.url=http://localhost:8080
+app.full.url=${app.base.url}/api
+my.java.home=${java.home}
+```
+
+Spring 会在解析属性值时自动替换这些占位符。
+
+**总结：**
+
+`@PropertySource` 提供了一种灵活且强大的方式来管理应用程序的外部配置。通过结合 `@Value` 或 `Environment`，你可以轻松地在 Spring 组件中使用这些配置值，从而使你的应用程序更加可配置和易于维护。在选择调用方式时，`@Value` 更适合静态和已知的属性注入，而 `Environment` 更适合动态获取或需要检查属性存在的场景。
 
 ##### 课堂演示
 
