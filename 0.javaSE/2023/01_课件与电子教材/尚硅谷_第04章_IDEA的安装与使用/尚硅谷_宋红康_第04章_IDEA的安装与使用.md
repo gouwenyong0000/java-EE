@@ -1304,6 +1304,8 @@ public class Debug08 {
 
 ### 插件5：Rainbow Brackets
 
+Rainbow Brackets Lite - Free and OpenSource
+
  ![image-20221019223340532](images/image-20221019223340532.png)
 
 给括号添加彩虹色，使开发者通过颜色区分括号嵌套层级，便于阅读
@@ -1395,6 +1397,8 @@ IDEA 支持各种主题插件，其中最出名的当属 Material Theme UI。
 
 ### 插件14：EsayCode
 
+它可以直接对数据的表生成entity、controller、service、dao、mapper，无需任何编码，简单而强大
+
 ### 插件15：Maven Helper
 
 ### 插件16：EditStarters
@@ -1403,3 +1407,80 @@ IDEA 支持各种主题插件，其中最出名的当属 Material Theme UI。
 
 在 kebab-case、SNAKE_CASE、PascalCase、camelCase、snake_case 或 space case 之间轻松切换。请参阅编辑菜单或使用 ⇧ + ⌥ + U / Shift + Alt + U。
 请查看此插件的首选项：您可以禁用某些转换或更改它们的顺序。
+
+### HighlightBracketPair(结尾括号高亮显示)
+
+### Baidu Comate(AI)
+
+### 推荐：arthas idea
+
+
+
+### 推荐：Smart Input Pro(输入法自动切换)
+
+###  MyBatisX
+
+MyBatisX 接口与SQL互相跳转插件
+
+
+
+### Auto Filling Java Arguments（自动填充参数）
+
+### google-java-format(代码自动格式化)
+
+### GitToolBox (git工具)
+
+
+
+### Jrebel and XRebel（热部署）
+
+### GenerateSerialVersionUID(生成序列化)
+
+
+
+### SonarLint (代码质量检查)
+
+
+
+### 推荐：Developer Tools
+
+- Encoding and Decoding: JWT (JSON Web Tokens), Base32, Base64, URL Base64, MIME Base64, URL encoding, line breaks
+  编码和解码：JWT（JSON Web 令牌）、Base32、Base64、URL Base64、MIME Base64、URL 编码、换行符
+- Regular Expression Matcher
+  正则表达式匹配器
+- UUID, ULID, Nano ID and Password Generator
+  UUID、ULID、Nano ID 和密码生成器
+- Text Sorting 文本排序
+- Text Case Transformation
+  文本大小写转换
+- Text Diff Viewer 文本差异查看器
+- Text Format Conversion 文本格式转换
+- Text Escape: HTML entities, Java Strings, JSON, CSV, and XML
+  文本转义：HTML 实体、Java 字符串、JSON、CSV 和 XML
+- Text Filter 文本过滤器
+- JSON Path Parser JSON 路径解析器
+- JSON Schema Validator JSON 架构验证器
+- Hashing 散列法
+- Archive (ZIP, TAR, JAR, 7z, ...) viewer and extractor
+  存档 （ZIP， TAR， JAR， 7z 等） 查看器和提取器
+- Date Time Handling (Unix Timestamp, Formatting, ...)
+  日期时间处理 （Unix 时间戳、格式等）
+- Units converters for time, data size and transfer rate
+  时间、数据大小和传输速率的单位转换器
+- Code Style Formatting 代码样式格式
+- SQL Formatting SQL 格式化
+- Color Picker 颜色选取器
+- Server certificates fetching, analyse and export
+  服务器证书获取、分析和导出
+- QR Code/Barcode Generator
+  二维码/条形码生成器
+- Lorem Ipsum Generator Lorem Ipsum 生成器
+- ASCII Art ASCII 艺术
+
+### 推荐：Color Brackets
+
+为基于 IntelliJ 的 IDE 着色括号。
+
+
+
+### Better Highlights
