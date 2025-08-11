@@ -140,7 +140,7 @@
 
 **1. 编码的必要性：符号位的处理**
 
-正如您所说，计算机底层使用二进制，但为了表示正数和负数，需要一种方法来区分符号。 最直观的想法就是用一位来专门表示符号，这就是符号位的由来。 然而，仅仅增加一个符号位会导致一些问题，尤其是在进行加减运算时。 为了更有效地进行运算，并解决一些原码和反码的缺陷，就发展出了反码和补码等更高级的编码方式。
+计算机底层使用二进制，但为了表示正数和负数，需要一种方法来区分符号。 最直观的想法就是用一位来专门表示符号，这就是符号位的由来。 然而，仅仅增加一个符号位会导致一些问题，尤其是在进行加减运算时。 为了更有效地进行运算，并解决一些原码和反码的缺陷，就发展出了反码和补码等更高级的编码方式。
 
 **2. 真值 vs. 机器数 (机器码)**
 
@@ -1728,8 +1728,6 @@ public class EvenOddCheck {
 
 在 Java 中，字符串和数字之间的相互转换是非常常见的操作。下面我将系统地介绍如何进行这些转换，并且区分**有符号**和**无符号数**的情况（Java 8 及以上支持无符号操作）。
 
-------
-
 ## 一、字符串转数字
 
 ###  1. 有符号整数（默认）
@@ -2056,126 +2054,149 @@ System.out.println(value); // 输出: 12300.0
 
 
 
-## 六、扩展：超大数
+## 六、扩展：超大数运算
 
-处理**超大数**（超过 `long` 的范围，例如 `> 9223372036854775807`）时，Java 提供了专门的类：
+### 1. 背景与概念
 
-------
+在 Java 中，基本整数类型（`byte`, `short`, `int`, `long`）都有固定的取值范围，无法直接表示超出范围的数值。
 
-###  一、使用 `BigInteger` 处理任意大小的整数
-
-`BigInteger` 是 Java 中处理任意精度整数的类，它支持：
-
-- 超过 long 的大整数（正负）
-- 各种进制的字符串解析（2~36）
-- 加减乘除、模运算等
+- `int` 最大值：2³¹-1（约 21 亿）
+- `long` 最大值：2⁶³-1（约 9.22 × 10¹⁸）
+   当需要处理超大整数或高精度小数时，必须使用 **`java.math` 包**中的类：
+  - **`BigInteger`**：任意精度整数
+  - **`BigDecimal`**：任意精度小数
 
 ------
 
-####  示例：字符串转超大整数
+### 2. BigInteger（任意精度整数）
+
+#### 2.1 特点
+
+- **不可变对象**：所有运算返回新对象，不会修改原值。
+- **支持任意精度**：内存足够时，数值可以无限大。
+- **线程安全**：内部不可变设计。
+
+#### 2.2 创建方式
 
 ```java
-import java.math.BigInteger;
+BigInteger a = new BigInteger("123456789012345678901234567890");
+BigInteger b = BigInteger.valueOf(12345); // 基本类型转大数
+```
 
-public class BigIntDemo {
+#### 2.3 常用方法
+
+| 方法                                     | 说明                   |
+| ---------------------------------------- | ---------------------- |
+| `add(BigInteger val)`                    | 加法                   |
+| `subtract(BigInteger val)`               | 减法                   |
+| `multiply(BigInteger val)`               | 乘法                   |
+| `divide(BigInteger val)`                 | 除法（截断）           |
+| `divideAndRemainder(BigInteger val)`     | 同时获取商与余数       |
+| `mod(BigInteger val)`                    | 取余（非负）           |
+| `pow(int exponent)`                      | 幂运算                 |
+| `gcd(BigInteger val)`                    | 最大公约数             |
+| `isProbablePrime(int certainty)`         | 判断是否为质数         |
+| `compareTo(BigInteger val)`              | 比较大小               |
+| `shiftLeft(int n)` / `shiftRight(int n)` | 位移（相当于乘/除 2ⁿ） |
+
+#### 2.4 注意事项
+
+- 不能用 `+`, `-`, `*`, `/` 运算符，必须用方法。
+- 适合大整数运算，但性能比基本类型慢很多。
+- `mod` 不支持负数模运算，负数需先转换。
+
+------
+
+### 3. BigDecimal（任意精度小数）
+
+#### 3.1 特点
+
+- 高精度浮点数表示，适用于**财务计算**。
+- **不可变对象**，线程安全。
+- 支持多种舍入模式。
+
+#### 3.2 创建方式
+
+```java
+BigDecimal a = new BigDecimal("0.1"); // 推荐用字符串避免精度丢失
+BigDecimal b = BigDecimal.valueOf(0.1); // 会自动处理 double 精度
+```
+
+#### 3.3 常用方法
+
+| 方法                                                   | 说明                         |
+| ------------------------------------------------------ | ---------------------------- |
+| `add(BigDecimal val)`                                  | 加法                         |
+| `subtract(BigDecimal val)`                             | 减法                         |
+| `multiply(BigDecimal val)`                             | 乘法                         |
+| `divide(BigDecimal val, int scale, RoundingMode mode)` | 除法（指定小数位与舍入模式） |
+| `setScale(int newScale, RoundingMode mode)`            | 调整精度                     |
+| `compareTo(BigDecimal val)`                            | 比较大小                     |
+| `stripTrailingZeros()`                                 | 去掉多余的 0                 |
+
+#### 3.4 舍入模式常用值
+
+| 模式                     | 说明                |
+| ------------------------ | ------------------- |
+| `RoundingMode.UP`        | 向远离 0 的方向舍入 |
+| `RoundingMode.DOWN`      | 向 0 方向舍入       |
+| `RoundingMode.HALF_UP`   | 四舍五入            |
+| `RoundingMode.HALF_DOWN` | 五舍六入            |
+| `RoundingMode.HALF_EVEN` | 银行家舍入          |
+
+------
+
+### 4. 性能与优化建议
+
+1. **性能劣势**：大数计算比基本类型慢几个数量级，应避免在高频计算中使用。
+2. **减少对象创建**：尽量复用 `BigInteger.ZERO`、`BigInteger.ONE` 等常量。
+3. **合理选择精度**：`BigDecimal` 尽量指定合适的 `scale`，避免不必要的高精度。
+4. **必要时使用第三方库**：如 `Apfloat`、`FastBigInteger`，在超大规模运算中性能更优。
+
+------
+
+### 5. 常见坑
+
+- **`new BigDecimal(double)` 精度丢失**：必须用字符串或 `valueOf`。
+- **不能直接用 `==` 比较**：要用 `.compareTo()` 或 `.equals()`。
+- **`divide` 默认会抛异常**：当不能整除时必须指定舍入模式，否则抛 `ArithmeticException`。
+
+------
+
+### 6. 示例代码
+
+```java
+import java.math.*;
+
+public class BigNumberDemo {
     public static void main(String[] args) {
-        // 超出 long 范围的值
-        String bigStr = "123456789012345678901234567890";
+        BigInteger a = new BigInteger("12345678901234567890");
+        BigInteger b = new BigInteger("987654321");
 
-        try {
-            BigInteger big = new BigInteger(bigStr); // 默认十进制
-            System.out.println("BigInteger: " + big);
-        } catch (NumberFormatException e) {
-            System.out.println("格式错误: " + e.getMessage());
-        }
+        // 大整数运算
+        System.out.println(a.add(b)); // 加
+        System.out.println(a.multiply(b)); // 乘
+        System.out.println(a.divideAndRemainder(b)[1]); // 余数
 
-        // 16 进制解析
-        BigInteger hex = new BigInteger("FFFFFFFFFFFFFFFF", 16);
-        System.out.println("Hex: " + hex);
+        // 高精度小数运算
+        BigDecimal x = new BigDecimal("1.2345");
+        BigDecimal y = new BigDecimal("3.4567");
+        BigDecimal result = x.divide(y, 10, RoundingMode.HALF_UP);
+        System.out.println(result);
     }
 }
 ```
 
 ------
 
-#### 常用操作
+### 7. 快速对照表
 
-```java
-BigInteger a = new BigInteger("99999999999999999999");
-BigInteger b = new BigInteger("88888888888888888888");
-
-BigInteger sum = a.add(b);       // 加
-BigInteger diff = a.subtract(b); // 减
-BigInteger prod = a.multiply(b); // 乘
-BigInteger quot = a.divide(b);   // 除
-BigInteger mod = a.mod(BigInteger.valueOf(1000)); // 取模
-```
-
-------
-
-#### 处理无符号十六进制字符串（如来自补码的 `FFFFFFFFFFFFFFFF`）
-
-```java
-// 无符号 64 位最大值
-BigInteger unsigned64 = new BigInteger("FFFFFFFFFFFFFFFF", 16);
-System.out.println("Unsigned 64位: " + unsigned64); // 输出：18446744073709551615
-```
-
-------
-
-### 二、封装：安全 BigInteger 工具方法
-
-```java
-public class BigIntUtils {
-
-    public static BigInteger tryParseBigInteger(String str, int radix, BigInteger defaultValue) {
-        if (str == null || str.trim().isEmpty()) return defaultValue;
-        try {
-            return new BigInteger(str.trim(), radix);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    public static BigInteger tryParseBigInteger(String str) {
-        return tryParseBigInteger(str, 10, null);
-    }
-}
-```
-
-------
-
-### 三、示例：处理超过 `Long.MAX_VALUE` 的值
-
-```java
-public class Demo {
-    public static void main(String[] args) {
-        String tooBig = "9223372036854775808"; // Long.MAX_VALUE + 1
-        BigInteger big = BigIntUtils.tryParseBigInteger(tooBig);
-
-        System.out.println("Big: " + big); // 9223372036854775808
-        System.out.println("Compare to Long.MAX_VALUE: " + big.compareTo(BigInteger.valueOf(Long.MAX_VALUE))); // > 0
-    }
-}
-```
-
-------
-
-### 总结
-
-| 数值大小 | 类型         | 示例最大值                                        |
-| -------- | ------------ | ------------------------------------------------- |
-| 普通整数 | `int`        | `2147483647`                                      |
-| 长整型   | `long`       | `9223372036854775807`                             |
-| 超大整数 | `BigInteger` | `无限精度`，如 `"123456789012345678901234567890"` |
-
-
-
-
-
-
-
-
+| 场景                   | 建议使用                                    |
+| ---------------------- | ------------------------------------------- |
+| 超大整数               | `BigInteger`                                |
+| 高精度小数             | `BigDecimal`                                |
+| 性能敏感且数值不超范围 | 基本类型（`long`, `double`）                |
+| 科学计算且允许误差     | `double` + 科学库（如 Apache Commons Math） |
 
 
 
@@ -3069,6 +3090,100 @@ public class BitOperationsUtil {
     }
 
 ```
+
+位运算是一种高效的计算方式，在某些场景下可以替代取余运算（%），尤其是当模数是2的幂时。以下是一些与取余相关的位运算技巧，以及其他常见的位运算技巧，简洁说明并举例：
+
+# 位运算技巧汇总
+
+### 1. **用位运算代替取余（模2的幂）**
+
+当需要对2的幂（如2、4、8、16等）取余时，可以使用位与运算（`&`）代替`%`。
+
+- **原理**：对一个数`n`模`2^k`等价于`n & (2^k - 1)`，因为`2^k - 1`是一个低`k`位全为1的二进制掩码。
+- **公式**：`n % 2^k == n & (2^k - 1)`
+- **例子**：
+  - `n % 2` 等价于 `n & 1`（因为2^1 - 1 = 1）
+    - 例：`7 % 2 = 1`，`7 & 1 = 1`（7的二进制`111`，与`001`按位与得`001`）
+  - `n % 4` 等价于 `n & 3`（因为2^2 - 1 = 3）
+    - 例：`10 % 4 = 2`，`10 & 3 = 2`（10的二进制`1010`，与`0011`按位与得`0010`）
+  - `n % 8` 等价于 `n & 7`（因为2^3 - 1 = 7）
+    - 例：`15 % 8 = 7`，`15 & 7 = 7`（15的二进制`1111`，与`0111`按位与得`0111`）
+
+- **适用场景**：哈希表索引计算、循环数组下标、快速模运算等。
+
+### 2. **判断奇偶性**
+
+- **原理**：一个数的二进制最低位为1表示奇数，为0表示偶数。
+- **公式**：`n & 1`（结果为1表示奇数，为0表示偶数）
+- **例子**：
+  - `6 & 1 = 0`（6的二进制`110`，最低位0，偶数）
+  - `7 & 1 = 1`（7的二进制`111`，最低位1，奇数）
+
+### 3. **判断是否为2的幂**
+
+- **原理**：2的幂的二进制只有一个1，其余位为0（如4=`100`，8=`1000`）。`n & (n-1)`可以清除最低位的1，如果结果为0，则`n`是2的幂。
+- **公式**：`n & (n-1) == 0`（且`n > 0`）
+- **例子**：
+  - `8 & 7 = 0`（8的二进制`1000`，7是`0111`，结果`0000`，是2的幂）
+  - `6 & 5 = 4`（6的二进制`110`，5是`101`，结果`100`，不是2的幂）
+
+### 4. **快速除以2的幂**
+
+- **原理**：右移运算`>>`相当于除以2的幂。
+- **公式**：`n >> k` 等价于 `n / 2^k`（向下取整）
+- **例子**：
+  - `16 >> 2 = 4`（16的二进制`10000`右移2位得`100`，即4，等价于`16 / 4`）
+  - `10 >> 1 = 5`（10的二进制`1010`右移1位得`101`，即5，等价于`10 / 2`）
+
+### 5. **交换两个数（不使用临时变量）**
+
+- **原理**：使用异或运算`^`可以交换两个数。
+
+- **公式**：
+
+  ```c
+  a ^= b;
+  b ^= a;
+  a ^= b;
+  ```
+
+- **例子**：交换`a=5`（`101`），`b=3`（`011`）：
+
+  - `a = a ^ b = 101 ^ 011 = 110`（6）
+  - `b = b ^ a = 011 ^ 110 = 101`（5）
+  - `a = a ^ b = 110 ^ 101 = 011`（3）
+  - 结果：`a=3`，`b=5`
+
+### 6. **获取最低位1**
+
+- **原理**：`n & (-n)`可以提取`n`的二进制表示中最低位的1。
+- **公式**：`n & (-n)`（`-n`是`n`的二进制补码）
+- **例子**：
+  - `n=12`（二进制`1100`），`-n = ~n + 1 = ~1100 + 1 = 0011 + 1 = 0100`
+  - `12 & (-12) = 1100 & 0100 = 0100`（即4，最低位1）
+
+### 7. **快速判断两个数符号是否相同**
+
+- **原理**：异或运算`^`后检查结果的符号位（最高位）。
+- **公式**：`(a ^ b) >= 0`表示`a`和`b`符号相同。
+- **例子**：
+  - `a=5, b=3`：`5 ^ 3 = 6`（正数，符号相同）
+  - `a=5, b=-3`：`5 ^ -3`（结果负数，符号不同）
+
+### 8. **位运算在循环数组中的应用**
+
+- **场景**：在长度为`n`（2的幂）的循环数组中，计算下标`i`的下一个位置。
+- **公式**：`(i + 1) & (n - 1)` 等价于 `(i + 1) % n`
+- **例子**：数组长度`n=8`，当前下标`i=7`：
+  - `(7 + 1) & (8 - 1) = 8 & 7 = 0`（等价于`8 % 8 = 0`）
+
+### 注意事项
+
+- 位运算高效，但需确保模数是2的幂，否则不适用。
+- 在负数运算时，注意补码表示可能影响结果。
+- 位运算可读性较低，建议在代码中添加注释说明。
+
+
 
 
 
