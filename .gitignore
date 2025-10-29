@@ -1,0 +1,152 @@
+# ===========================================
+# Git Ignore for Java + Vue (Full Stack)
+# IntelliJ IDEA + Maven/Gradle + Node
+# ===========================================
+
+### 1️⃣ Java & Build ###
+# Maven
+/target/
+/out/
+/build/
+/dependency-reduced-pom.xml
+
+# Gradle
+.gradle/
+/build/
+/!gradle/wrapper/gradle-wrapper.jar
+
+# Logs and temp
+*.log
+*.tmp
+*.bak
+*.swp
+*.lock
+hs_err_pid*
+replay_pid*
+*.pid
+
+# Application files
+*.war
+*.ear
+*.jar
+
+# Spring Boot
+*.iml
+*.iws
+*.ipr
+
+### 2️⃣ IntelliJ IDEA ###
+.idea/
+*.iml
+*.iws
+out/
+*.class
+
+# IntelliJ specific plugin files
+.idea_modules/
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf/
+.idea/**/httpRequests/
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/assetWizardSettings.xml
+.idea/**/gradle.xml
+.idea/**/libraries/
+.idea/**/vcs.xml
+.idea/**/runConfigurations/
+.idea/**/modules.xml
+.idea/**/compiler.xml
+
+# JetBrains Fleet
+.fleet/
+
+### 3️⃣ Node / Vue ###
+# node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# build output
+/dist/
+/build/
+/.cache/
+/.vuepress/dist
+/.nuxt/
+/out/
+/coverage/
+*.tsbuildinfo
+
+# local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# VSCode settings (if team uses IDEA only)
+.vscode/
+
+# editor temp files
+*.sublime-workspace
+*.sublime-project
+
+### 4️⃣ OS / Tooling ###
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+### 5️⃣ Others ###
+# IDE history and cache
+/.history/
+/.idea_cache/
+/.idea_backup/
+
+# JetBrains HTTP Client requests
+httpRequests/
+
+# Java coverage / analysis
+jacoco.exec
+*.ec
+*.em
+*.coverdata
+
+# Sonar / Lint
+.sonar/
+.eslintcache
+
+# Local test reports
+/test-output/
+/test-results/
+
+# Temporary upload / runtime files
+/tmp/
+/logs/
+/uploads/
+/data/
+
+# Custom project ignores
+# Uncomment and edit as needed:
+# /config/application-local.yml
+# /frontend/dist/
+# /backend/target/
+0.javaSE/2023/01_课件与电子教材/尚硅谷_第02章_变量与运算符/【拓展】CodeCharts.pdf
