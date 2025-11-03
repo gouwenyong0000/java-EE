@@ -1560,18 +1560,50 @@ public class EvenOddCheck {
 
 
 
-# java中字符串和数字转换
 
-在 Java 中，字符串和数字之间的相互转换是非常常见的操作。下面我将系统地介绍如何进行这些转换，并且区分**有符号**和**无符号数**的情况（Java 8 及以上支持无符号操作）。
+
+# Java 中字符串与数字转换详解
+
+> 💡 本文系统介绍了 Java 中字符串与数字的相互转换方式，涵盖：
+>
+> - 有符号与无符号数转换（Java 8+）
+> - 进制转换与补码理解
+> - 科学计数法格式化与解析
+> - 任意精度运算（`BigInteger`、`BigDecimal`）
+> - 常见陷阱与面试高频考点
+
+---
+
+<details>
+<summary>📑 目录（点击展开）</summary>
+
+
+1. [字符串转数字](#一字符串转数字)
+   - [有符号整数](#1-有符号整数默认)
+   - [无符号整数（Java-8）](#2-无符号整数java-8)
+   - [总结对比表](#总结对比表)
+2. [数字转字符串](#二数字转字符串)
+3. [示例对比](#三示例对比)
+4. [常用封装方法](#四转换实用方法封装)
+5. [科学计数法转换](#五java-中科学计数法数字转换)
+6. [任意精度数（BigInteger / BigDecimal）](#六扩展超大数运算)
+7. [易错点与陷阱总结](#七易错点与陷阱总结)
+8. [面试常考题与实战延伸](#八面试常考题与实战延伸)
+
+</details>
+
+---
 
 ## 一、字符串转数字
 
-###  1. 有符号整数（默认）
+### 1. 有符号整数（默认）
 
 Java 默认使用 **有符号整数类型**：
 
-- `int`（32 位，范围：-2³¹ ~ 2³¹-1）
-- `long`（64 位，范围：-2⁶³ ~ 2⁶³-1）
+| 类型   | 位数  | 范围         |
+| ------ | ----- | ------------ |
+| `int`  | 32 位 | -2³¹ ~ 2³¹-1 |
+| `long` | 64 位 | -2⁶³ ~ 2⁶³-1 |
 
 #### 🔹 字符串转整数
 
@@ -1579,179 +1611,138 @@ Java 默认使用 **有符号整数类型**：
 int a = Integer.parseInt("123");       // 123
 int b = Integer.parseInt("-123");      // -123（负数支持）
 
-long c = Long.parseLong("1234567890123");        // long 正数
-long d = Long.parseLong("-987654321012345678");  // long 负数
+long c = Long.parseLong("1234567890123");
+long d = Long.parseLong("-987654321012345678");
 ```
 
 #### 🔹 指定进制支持（支持负数）
 
 ```java
-int hex = Integer.parseInt("7F", 16);     // 127 十六进制
-int hexNeg = Integer.parseInt("-7F", 16); // -127 十六进制负数
+int hex = Integer.parseInt("7F", 16);     // 127
+int hexNeg = Integer.parseInt("-7F", 16); // -127
 
-int bin = Integer.parseInt("1010", 2);      // 10 二进制
-int binNeg = Integer.parseInt("-1111111", 2); // -127 二进制负数
+int bin = Integer.parseInt("1010", 2);      // 10
+int binNeg = Integer.parseInt("-1111111", 2); // -127
 ```
 
-> ✅ **负数必须以 `-` 前缀表示**，即 `-7F`、`-1111111`，否则会抛出 `NumberFormatException`。
+> ✅ **负数必须以 `-` 开头**，否则抛出 `NumberFormatException`。
 
 ------
 
-#### 🔸 负数如何存储？
-
-Java 使用 **补码**（two's complement）表示负数：
+#### 🔸 负数的存储方式（补码）
 
 ```java
 int x = -123;
-System.out.println(Integer.toBinaryString(x)); 
-// 输出: 11111111111111111111111110000101 （补码形式）
+System.out.println(Integer.toBinaryString(x));
+// 输出: 11111111111111111111111110000101
 ```
+
+Java 的负数使用 **补码** 表示。
 
 ------
 
 ### 2. 无符号整数（Java 8+）
 
-Java 不支持真正的无符号基础类型，但提供了**静态方法**用于解析无符号字符串：
+虽然 Java 没有真正的无符号类型，但从 **Java 8 起**支持解析与显示无符号数：
 
 ```java
 int u32 = Integer.parseUnsignedInt("4294967295"); // 最大无符号 32 位值 = 0xFFFFFFFF
-long u32long = Integer.toUnsignedLong(u32);       // 转为 long 得到正值表示
+long u32long = Integer.toUnsignedLong(u32);
 
-long u64 = Long.parseUnsignedLong("18446744073709551615"); // 最大 64 位无符号
+
+long u64 = Long.parseUnsignedLong("18446744073709551615");
+System.out.println("u32 =" + u32 + " u32long=" + u32long + " u64=" + u64);
+// 结果：u32 =-1 u32long=4294967295 u64=-1
 ```
 
-#### 🔸 负数行为对比（⚠️）
+#### 🔸 负数视角下的行为
 
 ```java
 int signed = Integer.parseInt("-1"); // -1，补码为 0xFFFFFFFF
 System.out.println(Integer.toUnsignedLong(signed)); // 输出：4294967295
 ```
 
-说明：`-1` 在无符号视角下就是 `0xFFFFFFFF`，即 `4294967295`
+`-1` 在无符号视角下是 `0xFFFFFFFF`。
 
 ------
 
-###  总结对比表
+### 总结对比表
 
-| 项目           | 有符号整数                   | 无符号整数（Java 8+）                   |
-| -------------- | ---------------------------- | --------------------------------------- |
-| 类型           | `int`, `long`                | `int`, `long`（解析时作为无符号）       |
-| 是否支持负数   | ✅ 是（以 `-` 表示）          | ❌ 否（不能传负数字符串）                |
-| 超范围处理     | 抛出 `NumberFormatException` | 抛出 `NumberFormatException`            |
-| 表示 -1        | `-1`                         | `0xFFFFFFFF` = `4294967295`             |
-| 方法           | `parseInt`, `parseLong`      | `parseUnsignedInt`, `parseUnsignedLong` |
-| 可转为更大类型 | 自动扩展为 long / BigInteger | 可转为 `long` 或 `BigInteger` 保留正值  |
-
-------
-
-
+| 项目     | 有符号整数              | 无符号整数（Java 8+）                   |
+| -------- | ----------------------- | --------------------------------------- |
+| 类型     | `int`, `long`           | `int`, `long`（解析时无符号）           |
+| 支持负数 | ✅ 是                    | ❌ 否                                    |
+| 超范围   | 抛出异常                | 抛出异常                                |
+| 表示 -1  | `-1`                    | `0xFFFFFFFF` = `4294967295`             |
+| 方法     | `parseInt`, `parseLong` | `parseUnsignedInt`, `parseUnsignedLong` |
+| 转换扩展 | long / BigInteger       | long / BigInteger                       |
 
 ------
 
-> `Integer.parseInt(String s, int radix)`**要点总结：**
->
-> - **指定基数 16:**  在 `Integer.parseInt()` 和 `Integer.valueOf()` 方法中，**第二个参数必须设置为 `16`**，明确告知 Java 虚拟机 (JVM)  输入的字符串是十六进制格式。
-> - **大小写不敏感:**  十六进制字符串中的 `A-F` 或 `a-f` 字母**大小写不敏感**，`"0xFF"` 和 `"0xff"` 都会被正确解析。
-> - **可选的 "0x" 前缀:**  虽然 `parseInt()` 和 `valueOf()` 方法可以处理带有 `"0x"` 或 `"0X"` 前缀的十六进制字符串，但**更规范的做法是直接提供不带前缀的十六进制字符串**，例如 `"FF"` 而不是 `"0xFF"`。
-> - **错误处理:**  如果输入的字符串**不是有效的十六进制格式**，或者**超出了 `int` 类型的表示范围**，会抛出 `NumberFormatException` 异常，需要进行适当的异常处理。
-> - **补码表示:**  需要注意的是，当十六进制字符串表示的数值超出 `int` 的正数范围，或者表示负数时（例如，`"80000000"` 和 `"FFFFFFFF"`），`Integer.parseInt()` 会将其解析为对应的**有符号 `int` 值 (补码表示)**，结果可能为负数。  如果需要将超出 `int` 范围的十六进制字符串解析为无符号数，则需要使用 `Long.parseUnsignedLong(String s, 16)` (Java 8+)。
+### `Integer.parseInt(String s, int radix)` 要点总结
 
+- 基数必须显式指定（如 16 表示十六进制）。
+- `A-F` 大小写不敏感。
+- 不推荐带 `"0x"` 前缀。
+- 非法格式或超范围会抛出 `NumberFormatException`。
+- 当十六进制超出正数范围，如 `"FFFFFFFF"`，结果为 **补码负数**。
 
+> 如需保留正值，应使用：
+>
+> **补码表示:**  需要注意的是，当十六进制字符串表示的数值超出 `int` 的正数范围，或者表示负数时（例如，`"80000000"` 和 `"FFFFFFFF"`），`Integer.parseInt()` 会将其解析为对应的**有符号 `int` 值 (补码表示)**，结果可能为负数。  如果需要将超出 `int` 范围的十六进制字符串解析为无符号数，则需要使用 `Long.parseUnsignedLong(String s, 16)` (Java 8+)。
 
-**注意：**  `Integer.toUnsignedString()` 和 `Long.toUnsignedString()`  **不会改变数字的二进制表示**，它们只是在**字符串转换时，将数字解释为无符号数来计算十进制值**。  底层的数字仍然是有符号的 `int` 或 `long` 类型。
+------
 
-> `Long.toUnsignedString()`中部分源码
->
-> ```java
->  private static BigInteger toUnsignedBigInteger(long i) {
->      if (i >= 0L)
->          return BigInteger.valueOf(i);
->      else {
->          int upper = (int) (i >>> 32);
->          int lower = (int) i;
-> 
->          // return (upper << 32) + lower
->          return (BigInteger.valueOf(Integer.toUnsignedLong(upper))).shiftLeft(32).
->              add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
->      }
->  }
-> 
-> ```
->
-> 这段代码的核心思想是：
->
-> Java 的 `long` 类型是有符号的，要表示 64 位无符号整数，需要使用 `BigInteger` 类，因为 `BigInteger` 可以表示任意大小的整数。
->
-> 对于非负的 `long` 值，可以直接转换为 `BigInteger`。
->
-> 对于负的 `long` 值，需要将其视为无符号数来转换。  方法是将 64 位的 `long` 分成高 32 位和低 32 位，分别将这两部分当作无符号 32 位整数转换为 `BigInteger`，然后将高 32 位的部分左移 32 位，再与低 32 位部分相加，最终得到完整的 64 位无符号 `BigInteger` 表示。
+#### 📜 源码理解（`Integer.toUnsignedLong`）
 
-> `Integer.toUnsignedString(int i)`部分源码
->
-> ```java
-> //功能:  将有符号 int 转换为无符号 long。 
-> public static long toUnsignedLong(int x) {
->   return ((long) x) & 0xffffffffL;// 0xffffffffL ==> 0x00000000ffffffffL
-> }
-> ```
->
-> **`(long) x`**:  将 `int` 转换为 `long`，如果 `x` 是负数，会进行符号扩展，`long` 的高位会变成 `1`。
->
-> **`& 0xffffffffL`**:  使用掩码 `0xffffffffL`，将 `long` 的高 32 位清零，只保留低 32 位。 这相当于**截断了符号扩展**，并将 `int` 的 32 位二进制数据视为**无符号数**来解释。
->
-> 
->
-> **`return ((long) x) & 0xffffffffL;`**
->
-> - 这是方法的核心语句，负责执行转换并返回值。让我们分解一下：
->   - **`((long) x)`**:  这部分代码执行了**类型转换 (Type Casting)**。 它将输入的 `int` 值 `x` 转换为 `long` 类型。
->     - 当 `int` 转换为 `long` 时，数值会保持不变。 如果 `x` 是正数，`long` 类型的值仍然是相同的正数。  如果 `x` 是负数（在二进制补码表示下），会进行**符号扩展 (Sign Extension)**，即 `long` 类型的高位会用 1 填充，以保持负数值的补码表示。
->   - **`& 0xffffffffL`**:  这部分代码执行了**按位与运算 (Bitwise AND)**。
->     - **`0xffffffffL`**:  这是一个 **`long` 类型的十六进制字面量 (Literal)**，表示十六进制数值 `0xffffffff`。 让我们详细解释一下这个十六进制值：
->       - `ffffffff`:  八个 `f`，所以 `0xffffffff` 在二进制中是 32 个 `1`: `11111111 11111111 11111111 11111111`。表示无符号int最大值
->       - `L`:  后缀 `L` 表明这是一个 `long` 类型的字面量。  这很重要，因为如果去掉 `L`，`0xffffffff` 会被默认当作 `int` 类型，在某些情况下可能会导致问题。
->     - **`((long) x) & 0xffffffffL` 的作用**:  将 `(long) x` 的值与 `0xffffffffL` 进行按位与运算。  `0xffffffffL`  这个掩码 (Mask) 的特点是：它的 **低 32 位都是 1**，而 **高 32 位都是 0**。
->       - **按位与运算的特性**:  任何位与 `1` 进行与运算，结果保持原位不变。 任何位与 `0` 进行与运算，结果都变为 `0`。
->       - 因此，`((long) x) & 0xffffffffL` 的效果是：
->         - **保留 `(long) x` 的 低 32 位 不变** (因为与 `0xffffffffL` 的低 32 位 `1` 进行与运算)。
->         - 将 `(long) x` 的 **高 32 位 全部设置为 0** (因为与 `0xffffffffL` 的高 32 位 `0` 进行与运算)。
+```java
+public static long toUnsignedLong(int x) {
+    return ((long) x) & 0xffffffffL;// 0xffffffffL ==> 0x00000000ffffffffL
+}
+```
 
+> **作用：**
+>
+> - **`(long) x`**:  将 `int` 转换为 `long`，会进行符号扩展，`long` 的高位会变成 `1`。
+>
+> - **`& 0xffffffffL`**:  使用掩码 `0xffffffffL`，将 `long` 的高 32 位清零，只保留低 32 位。 这相当于**截断了符号扩展**，并将 `int` 的 32 位二进制数据视为**无符号数**来解释。
+>
+>   
 
+------
 
+## 二、数字转字符串
 
-
-##  二、数字转字符串
-
-### 1. 有符号数转字符串
+### 1. 有符号数
 
 ```java
 int a = -123;
-String s = Integer.toString(a);       // "-123"
-String s2 = Integer.toString(a, 16);  // 转为十六进制补码表示，结果："ffffff85"
+System.out.println(Integer.toString(a));       // "-123"
+System.out.println(Integer.toString(a, 16));   // 转为十六进制补码表示，结果："ffffff85"
 ```
 
-### 2. 无符号数转字符串（Java 8+）
+### 2. 无符号数（Java 8+）
 
 ```java
 int i = -1;
-String s = Integer.toUnsignedString(i);        // "4294967295"
-String hex = Integer.toUnsignedString(i, 16);  // "ffffffff" 补码形式
+System.out.println(Integer.toUnsignedString(i));       // "4294967295"
+System.out.println(Integer.toUnsignedString(i, 16));   // "ffffffff"
 
 long l = -1L;
-String s64 = Long.toUnsignedString(l);         // "18446744073709551615"
+System.out.println(Long.toUnsignedString(l));          // "18446744073709551615"
 ```
 
 ------
 
 ## 三、示例对比
 
-| 表达式                                   | 说明                   | 输出                                 |
-| ---------------------------------------- | ---------------------- | ------------------------------------ |
-| `Integer.parseInt("-1")`                 | 有符号解析             | `-1`                                 |
-| `Integer.parseUnsignedInt("4294967295")` | 解析无符号 32 位最大值 | `-1`（存储为 int）                   |
-| `Integer.toUnsignedString(-1)`           | 无符号显示 int 的补码  | `"4294967295"`                       |
-| `Integer.toString(-1, 16)`               | 十六进制补码字符串     | `"ffffffff"`                         |
-| `Integer.toBinaryString(-5)`             | 二进制补码字符串       | `"11111111111111111111111111111011"` |
+| 表达式                                   | 说明         | 输出                                 |
+| ---------------------------------------- | ------------ | ------------------------------------ |
+| `Integer.parseInt("-1")`                 | 有符号解析   | `-1`                                 |
+| `Integer.parseUnsignedInt("4294967295")` | 无符号解析   | `-1`（内部存储）                     |
+| `Integer.toUnsignedString(-1)`           | 无符号显示   | `"4294967295"`                       |
+| `Integer.toString(-1, 16)`               | 十六进制补码 | `"ffffffff"`                         |
+| `Integer.toBinaryString(-5)`             | 二进制补码   | `"11111111111111111111111111111011"` |
 
 ------
 
@@ -1773,266 +1764,212 @@ public class NumberUtils {
 }
 ```
 
-#### 处理 `NumberFormatException` 异常
-
-如果输入字符串不是有效的数字格式，例如 `parseInt()` 和 `parseDouble()` 这样的方法会抛出 `NumberFormatException` 异常。 您应该处理这个异常，以防止程序崩溃。
+异常处理：
 
 ```java
-String invalidStr = "abc";
 try {
-    int num = Integer.parseInt(invalidStr);
+    int num = Integer.parseInt("abc");
 } catch (NumberFormatException e) {
-    System.err.println("字符串转换为数字时出错: " + e.getMessage());
+    System.err.println("字符串转换错误: " + e.getMessage());
 }
 ```
-
-以下是将「Java 中科学计数法数字转换」整理成美观的 Markdown 格式，适合文档或笔记使用：
 
 ------
 
 ## 五、Java 中科学计数法数字转换
 
-在 Java 中，可以使用多种方式将数字转换为科学计数法格式，或从科学计数法转换为普通数字。本文介绍常用的三种方式：`String.format()`、`DecimalFormat`、以及 `BigDecimal`。
-
-------
-
-### ✅ 方式一：使用 `String.format()`
-
-使用格式说明符 `%e` 或 `%E` 生成科学计数法表示：
+### ✅ 使用 `String.format()`
 
 ```java
-double number = 12345.6789;
-
-// 小写 e 表示
-String scientific1 = String.format("%e", number);
-System.out.println(scientific1); // 输出: 1.234568e+04
-
-// 大写 E，保留两位小数
-String scientific2 = String.format("%.2E", number);
-System.out.println(scientific2); // 输出: 1.23E+04
+double num = 12345.6789;
+System.out.println(String.format("%e", num));    // 1.234568e+04
+System.out.println(String.format("%.2E", num));  // 1.23E+04 
 ```
 
-#### 📌 格式控制说明：
-
-| 格式        | 含义                             |
-| ----------- | -------------------------------- |
-| `%e` / `%E` | 科学计数法，默认保留 6 位小数    |
-| `%.nf`      | 保留 `n` 位小数                  |
-| `%10.2e`    | 宽度为 10，保留 2 位小数，右对齐 |
+| 格式        | 含义            |
+| ----------- | --------------- |
+| `%e` / `%E` | 科学计数法      |
+| `%.nf`      | 保留 n 位小数   |
+| `%10.2e`    | 宽度 10，右对齐 |
 
 ------
 
-### ✅ 方式二：使用 `DecimalFormat`
-
-`java.text.DecimalFormat` 提供更灵活的格式控制。
+### ✅ 使用 `DecimalFormat`
 
 ```java
-import java.text.DecimalFormat;
-
-double number = 12345.6789;
-
 DecimalFormat df = new DecimalFormat("0.###E0");
-String result = df.format(number);
-System.out.println(result); // 输出: 1.235E4
+System.out.println(df.format(12345.6789)); // 1.235E4
 ```
 
-#### 📌 模式说明：
-
-| 格式字符串  | 示例输出    | 说明                       |
-| ----------- | ----------- | -------------------------- |
-| `0.00E0`    | `1.23E4`    | 保留两位小数               |
-| `0.###E0`   | `1.235E4`   | 最多三位小数，去尾零       |
-| `0.0000E00` | `1.2346E04` | 保留四位小数，指数两位数字 |
+| 模式        | 示例      | 说明         |
+| ----------- | --------- | ------------ |
+| `0.00E0`    | 1.23E4    | 保留两位小数 |
+| `0.###E0`   | 1.235E4   | 去尾零       |
+| `0.0000E00` | 1.2346E04 | 指数两位数   |
 
 ------
 
-### ✅ 方式三：使用 `BigDecimal`
-
-`BigDecimal` 支持科学计数法与普通数字之间的灵活转换。
+### ✅ 使用 `BigDecimal`
 
 ```java
-import java.math.BigDecimal;
-
-BigDecimal number = new BigDecimal("12345.6789");
-
-System.out.println(number.toEngineeringString()); // 输出: 12.3456789E3
-System.out.println(number.toPlainString());       // 输出: 12345.6789
+BigDecimal n = new BigDecimal("12345.6789");
+System.out.println(n.toEngineeringString()); // 12.3456789E3
+System.out.println(n.toPlainString());       // 12345.6789
 ```
 
-- `toEngineeringString()`：科学计数法，指数为 3 的倍数
-- `toPlainString()`：标准数字字符串表示
+| 方法                    | 说明            |
+| ----------------------- | --------------- |
+| `toEngineeringString()` | 指数为 3 的倍数 |
+| `toPlainString()`       | 普通数字        |
 
 ------
 
-### 🔁 科学计数法字符串转普通数字
-
-如果你已有科学计数法字符串（如 `"1.23E4"`），可以使用 `Double.parseDouble()` 解析：
+### ✅ 字符串转科学计数法数值
 
 ```java
-double value = Double.parseDouble("1.23E4");
-System.out.println(value); // 输出: 12300.0
+double val = Double.parseDouble("1.23E4");
+System.out.println(val); // 12300.0
 ```
 
 ------
-
-### ✅ 总结
-
-| 类型              | 方法                           | 示例输出   |
-| ----------------- | ------------------------------ | ---------- |
-| `String.format()` | `%e`, `%.2E` 等格式控制符      | `1.23E+04` |
-| `DecimalFormat`   | `"0.###E0"` 等格式字符串       | `1.235E4`  |
-| `BigDecimal`      | `toEngineeringString()` 等     | `12.345E3` |
-| 字符串转 double   | `Double.parseDouble("1.23E4")` | `12300.0`  |
-
-------
-
-
-
-
 
 ## 六、扩展：超大数运算
 
-### 1. 背景与概念
+### 1️⃣ BigInteger（任意精度整数）
 
-在 Java 中，基本整数类型（`byte`, `short`, `int`, `long`）都有固定的取值范围，无法直接表示超出范围的数值。
-
-- `int` 最大值：2³¹-1（约 21 亿）
-- `long` 最大值：2⁶³-1（约 9.22 × 10¹⁸）
-   当需要处理超大整数或高精度小数时，必须使用 **`java.math` 包**中的类：
-  - **`BigInteger`**：任意精度整数
-  - **`BigDecimal`**：任意精度小数
-
-------
-
-### 2. BigInteger（任意精度整数）
-
-#### 2.1 特点
-
-- **不可变对象**：所有运算返回新对象，不会修改原值。
-- **支持任意精度**：内存足够时，数值可以无限大。
-- **线程安全**：内部不可变设计。
-
-#### 2.2 创建方式
+> - **不可变对象**：所有运算返回新对象，不会修改原值。
+> - **支持任意精度**：内存足够时，数值可以无限大。
+> - **线程安全**：内部不可变设计。
 
 ```java
-BigInteger a = new BigInteger("123456789012345678901234567890");
-BigInteger b = BigInteger.valueOf(12345); // 基本类型转大数
+BigInteger a = new BigInteger("12345678901234567890");
+BigInteger b = BigInteger.valueOf(987654321);
+
+System.out.println(a.add(b));
+System.out.println(a.multiply(b));
+System.out.println(a.divideAndRemainder(b)[1]);
 ```
 
-#### 2.3 常用方法
-
-| 方法                                     | 说明                   |
-| ---------------------------------------- | ---------------------- |
-| `add(BigInteger val)`                    | 加法                   |
-| `subtract(BigInteger val)`               | 减法                   |
-| `multiply(BigInteger val)`               | 乘法                   |
-| `divide(BigInteger val)`                 | 除法（截断）           |
-| `divideAndRemainder(BigInteger val)`     | 同时获取商与余数       |
-| `mod(BigInteger val)`                    | 取余（非负）           |
-| `pow(int exponent)`                      | 幂运算                 |
-| `gcd(BigInteger val)`                    | 最大公约数             |
-| `isProbablePrime(int certainty)`         | 判断是否为质数         |
-| `compareTo(BigInteger val)`              | 比较大小               |
-| `shiftLeft(int n)` / `shiftRight(int n)` | 位移（相当于乘/除 2ⁿ） |
-
-#### 2.4 注意事项
-
-- 不能用 `+`, `-`, `*`, `/` 运算符，必须用方法。
-- 适合大整数运算，但性能比基本类型慢很多。
-- `mod` 不支持负数模运算，负数需先转换。
+| 方法                                               | 说明                   |
+| -------------------------------------------------- | ---------------------- |
+| `add()` / `subtract()` / `multiply()` / `divide()` | 四则运算               |
+| `mod()`                                            | 取模                   |
+| `pow(int)`                                         | 幂运算                 |
+| `compareTo()`                                      | 比较大小               |
+| `divideAndRemainder(BigInteger val)`               | 同时获取商与余数       |
+| `gcd(BigInteger val)`                              | 最大公约数             |
+| `shiftLeft(int n)` / `shiftRight(int n)`           | 位移（相当于乘/除 2ⁿ） |
+| `isProbablePrime(int certainty)`                   | 判断是否为质数         |
 
 ------
 
-### 3. BigDecimal（任意精度小数）
+> - 不能用 `+`, `-`, `*`, `/` 运算符，必须用方法。
+> - 适合大整数运算，但性能比基本类型慢很多。
+> - `mod` 不支持负数模运算，负数需先转换。
 
-#### 3.1 特点
+### 2️⃣ BigDecimal（任意精度小数）
 
-- 高精度浮点数表示，适用于**财务计算**。
-- **不可变对象**，线程安全。
-- 支持多种舍入模式。
-
-#### 3.2 创建方式
+> - 高精度浮点数表示，适用于**财务计算**。
+> - **不可变对象**，线程安全。
+> - 支持多种舍入模式。
 
 ```java
-BigDecimal a = new BigDecimal("0.1"); // 推荐用字符串避免精度丢失
-BigDecimal b = BigDecimal.valueOf(0.1); // 会自动处理 double 精度
+BigDecimal x = new BigDecimal("1.2345");// 推荐用字符串避免精度丢失
+BigDecimal y = new BigDecimal("3.4567");
+BigDecimal result = x.divide(y, 10, RoundingMode.HALF_UP);
+System.out.println(result);
 ```
 
-#### 3.3 常用方法
+| 方法                                               | 说明     |
+| -------------------------------------------------- | -------- |
+| `add()` / `subtract()` / `multiply()` / `divide()` | 四则运算 |
+| `setScale()`                                       | 设置精度 |
+| `compareTo()`                                      | 比较     |
+| `stripTrailingZeros()`                             | 去尾零   |
 
-| 方法                                                   | 说明                         |
-| ------------------------------------------------------ | ---------------------------- |
-| `add(BigDecimal val)`                                  | 加法                         |
-| `subtract(BigDecimal val)`                             | 减法                         |
-| `multiply(BigDecimal val)`                             | 乘法                         |
-| `divide(BigDecimal val, int scale, RoundingMode mode)` | 除法（指定小数位与舍入模式） |
-| `setScale(int newScale, RoundingMode mode)`            | 调整精度                     |
-| `compareTo(BigDecimal val)`                            | 比较大小                     |
-| `stripTrailingZeros()`                                 | 去掉多余的 0                 |
+常用舍入模式：
 
-#### 3.4 舍入模式常用值
-
-| 模式                     | 说明                |
-| ------------------------ | ------------------- |
-| `RoundingMode.UP`        | 向远离 0 的方向舍入 |
-| `RoundingMode.DOWN`      | 向 0 方向舍入       |
-| `RoundingMode.HALF_UP`   | 四舍五入            |
-| `RoundingMode.HALF_DOWN` | 五舍六入            |
-| `RoundingMode.HALF_EVEN` | 银行家舍入          |
+| 模式        | 说明       |
+| ----------- | ---------- |
+| `UP`        | 向远离 0   |
+| `DOWN`      | 向 0       |
+| `HALF_UP`   | 四舍五入   |
+| `HALF_EVEN` | 银行家舍入 |
 
 ------
 
-### 4. 性能与优化建议
+## 七、易错点与陷阱总结
 
-1. **性能劣势**：大数计算比基本类型慢几个数量级，应避免在高频计算中使用。
-2. **减少对象创建**：尽量复用 `BigInteger.ZERO`、`BigInteger.ONE` 等常量。
-3. **合理选择精度**：`BigDecimal` 尽量指定合适的 `scale`，避免不必要的高精度。
-4. **必要时使用第三方库**：如 `Apfloat`、`FastBigInteger`，在超大规模运算中性能更优。
-
-------
-
-### 5. 常见坑
-
-- **`new BigDecimal(double)` 精度丢失**：必须用字符串或 `valueOf`。
-- **不能直接用 `==` 比较**：要用 `.compareTo()` 或 `.equals()`。
-- **`divide` 默认会抛异常**：当不能整除时必须指定舍入模式，否则抛 `ArithmeticException`。
+| 类型       | 问题                               | 原因                       |
+| ---------- | ---------------------------------- | -------------------------- |
+| 精度丢失   | `new BigDecimal(0.1)`              | 使用 double 构造会损失精度 |
+| 比较错误   | `==` 比较 BigDecimal               | 需用 `.compareTo()`        |
+| 除法异常   | `divide()` 无舍入模式              | 必须指定 RoundingMode      |
+| 无符号误判 | `parseUnsignedInt("-1")`           | 抛出异常                   |
+| 溢出误判   | `Integer.parseInt("FFFFFFFF", 16)` | 得到 -1，而非 4294967295   |
 
 ------
 
-### 6. 示例代码
+## 八、面试常考题与实战延伸
+
+### 💬 Q1：Java 如何表示无符号整数？
+
+> Java 没有真正的无符号类型，但可通过：
+>
+> - `Integer.parseUnsignedInt()` 解析；
+> - `Integer.toUnsignedString()` 显示；
+> - `& 0xffffffffL` 掩码实现。
+
+------
+
+### 💬 Q2：`-1` 的二进制补码与无符号值是什么？
 
 ```java
-import java.math.*;
-
-public class BigNumberDemo {
-    public static void main(String[] args) {
-        BigInteger a = new BigInteger("12345678901234567890");
-        BigInteger b = new BigInteger("987654321");
-
-        // 大整数运算
-        System.out.println(a.add(b)); // 加
-        System.out.println(a.multiply(b)); // 乘
-        System.out.println(a.divideAndRemainder(b)[1]); // 余数
-
-        // 高精度小数运算
-        BigDecimal x = new BigDecimal("1.2345");
-        BigDecimal y = new BigDecimal("3.4567");
-        BigDecimal result = x.divide(y, 10, RoundingMode.HALF_UP);
-        System.out.println(result);
-    }
-}
+int x = -1;
+System.out.println(Integer.toBinaryString(x));  // 11111111111111111111111111111111
+System.out.println(Integer.toUnsignedLong(x));  // 4294967295
 ```
 
 ------
 
-### 7. 快速对照表
+### 💬 Q3：`BigDecimal` 精度丢失的根源？
 
-| 场景                   | 建议使用                                    |
-| ---------------------- | ------------------------------------------- |
-| 超大整数               | `BigInteger`                                |
-| 高精度小数             | `BigDecimal`                                |
-| 性能敏感且数值不超范围 | 基本类型（`long`, `double`）                |
-| 科学计算且允许误差     | `double` + 科学库（如 Apache Commons Math） |
+> 因为浮点数 `0.1` 的二进制表示并非精确值。
+>  推荐使用字符串构造：
+>  `new BigDecimal("0.1")` ✅
+
+------
+
+### 💬 Q4：如何安全地处理科学计数法输入？
+
+```java
+String input = "1.23E4";
+BigDecimal num = new BigDecimal(input);
+System.out.println(num.toPlainString()); // 12300
+```
+
+------
+
+### 💬 Q5：如何将十六进制字符串 `"FFFFFFFF"` 转为无符号 long？
+
+```java
+long val = Long.parseUnsignedLong("FFFFFFFF", 16);
+System.out.println(val); // 4294967295
+```
+
+------
+
+> 🧭 **总结一句话：**
+>
+> Java 的数值类型本质都是有符号的，
+>  “无符号”只是**解释方式不同**，
+>  关键在于正确使用 `Unsigned` 系列方法与补码思维。
+
+
+
+
+
+
 
 
 
@@ -2468,36 +2405,72 @@ System.out.println(Long.toHexString(0x100000000L + 0xcafebabeL));// 1cafebabe
 Java 位运算应用
 ========
 
-###  开发注意事项
+## 一、开发注意事项
 
-- **避免隐式类型转换**：尤其是`byte`/`short`参与运算时自动转为`int`
-- **警惕符号扩展**：`byte → int`时使用`& 0xFF`保持无符号性
-- **注意位移溢出**：超过数据类型长度时使用取模运算
+| 注意点               | 说明                                                         |
+| -------------------- | ------------------------------------------------------------ |
+| **避免隐式类型转换** | `byte` / `short` 在参与运算时会自动提升为 `int`，可能导致符号位干扰。 |
+| **警惕符号扩展**     | 当小于 `int` 类型的数参与运算时，若需要保持无符号性，应使用 `& 0xFF`。 |
+| **防止位移溢出**     | Java 位移超出类型长度会自动取模，例如 `x << 35 == x << 3`。  |
 
-位运算本身就是处理器、计算机自身所提供的能力，所以针对位运算的使用，实际上是不限于任何编程语言的，此处之所以以 JAVA 为例，主要是因为本人常用的开发语言是 JAVA，针对 JAVA 中位运算的使用，实际上在 JDK 中有这很丰富的案例，比如：
+> 💡 位运算是 CPU 的底层能力，语言无关，但 Java 中封装了许多位运算优化场景（如 HashMap、线程池）。
 
-1、JDK 中线程池 ThreadPoolExecutor 的实现当中使用 Integer 类型（4 字节，32 位）其中高 3 位保存线程池状态，而低 29 位保存线程池内有效线程数量。
+------
 
-2、比如 JDK 的 HashMap 中使用位运算的方式将初始化容量的数值，快速的转换为 2 的 n 次幂。以及计算 key 的 hash 时，根据该 key 的 hashCode 结果，再将该 hashCode 的高 16 位和低 16 位通过位运算的方式进行混合，以此降低 hash 碰撞的概率等等。
+## 二、JDK 中的位运算实例
 
-3、比如我们直接打开常用的 Integer 类的源码，也会发现里面有大量的位运算的使用。
+1. **ThreadPoolExecutor**
+    高 3 位保存线程池状态，低 29 位保存工作线程数量：
 
-此处仅是为了通过上述举例的方式来以此说明位运算在 Java 生态中的使用程度，实际上是非常丰富的，并且由于位运算独特的计算特性，在某些相对特殊的代码场景下，使用位运算会意想不到的将问题给简单化。
+   ```java
+   // ctl: 32位整型，高3位表示状态，低29位表示工作线程数
+   private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
+   ```
 
-如果想了解更多在 JAVA 中的使用场景和案例，建议大家直接翻看各种源码即可。
+2. **HashMap 容量与 Hash 优化**
 
-**以上是一些举例，以下再做一些小的补充说明：**
+   - 通过位运算将初始容量快速提升为 2 的幂次：
 
-在 Java 当中的位运算，是只针对 Int 类型和 Long 类型有效（java 中，一个 int 的长度始终是 32 位，也就是 4 个字节, 它操作的都是该整数的二进制数，Long 则是 64 位，表示 8 字节。），**而对于 byte，char，short，当为这三个类型时，JVM 会先把他们转换为 Int 类型后再进行操作**【**自动扩展到int**】。
+     ```java
+     static final int tableSizeFor(int cap) {
+         int n = cap - 1;
+         n |= n >>> 1;
+         n |= n >>> 2;
+         n |= n >>> 4;
+         n |= n >>> 8;
+         n |= n >>> 16;
+         return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
+     }
+     ```
+
+   - hash 混合减少碰撞：
+
+     ```java
+     static final int hash(Object key) {
+         int h;
+         return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+     }
+     ```
+
+3. **Integer/Long 源码中大量使用位操作**
+    如 `Integer.reverse()`, `bitCount()`, `highestOneBit()` 等。
+
+
+
+## 三、Java 位运算基础规则
+
+- 位运算只对 `int` 和 `long` 有效。
+- `byte`, `short`, `char` 运算时会**自动提升为 int**。
+- `int` 长度固定为 32 位，`long` 为 64 位。
+
+```java
+byte b = (byte) 0xff; // //  0xff 是int，补码按byte 【8字节】截取后-1
+int unsignedInt = Byte.toUnsignedInt(b); // 255 将符号位也参与到运算，得到无符号数
+```
 
 包装类的parseLong、toUnsignedInt、 toBinaryString() 可以对字节形式转换。
 
 ```java
-byte b = (byte) 0xff;//  0xff 是int，补码按byte 【8字节】截取后-1
-int unsignedInt = Byte.toUnsignedInt(b); //将符号位也参与到运算，得到无符号数
-System.out.println("unsignedInt = " + unsignedInt);//255
-
-
 long l = Long.parseLong("ff", 16);//16 表示十六进制，将0xff 解析成long整数
 System.out.println(l);//255
 
@@ -2527,125 +2500,310 @@ System.out.println(Long.toBinaryString(10));//1010
 
 如上代码可知，Integer 和 Long 转换为补码时，Integer 为 32 位，Long 是 64 位。实际上上述的基本类型 32 位还是 64 位，均是直接定义在源码当中的，感兴趣直接看对应的 Integer 和 Long 的源码即可。
 
-## java中 byte操作技巧`0xff` 
+
+
+## 四、`0xFF` 的常见用途
 
 在java中，byte short  int 运算都会转换成int计算，byte short 都是按符号位宽化。
 
-### **0xff 的作用一      截断**
+### 1️⃣ 截断操作
 
-十六进制 `0xff` 的长度是一个字节8bit，但是其**字面值是int**，底层补码 `0x000000ff`   ，那么一个 8bit 数与 其 与运算还是这个数本身，**但是一个 16bit 数与 0xff 就被截断了，比如 `1100110011001100 & 0xff 结果为 11001100`**。那如果想不被截断怎么办？把 0xff 扩展为二个字节即：0xffff，那么以此类推，0xffffff,0xffffffff 都出来了。
-
-### **0xff 的作用二:    无符号处理**
-
-java 专属，由于 java 没有 unsigned 类型，所以为了适应与其他语言二进制通讯时各种数据的一致性，需要做一些处理。
-
-最直观的例子：**`int a = -127 & 0xFF ; // 等同于 unsigned int c = 129;` (这里的 - 127 与 129 是字节，只为了直观而写的具体数字)**
-
-> `0xFF`整数默认字面值int，与byte、short等运算时小于4字节的都自动宽化【按对应符号位或者零位】，
->
-> 
->
-> 这里要严格说明一点：再 32 位机器上，0xff 实际上是 0x00000000 00000000 00000000 11111111，
->
-> 而 - 127 是 11111111 11111111 11111111 10000001 (补码形式), 那么 - 127 & 0xff 的结果自然是
->
-> 00000000 00000000 00000000 10000001 即 129.
->
-> 简而言之，该作用主要是为了将 `有符号数转换为无符号数`。
-
-
-
-**再详细点：4 字节 ，32 位，按照大端方式排列【Java采用】，**
+- `0xFF` 表示一个字节掩码（8bit）。
+- 用于只取低 8 位：
 
 ```
-最高位                      最低位
-11111111 10101010 11000011 10101010
+int x = 0xABCD;
+int lowByte = x & 0xFF; // 0xCD
 ```
 
-最高位 8 字节要移到最低位那么，这个 8 个字节 `>>（3*8）`，然后与 0xff 运算，即[`Num>>（3*8）&0xff`]，取出
+> 十六进制 `0xff` 的长度是一个字节8bit，但是其**字面值是int**，底层补码 `0x000000ff`   ，那么一个 8bit 数与 其 与运算还是这个数本身，**但是一个 16bit 数与 0xff 就被截断了，比如 `1100110011001100 & 0xff 结果为 11001100`**。那如果想不被截断怎么办？把 0xff 扩展为二个字节即：0xffff，那么以此类推，0xffffff,0xffffffff 都出来了。
 
-然后后续得 `Num>>(2*8) & 0xff ;Num>>(1*8) & 0xff;Num & 0xff`, 均可取出。代码如下：
+### 2️⃣ 无符号处理
+
+Java 没有 unsigned 类型，为了适应与其他语言二进制通讯时各种数据的一致性，需要做一些处理,利用 `& 0xFF` 可实现无符号数的效果：
+
+```java
+int a = -127 & 0xFF; // 129
+```
+
+> -127 的补码：`11111111 11111111 11111111 10000001`
+>  `& 0xFF` 之后得到 `00000000 00000000 00000000 10000001` 
+>
+> → [00000000 00000000 00000000 10000001]129
+
+
+
+## 五、提取与拼装字节（大端序）
 
 ```java
 int a = 0b11111111_10101010_11000011_10101010;
-int bit1 = (a >> 24) & 0xff;//此处>>右移最高位补充符号位，但是截取后不关心高位
-int bit2 = (a >> 16) & 0xff;
-int bit3 = (a >> 8 ) & 0xff;
-int bit4 = (a >> 0) & 0xff;
 
-System.out.println(Integer.toBinaryString(bit1));//11111111
-System.out.println(Integer.toBinaryString(bit2));//10101010
-System.out.println(Integer.toBinaryString(bit3));//11000011
-System.out.println(Integer.toBinaryString(bit4));//10101010
+int b1 = (a >> 24) & 0xFF;
+int b2 = (a >> 16) & 0xFF;
+int b3 = (a >> 8)  & 0xFF;
+int b4 = a & 0xFF;
 ```
 
-### 符号位为负的Long十六进制转换成java基本long整型
+输出：
+
+```
+11111111
+10101010
+11000011
+10101010
+```
+
+## 六、Long 十六进制字符串转 Java Long（含符号位）
 
 ```java
-    public static void main(String[] args) {
+public static void main(String[] args) {
 
-        //将一个最高位为1的long 长度64bit的数转换成 java中long，显示为负数
+    //将一个最高位为1的long 长度64bit的数转换成 java中long，显示为负数
+    String hexStr = "ffffffffffffffff";//需要去掉0x 表示 -1，如果直接用Long.parseLong(hexStr, 16) 会报错
 
-        String hexStr = "ffffffffffffffff";//需要去掉0x 表示 -1，如果直接用Long.parseLong(hexStr, 16) 会报错
+    //思路： 64bit 拆分成两个32bit int，用Long.parseLong(highHex, 16) 去解析成int，去除符号位干扰，在位运算合并
+    String highHex = hexStr.substring(0, 8);
+    String lowHex = hexStr.substring(8,16);
 
-        //思路： 64bit 拆分成两个32bit int，用Long.parseLong(highHex, 16) 去解析成int，去除符号位干扰，在位运算合并
-        String highHex = hexStr.substring(0, 8);
-        String lowHex = hexStr.substring(8,16);
+    long highPart = Long.parseLong(highHex, 16);
+    long lowPart = Long.parseLong(lowHex, 16);
 
-        long highPart = Long.parseLong(highHex, 16);
-        long lowPart = Long.parseLong(lowHex, 16);
+    // 确保高位部分正确扩展符号位
+    long result = (highPart & 0xffffffffL) << 32 | lowPart;
+    System.out.println(result);//-1
 
-        // 确保高位部分正确扩展符号位
-        long result = (highPart & 0xffffffffL) << 32 | lowPart;
-        System.out.println(result);//-1
-        
-    }
+}
 ```
 
-### int拆分byte与合并
+## 七、int ↔ byte[4] 转换（大端序）
+
+在 Java 中，`int` 类型占 **4 个字节（32 位）**，因此在进行网络传输、文件写入或二进制协议解析时，通常需要将 `int` 拆分为 4 个 `byte`；反之，也需要从字节数组还原出整数值。
+
+------
+
+### 一、int 转 byte[] 的原理
+
+Java 采用 **大端序 (Big-Endian)** 存储方式：
+
+> 高位字节存在低地址，低位字节存在高地址。
+
+也就是说：
+
+```
+int:  [b0][b1][b2][b3]
+位序: 31..............0
+```
+
+例如：
 
 ```java
-int a = 1234567890; // 补码：01001001 10010110 00000010 11010010
-
-byte[] b1 = new byte[4];
-
-//拆分
-b1[0] = (byte) ((a >> 24) & 0xff);  //73    补码：0100 1001
-b1[1] = (byte) ((a >> 16) & 0xff);  //-106  补码：1001 0110
-b1[2] = (byte) ((a >> 8) & 0xff);   //2     补码：0000 0010
-b1[3] = (byte) (a & 0xff);          //-46   补码：1101 0010
-
-//合并
-int b2 = ((b1[0] & 0xff) << 24) |
-        ((b1[1] & 0xff) << 16) |
-        ((b1[2] & 0xff) << 8) |
-        (b1[3] & 0xff);
-System.out.println(b2);//正确结果 【1234567890】
-
-
-int b3 = (b1[0]) << 24 | (b1[1]) << 16 | (b1[2]) << 8 | (b1[3]);
-System.out.println(b3);//错误结果【-46】，没有做有符号转无符号操作，导致结果不对。
-
-//错误分析：(b1[1]) << 16 【-106【1001 0110】 << 16】byte做运算时，会隐式转换成int[ 11111111 11111111 11111111 10010110]，涉及到负数时，没有做有符号转无符号操作
-System.out.println(Integer.toBinaryString(-106));                   // 11111111 11111111 11111111 10010110
-System.out.println(Integer.toBinaryString(-106 << 16));             // 11111111 10010110 00000000 00000000
-System.out.println(Integer.toBinaryString((-106 & 0xff) << 16));    // 00000000 10010110 00000000 00000000
+int a = 0x499602D2; // 十进制 1234567890
 ```
 
-将 int a 转换成字节，一般情况下，int 4 字节，那么需要 4 个 byte 来保存，又因为 java 是大端排序，那么 byte[0] 为最高位，所以需要 >>24, 这么一个个的把 a 的 4 个字节取出存入 byte 数组中，这里 **0xff 不仅截断，而且还将有符号转换成了无符号**。
+对应的二进制为：
 
-那么将字节转换回去就不一样了，不是截断而是融合 ，因此需要将 & 改为 |，并且还得把每个字节移到所在实际位置，比如 byte[0] 是最高位，因此还得将其移到 4 个字节的头部即需要 <<24，那么后续得以此类推。一个完成的 int32 型就出现了。但是由于 java 的原因，再做位移操作之前还是不能少了有符号转无符号操作。
+```
+01001001 10010110 00000010 11010010
+```
+
+#### 拆分逻辑
+
+为了取出每个字节，可以依次右移并掩码 `0xFF`：
+
+```java
+byte[] bytes = new byte[4];
+bytes[0] = (byte)((a >> 24) & 0xFF); // 取最高8位
+bytes[1] = (byte)((a >> 16) & 0xFF);
+bytes[2] = (byte)((a >> 8)  & 0xFF);
+bytes[3] = (byte)(a & 0xFF);
+```
+
+输出结果：
+
+```
+[0x49, 0x96, 0x02, 0xD2]
+```
+
+#### 为什么要 `& 0xFF`
+
+- `>>` 位移时会保留符号位（带符号右移）；
+- `& 0xFF` 可以：
+  - **截断只取 8 位**；
+  - **消除符号扩展**，得到“无符号”字节值；
+  - 保证负数或高位带 1 的情况仍能正确转成对应字节。
+
+------
+
+### 二、byte[] 转 int 的原理
+
+将字节恢复为整数，与拆分操作相反：
+
+```java
+int result = ((bytes[0] & 0xFF) << 24) |
+             ((bytes[1] & 0xFF) << 16) |
+             ((bytes[2] & 0xFF) << 8)  |
+             (bytes[3] & 0xFF);
+```
+
+这里的逻辑是：
+
+- 通过 `& 0xFF` 把每个 byte 还原成 0~255 之间的正整数；
+- 再通过 `<<` 左移到对应的权值位；
+- 最后使用 `|` 按位或将所有部分合并。
+
+#### 为什么是 “融合” 而不是 “截断”
+
+- 拆分时是“取一部分”；
+- 组装时是“组合整体”。
+   因此要用 `|`（合并）而不是 `&`（掩码）。
+
+------
+
+### 三、错误示例与符号扩展问题
+
+> 在 `byte[]` 合并回 `int` 时，必须对每个 `byte` 使用 `& 0xFF` 操作
+
+✅ 正确做法：
+
+```
+(bytes[1] & 0xFF) << 16
+```
+
+这样确保移位前已经清除符号扩展。
+
+如果忘记加 `& 0xFF`：
+
+1. **原始整数 (int):** `int a = 0x499602D2;` (十进制 1234567890)
+
+2. **拆分 (int -> byte[]) (正确)：** `byte[] bytes = new byte[4];`
+
+   - `bytes[0] = 0x49;` (十进制 73)
+   - `bytes[1] = 0x96;` (十进制 -106)
+   - `bytes[2] = 0x02;` (十进制 2)
+   - `bytes[3] = 0xD2;` (十进制 -46)
+
+   **注意：** 这里的关键是 `bytes[1]` 和 `bytes[3]`。由于它们的最高位是 1，它们在 Java 中被解释为负数。
+
+3. **合并 (byte[] -> int) (错误方式)：** `int b3 = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | (bytes[3]);`
+
+------
 
 
 
-### Byte  int float转换工具类
+**错误过程逐步分析**
+
+我们将逐一分析 `|` 符号分隔的四个部分，看看当 `byte` 被提升为 `int` 时发生了什么：
+
+#### 1. (bytes[0] << 24)
+
+- `bytes[0]` 是 `0x49` (正数 73)。
+- 提升为 `int` (无符号扩展，因为是正数): `0x00000049`
+- 左移 24 位 (`<< 24`): `0x49000000`
+- **结果：(正确)**
+
+
+
+#### 2. (bytes[1] << 16)
+
+- `bytes[1]` 是 `0x96` (负数 -106)。
+- **【关键错误】** 提升为 `int` 时，发生 **符号扩展**： `0x96` (8位) -> `0xFFFFFF96` (32位)
+- 左移 16 位 (`<< 16`): `0xFF960000`
+- **结果：(错误)**
+  - *期望值 (来自 `& 0xFF`):* `0x00960000`
+  - *实际值 (符号扩展):* `0xFF960000`
+
+
+
+#### 3. (bytes[2] << 8)
+
+- `bytes[2]` 是 `0x02` (正数 2)。
+- 提升为 `int`： `0x00000002`
+- 左移 8 位 (`<< 8`): `0x00000200`
+- **结果：(正确)**
+
+
+
+#### 4. (bytes[3])
+
+- `bytes[3]` 是 `0xD2` (负数 -46)。
+- **【关键错误】** 提升为 `int` 时，发生 **符号扩展**： `0xD2` (8位) -> `0xFFFFFFD2` (32位)
+- **结果：(错误)**
+  - *期望值 (来自 `& 0xFF`):* `0x000000D2`
+  - *实际值 (符号扩展):* `0xFFFFFFD2`
+
+------
+
+
+
+**最终的 `|` (按位或) 灾难**
+
+现在，我们将这四个（部分错误的）中间值“融合”在一起：
+
+```
+  0x49000000   (来自 Term 1)
+| 0xFF960000   (来自 Term 2 - 错误)
+| 0x00000200   (来自 Term 3)
+| 0xFFFFFFD2   (来自 Term 4 - 错误)
+------------------
+```
+
+`|` (按位或) 操作的规则是：**只要有 1，结果就是 1**。
+
+让我们用二进制（只看高位）来展示这种“污染”：
+
+```
+Term 1: 01001001 00000000 ...
+Term 2: 11111111 10010110 ...
+Term 4: 11111111 11111111 11111111 11010010
+```
+
+- **看最高 8 位 (bits 31-24):** `01001001` (from Term 1) `|` `11111111` (from Term 2) `|` `11111111` (from Term 4) 结果: `11111111` (即 `0xFF`) *Term 1 的 `0x49` 被完全覆盖了！*
+- **看次高 8 位 (bits 23-16):** `00000000` (from Term 1) `|` `10010110` (from Term 2) `|` `11111111` (from Term 4) 结果: `11111111` (即 `0xFF`) *Term 2 的 `0x96` 也被 Term 4 覆盖了！*
+- **看次低 8 位 (bits 15-8):** `00000000` (from Term 1,2) `|` `00000010` (from Term 3) `|` `11111111` (from Term 4) 结果: `11111111` (即 `0xFF`) *Term 3 的 `0x02` 也被 Term 4 覆盖了！*
+- **看最低 8 位 (bits 7-0):** `... | 11010010` (from Term 4) 结果: `11010010` (即 `0xD2`)
+
+**最终的错误结果: `0xFFFFFFD2`** (十进制 -46)
+
+
+
+> 在不使用 `& 0xFF` 时：
+>
+> 1. **提升 (Promotion):** 任何为负的 `byte` 在参与位运算（`<<` 或 `|`）时，会被**符号扩展**为一个 32 位的 `int`，其高位的 24 位全被 1 填充。
+> 2. **污染 (Contamination):** 当执行 `|` 操作时，这些被符号扩展出来的 `1`（例如 `0xFFFFFFD2` 中的 `FF`），会“覆盖”掉所有其他项在该位置的正确值。
+> 3. **结果：** 最终结果被（错误地）“或”成了 `0xFFFFFFD2`，这恰好是 `bytes[3]` 符号扩展后的值，因为它的 `1` 覆盖了所有其他位。
+>
+> 而 `& 0xFF` (例如 `(bytes[1] & 0xFF)`) 的作用是在 **符号扩展之后**，但在 **位移之前**，将所有高 24 位清零，从而移除了所有“污染”的 `1`，确保只有那 8 位数据被保留。
+
+------
+
+### 四、示意图
+
+```java
+         ┌──────────────────────────┐
+         │        int a = 0x12345678│
+         └─────────────┬────────────┘
+                       │ 拆分 →
+┌────────────────────────────────────────────┐
+│  [0x12] [0x34] [0x56] [0x78]              │
+│   b[0]   b[1]   b[2]   b[3]               │
+└────────────────────────────────────────────┘
+                       │ 融合 →
+┌────────────────────────────────────────────┐
+│ ((b[0]&0xFF)<<24) | ((b[1]&0xFF)<<16) ... │
+│ = 0x12345678                               │
+└────────────────────────────────────────────┘
+```
+
+
+
+## 八、实用工具类：`BitOperationsUtil`
 
 ```java
 
 public class BitOperationsUtil {
     
     /**
-     * 将字节数组转换为整数
+     * byte[4] → int（大端）
      */
     private static int byteArrayToInt(byte[] b) {
         if (b.length != 4) {
@@ -2660,35 +2818,29 @@ public class BitOperationsUtil {
     }
 
     /**
-     * 方法：将一个int类型的整数照大端序（Big-Endian）转换为长度为4的字节数组
+     *int → byte[4]（大端）
      */
     public static byte[] intToByteArray(int value) {
-        byte[] bytes = new byte[4];
-
-        // 将int按照大端序（Big-Endian）存储到字节数组中
-        bytes[0] = (byte) ((value >> 24) & 0xFF);//右移>>最高位补充符号位，但是截取后不关心
-        bytes[1] = (byte) ((value >> 16) & 0xFF);
-        bytes[2] = (byte) ((value >> 8) & 0xFF);
-        bytes[3] = (byte) (value & 0xFF);
-
-        return bytes;
+       return new byte[]{
+            (byte)((value >> 24) & 0xFF),
+            (byte)((value >> 16) & 0xFF),
+            (byte)((value >> 8) & 0xFF),
+            (byte)(value & 0xFF)
+        };
     }
     
     //实现小端序（Little-Endian），则字节顺序会相反
     public static byte[] intToByteArrayLE(int value) {
-        byte[] bytes = new byte[4];
-
-        // 将int按照小端序（Little-Endian）存储到字节数组中
-        bytes[3] = (byte) ((value >> 24) & 0xFF);
-        bytes[2] = (byte) ((value >> 16) & 0xFF);
-        bytes[1] = (byte) ((value >> 8) & 0xFF);
-        bytes[0] = (byte) (value & 0xFF);
-
-        return bytes;
+       return new byte[]{
+            (byte)(value & 0xFF),
+            (byte)((value >> 8) & 0xFF),
+            (byte)((value >> 16) & 0xFF),
+            (byte)((value >> 24) & 0xFF)
+        };
 	}
 
     /**
-     * 将字节数组转换为浮点数
+     *  byte[4] → float
      */
     public static float bytesToFloat(byte[] b) {
         int accum = byteArrayToInt(b);
@@ -2740,7 +2892,9 @@ public class BitOperationsUtil {
 
 ```
 
-位运算是一种高效的计算方式，在某些场景下可以替代取余运算（%），尤其是当模数是2的幂时。以下是一些与取余相关的位运算技巧，以及其他常见的位运算技巧，简洁说明并举例：
+
+
+
 
 # 位运算技巧汇总
 
@@ -2763,7 +2917,7 @@ public class BitOperationsUtil {
 > Hashmap扩容：hash值对数组长度（2的幂次）取余计算索引位置
 >
 > 	扩容前：长度为b，hash % b = a；	即hash =  n * b + a
-> 					
+> 						
 > 	扩容后：长度为2b：计算 (n * b + a ) % 2b 
 > 		当n为偶数时  余数 = a，		索引 a
 > 		当n为奇数时  余数 = a + b，	索引 a+b
@@ -3254,17 +3408,20 @@ public class Differences {
 
 
 
-# 📘 Java 字符串格式化 (`String.format`) 详解
+# Java 字符串格式化 (`String.format`) 可视化指南
 
 ## ✅ 简介
 
-`String.format()` 是 Java 中非常强大的字符串格式化工具，允许你以类似 C 的 `printf` 风格来构建格式化的字符串。它广泛用于日志输出、界面显示、数据转换等场景。
+`String.format()` 是 Java 中非常强大的字符串格式化工具，允许你以类似 C 的 `printf` 风格来构建格式化的字符串。  
+广泛用于日志输出、界面显示、报表生成、数据转换等场景。
 
-------
+> 💡 注意：`String.format()` 本质上是 `Formatter` 的便捷封装，可以向文件或输出流直接写入格式化内容。
+
+---
 
 ## 🧩 一、基本语法结构
 
-```ABAP
+```text
 %[argument_index$][flags][width][.precision]conversion
 ```
 
@@ -3274,30 +3431,28 @@ public class Differences {
 | `[argument_index$]` | 可选参数索引（如 `%2$s` 表示第 2 个参数） |
 | `[flags]`           | 控制对齐方式、填充等                      |
 | `[width]`           | 最小字段宽度                              |
-| `[.precision]`      | 控制浮点数精度或字符串最大长度            |
+| `[.precision]`      | 浮点数小数位或字符串最大长度              |
 | `conversion`        | 必填，指定数据类型（如 `%d`, `%f`, `%s`） |
 
 ------
 
 ## 🔢 二、常用转换类型 (`conversion`)
 
-| 转换字符    | 数据类型                   | 示例                       |
-| ----------- | -------------------------- | -------------------------- |
-| `%d`        | 整数（十进制）             | `123`                      |
-| `%o`        | 八进制整数                 | `173`                      |
-| `%x` / `%X` | 十六进制整数（小写/大写）  | `ff` / `FF`                |
-| `%f`        | 浮点数                     | `45.67`                    |
-| `%e` / `%E` | 科学计数法                 | `4.567e+01` / `4.567E+01`  |
-| `%g` / `%G` | 自动选择 `%f` 或科学计数法 | `1234.56` or `1.23456e+03` |
-| `%s` / `%S` | 字符串（保留原样/全大写）  | `"hello"` / `"HELLO"`      |
-| `%c` / `%C` | 单个字符（保留原样/大写）  | `'a'` / `'A'`              |
-| `%b` / `%B` | 布尔值                     | `true` / `TRUE`            |
-| `%n`        | 换行符（平台无关）         | `\n`                       |
-| `%%`        | 输出一个 `%` 符号          | `%`                        |
+| 转换字符    | 数据类型                   | 示例输出                  |
+| ----------- | -------------------------- | ------------------------- |
+| `%d`        | 整数（十进制）             | `123`                     |
+| `%o`        | 八进制整数                 | `173`                     |
+| `%x` / `%X` | 十六进制整数（小写/大写）  | `ff` / `FF`               |
+| `%f`        | 浮点数                     | `45.67`                   |
+| `%e` / `%E` | 科学计数法                 | `4.567e+01` / `4.567E+01` |
+| `%g` / `%G` | 自动选择 `%f` 或科学计数法 | `1234.56` / `1.23456e+03` |
+| `%s` / `%S` | 字符串（原样/全大写）      | `"hello"` / `"HELLO"`     |
+| `%c` / `%C` | 单个字符（原样/大写）      | `'a'` / `'A'`             |
+| `%b` / `%B` | 布尔值                     | `true` / `TRUE`           |
+| `%n`        | 换行符（平台无关）         | `\n`                      |
+| `%%`        | 输出一个 `%` 符号          | `%`                       |
 
-### 💡 示例代码：各种转换类型的使用
-
-
+### 💡 示例代码
 
 ```java
 int i = 123;
@@ -3324,19 +3479,19 @@ System.out.printf("换行%n");                                // 换行
 
 ------
 
-## 🔧 三、标志 (`flags`) 使用详解
+## 🔧 三、标志 (`flags`) 使用可视化
 
-| 标志 | 描述                      | 示例                |
-| ---- | ------------------------- | ------------------- |
-| `-`  | 左对齐                    | `%-10s`             |
-| `+`  | 强制显示正负号            | ` %+d` → `+10`      |
-| 空格 | 正数前加空格              | `% d` → ` 10`       |
-| `0`  | 以零填充空白部分          | `%05d` → `00123`    |
-| `,`  | 添加千位分隔符            | `%,d` → `1,234,567` |
-| `(`  | 负数用括号括起            | `%(d` → `(10)`      |
-| `#`  | 添加前缀（如 `0x`, `0.`） | ` %#x` → `0xff`     |
+| 标志 | 描述                  | 示例    | 输出示例     |
+| ---- | --------------------- | ------- | ------------ |
+| `-`  | 左对齐                | `%-10s` | `Hello     ` |
+| `+`  | 强制显示正负号        | `%+d`   | `+123`       |
+| 空格 | 正数前加空格          | `% d`   | ` 123`       |
+| `0`  | 用零填充空白部分      | `%010d` | `0000000123` |
+| `,`  | 千分位分隔符          | `%,d`   | `1,234,567`  |
+| `(`  | 负数用括号括起        | `%(d`   | `(123)`      |
+| `#`  | 添加前缀（如 0x, 0.） | `%#x`   | `0x7b`       |
 
-### 💡 示例代码：各种标志的使用
+### 💡 示例代码
 
 ```java
 int num = -12345;
@@ -3352,71 +3507,109 @@ System.out.println(String.format("十六进制带前缀: %#x", 255)); // 0xff
 
 ------
 
-## 📏 四、宽度 (`width`) 和精度 (`.precision`) 示例
+## 📏 四、宽度 (`width`) 和精度 (`.precision`) 可视化
 
-- **宽度**: 最小字段宽度，不足则填充。
-- **精度**: 对于浮点数控制小数点后位数，对于字符串限制最大长度。
-
-### 💡 示例代码：宽度和精度的组合使用
+| 格式符   | 字符串                    | 输出效果       |
+| -------- | ------------------------- | -------------- |
+| `%10s`   | `"Hi"`                    | `"        Hi"` |
+| `%-10s`  | `"Hi"`                    | `"Hi        "` |
+| `%010d`  | `123`                     | `"0000000123"` |
+| `%.2f`   | `3.1415`                  | `"3.14"`       |
+| `%10.2f` | `3.1415`                  | `"      3.14"` |
+| `%.10s`  | `"This is a long string"` | `"This is a "` |
 
 ```java
 double pi = Math.PI;
 String text = "This is a long string";
 
-System.out.println(String.format("宽度为 10: |%10s|", "Hello"));         // |     Hello|
-System.out.println(String.format("左对齐宽度为 10:|%-10s|", "Hi"));       // |Hi        |
-System.out.println(String.format("保留两位小数:| %.2f|", pi));            // | 3.14|
-System.out.println(String.format("宽度 10 保留两位小数:| %10.2f|", pi));   // |       3.14|
-System.out.println(String.format("截断字符串到 10 字符: |%.10s|", text));   // |This is a |
+System.out.println(String.format("|%10s|", "Hello"));       // |     Hello|
+System.out.println(String.format("|%-10s|", "Hi"));         // |Hi        |
+System.out.println(String.format("|%.2f|", pi));            // |3.14|
+System.out.println(String.format("|%10.2f|", pi));          // |      3.14|
+System.out.println(String.format("|%.10s|", text));         // |This is a |
 ```
 
 ------
 
-## 🔄 五、参数索引重用 (`%1$d`, `%2$s`)
-
-通过参数索引，你可以：
-
-- 多次使用同一个参数
-- 打乱参数顺序进行格式化
-
-### 💡 示例代码：参数索引使用
+## 🔄 五、参数索引重用
 
 ```java
-public class ArgumentIndexExample {
-    public static void main(String[] args) {
-        String result = String.format("%2$s %1$d %2$s again", 10, "Hello");
-        System.out.println(result); // Hello 10 Hello again
-    }
-}
+String result = String.format("%2$s %1$d %2$s again", 10, "Hello");
+System.out.println(result); // Hello 10 Hello again
 ```
+
+> 可以打乱参数顺序，重复使用同一个参数。
 
 ------
 
 ## 🌍 六、国际化支持（Locale）
 
-不同国家和地区对数字格式、千分位等处理方式不同。可以通过传入 `Locale` 来实现本地化格式化。
-
-### 💡 示例代码：使用 `Locale` 进行本地化
-
 ```java
 import java.util.Locale;
 
-public class LocaleExample {
-    public static void main(String[] args) {
-        double number = 1234567.89;
+double number = 1234567.89;
 
-        System.out.println(String.format(Locale.US, "美国格式: %,f", number));
-        // 输出: 美国格式: 1,234,567.890000
+System.out.println(String.format(Locale.US, "美国格式: %,f", number));
+// 美国格式: 1,234,567.890000
 
-        System.out.println(String.format(Locale.GERMANY, "德国格式: %,f", number));
-        // 输出: 德国格式: 1.234.567,890000
-    }
-}
+System.out.println(String.format(Locale.GERMANY, "德国格式: %,f", number));
+// 德国格式: 1.234.567,890000
 ```
 
 ------
 
-## 📋 七、推荐使用场景总结
+## 🕒 七、日期与时间格式化
+
+| 格式符 | 含义             | 示例输出   |
+| ------ | ---------------- | ---------- |
+| `%tY`  | 年（四位）       | 2025       |
+| `%tm`  | 月（两位）       | 11         |
+| `%td`  | 日（两位）       | 04         |
+| `%tH`  | 小时（24制）     | 13         |
+| `%tM`  | 分钟             | 05         |
+| `%tS`  | 秒               | 09         |
+| `%tF`  | 日期（ISO 8601） | 2025-11-04 |
+| `%tT`  | 时间（HH:mm:ss） | 13:05:09   |
+
+```java
+import java.util.Date;
+
+Date now = new Date();
+System.out.println(String.format("今天是 %tF %tT", now, now));
+// 今天是 2025-11-04 13:05:09
+```
+
+------
+
+## ⚙️ 八、`Formatter` 类使用示例
+
+```java
+import java.util.Formatter;
+
+Formatter f = new Formatter();
+f.format("Name: %s, Score: %d", "Tom", 90);
+System.out.println(f.toString());
+f.close();
+```
+
+> 当需要向文件或流写入格式化内容时，可直接使用 `Formatter`。
+
+------
+
+## ⚠️ 九、易错点与注意事项
+
+| 常见问题                           | 说明                                    |
+| ---------------------------------- | --------------------------------------- |
+| `%d` 接收浮点数                    | 抛出 `IllegalFormatConversionException` |
+| `%f` 默认保留六位小数              | 需指定精度，如 `%.2f`                   |
+| `%s` 可自动调用对象的 `toString()` | 不必手动转换                            |
+| `%n` 推荐替代 `\n`                 | 避免跨平台换行问题                      |
+| 多参数顺序错误                     | 使用索引 `%2$s` 可解决                  |
+| 参数类型必须匹配                   | 否则抛出异常，如 `%d` 不能用 `String`   |
+
+------
+
+## 📋 十、推荐使用场景
 
 | 场景                    | 推荐方法                                         |
 | ----------------------- | ------------------------------------------------ |
@@ -3428,15 +3621,96 @@ public class LocaleExample {
 
 ------
 
-## ⚠️ 八、注意事项
+## 🧩 十一、实用模板片段
 
-- 参数类型必须与转换符匹配，否则抛出异常（如 `%d` 不能接受 `String` 类型）。
-- 不同国家/地区对千位分隔符、货币符号等的处理不同，注意使用 `Locale`。
-- 如果不确定输入是否安全，应使用 try-catch 包裹解析操作。
+```java
+// 金额格式化
+String money = String.format("%,.2f", 1234567.89); // 1,234,567.89
 
+// 百分比格式化
+String percent = String.format("%.2f%%", 0.8567 * 100); // 85.67%
 
+// 日志输出
+System.out.printf("[%1$tF %1$tT] INFO - %2$s%n", new Date(), "Operation success");
 
+// 多语言支持
+System.out.println(String.format(Locale.FRANCE, "%,.2f euros", 1234567.89));
+```
 
+------
+
+## 🧮 十二、数字进制输出模板
+
+### 1️⃣ 十进制
+
+```java
+int n = 12345;
+System.out.println(String.format("%d", n));      // 12345
+System.out.println(String.format("%+d", n));     // +12345
+System.out.println(String.format("% d", n));     //  12345
+System.out.println(String.format("|%10d|", n));  // |     12345|
+System.out.println(String.format("%,d", 1234567)); // 1,234,567
+```
+
+### 2️⃣ 八进制
+
+```java
+int n = 123;
+System.out.println(String.format("%o", n));      // 173
+System.out.println(String.format("%#o", n));     // 0173
+```
+
+### 3️⃣ 十六进制
+
+```java
+int n = 255;
+System.out.println(String.format("%x", n));      // ff
+System.out.println(String.format("%X", n));      // FF
+System.out.println(String.format("%#x", n));     // 0xff
+System.out.println(String.format("%#X", n));     // 0XFF
+System.out.println(String.format("%04X", n));    // 00FF
+```
+
+### 4️⃣ 二进制
+
+```java
+int n = 13;
+System.out.println(Integer.toBinaryString(n));  // 1101
+System.out.println(String.format("%8s", Integer.toBinaryString(n)).replace(' ', '0'));  // 00001101
+System.out.println(String.format("%16s", Integer.toBinaryString(n)).replace(' ', '0')); // 0000000000001101
+```
+
+### 5️⃣ 综合输出示例
+
+```java
+int num = 255;
+
+System.out.println(String.format("Decimal       : %d", num));
+System.out.println(String.format("Decimal + sign: %+d", num));
+System.out.println(String.format("Octal         : %o", num));
+System.out.println(String.format("Octal #       : %#o", num));
+System.out.println(String.format("Hex (lower)   : %x", num));
+System.out.println(String.format("Hex (upper)   : %X", num));
+System.out.println(String.format("Hex #         : %#X", num));
+System.out.println("Binary        : " + Integer.toBinaryString(num));
+System.out.println("Binary 8-bit  : " + String.format("%8s", Integer.toBinaryString(num)).replace(' ', '0'));
+System.out.println("Binary 16-bit : " + String.format("%16s", Integer.toBinaryString(num)).replace(' ', '0'));
+```
+
+**输出示例：**
+
+```
+Decimal       : 255
+Decimal + sign: +255
+Octal         : 377
+Octal #       : 0377
+Hex (lower)   : ff
+Hex (upper)   : FF
+Hex #         : 0XFF
+Binary        : 11111111
+Binary 8-bit  : 11111111
+Binary 16-bit : 0000000011111111
+```
 
 
 
