@@ -154,25 +154,70 @@ Java NIO中的Buffer用于和NIO通道进行交互。如你所知，数据是从
 下面是一个使用Buffer的例子：
 
 ```java
-RandomAccessFile aFile = new RandomAccessFile("data/nio-data.txt", "rw");
-FileChannel inChannel = aFile.getChannel();
+public void process(ByteBuffer buf) {
+    buf.flip();
 
-//create buffer with capacity of 48 bytes
-ByteBuffer buf = ByteBuffer.allocate(48);
+    while (true) {
+        // 1. header 不够
+        if (buf.remaining() < HEADER_SIZE) {
+            break;
+        }
 
-int bytesRead = inChannel.read(buf); //read into buffer.
-while (bytesRead != -1) {
+        buf.mark();
 
-buf.flip(); //make buffer ready for read
+        // 2. 读取魔数（保护：剩余 < 2 直接 break）
+        if (buf.remaining() < 2) {
+            buf.reset();
+            break;
+        }
 
-while(buf.hasRemaining()){
-System.out.print((char) buf.get()); // read 1 byte at a time
+        short magic = buf.getShort();
+        if (magic != MAGIC_VALUE) {
+            buf.reset();
+            buf.get(); // 跳 1 字节
+            continue;
+        }
+
+        // 3. 读取 length（保护：剩余 < 4 直接 break）
+        if (buf.remaining() < 4) {
+            buf.reset();
+            break;
+        }
+
+        int length = buf.getInt();
+
+        // 3.1 安全检查：负数
+        if (length < 0) {
+            // 长度异常 = 必定协议错乱 => 丢掉 1 字节重新找魔数
+            buf.reset();
+            buf.get();
+            continue;
+        }
+
+        // 3.2 安全检查：包大小上限（防止攻击者写超大 length）
+        if (length > MAX_PACKET_SIZE) {
+            buf.reset();
+            buf.get(); // 丢掉 1 字节，继续找魔数
+            continue;
+        }
+
+        // 4. body 不够
+        if (buf.remaining() < length) {
+            buf.reset();
+            break;
+        }
+
+        // 5. 读取 body
+        byte[] body = new byte[length];
+        buf.get(body);
+
+        // 6. 处理业务数据
+        handle(body);
+    }
+
+    buf.compact();
 }
 
-buf.clear(); //make buffer ready for writing
-bytesRead = inChannel.read(buf);
-}
-aFile.close();
 ```
 
 
