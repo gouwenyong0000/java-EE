@@ -1,10 +1,51 @@
-# Runtime 执行 CMD & Shell 命令 —— 完整指南
+# Runtime执行CMD-Shell命令
 
-> 作者：重构优化版（2025）  
-> 适用环境：Windows / Linux / macOS  
-> 关键词：`Runtime.exec()`、`ProcessBuilder`、`Apache Commons Exec`、`cmd.exe`、`shell`
+> **定位**：从入门 → 进阶 → 生产实践
+>
+> **适用人群**：Java 后端 / 运维自动化 / 工具开发
+>
+> **目标**：
+>
+> - 正确、安全地在 Java 中执行 CMD / Shell 命令
+> - 避免死锁、乱码、阻塞、注入等经典坑
+> - 能在生产环境中“放心用”
 
+## 整体知识地图
 
+```
+Java 执行系统命令
+│
+├── 基础 API
+│   ├── Runtime.exec（旧）
+│   └── ProcessBuilder（推荐）
+│
+├── 进程交互
+│   ├── 标准输出 stdout
+│   ├── 错误输出 stderr
+│   └── 标准输入 stdin
+│
+├── 平台差异
+│   ├── Windows（cmd.exe）
+│   └── Linux / macOS（/bin/sh / bash）
+│
+├── 关键问题
+│   ├── 死锁（必须并发读流）
+│   ├── 中文乱码（字符集）
+│   ├── 命令注入（安全）
+│   └── 超时与进程回收
+│
+├── 高级方案
+│   ├── Apache Commons Exec
+│   └── 工具类封装
+│
+└── 实战
+    ├── 执行系统命令
+    ├── 端口检测 / ping
+    ├── 构建 / 部署脚本
+    └── 运维自动化
+```
+
+> **学习建议**：先完整看一遍 → 再回到对应章节查用法。
 
 ---
 
@@ -21,17 +62,17 @@
 
 ## 一、Java 执行外部命令的方式对比
 
-| 特性 / 项目      | Runtime.exec()                                           | ProcessBuilder                                               | 说明与补充                                      |
-| ---------------- | -------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------- |
-| **参数传递**     | 支持字符串或字符串数组                                   | 仅支持字符串列表（更安全）                                   | `ProcessBuilder` 更推荐，因为能防止命令注入问题 |
-| **环境变量设置** | 不能直接设置，需通过 `String[] envp` 参数传入            | 可通过 `pb.environment().put(key, value)` 动态修改           | `ProcessBuilder` 支持更灵活的环境配置           |
-| **工作目录**     | 默认当前进程工作目录，可在第三个参数传入 `File` 对象指定 | 可通过 `pb.directory(File)` 设置                             | 可独立指定运行路径，如项目编译目录              |
-| **错误输出合并** | 不支持直接合并                                           | 可通过 `pb.redirectErrorStream(true)` 合并标准输出和错误输出 | 常用于脚本执行或命令调试时查看完整日志          |
-| **输出读取**     | 需手动获取 `Process.getInputStream()`                    | 支持灵活的重定向输出，如 `pb.redirectOutput(File)`           | `ProcessBuilder` 可直接写入文件或控制台         |
-| **执行结果**     | 仅返回 `Process` 对象，需要自行处理流                    | 同样返回 `Process`，但支持更多控制                           | 推荐结合 `waitFor()` 与流读取                   |
-| **可维护性**     | 较差                                                     | 较高                                                         | `ProcessBuilder` 结构更清晰、可扩展             |
-| **错误处理**     | 不支持自动捕获                                           | 可通过异常或合并流方式处理                                   | 错误输出建议合并便于排查                        |
-| **推荐程度**     | 旧式用法（不推荐）                                       | ✅ **推荐方式**                                               | 新项目统一使用 `ProcessBuilder`                 |
+| 特性 / 项目      | Runtime.exec()                                           | ProcessBuilder                                               |
+| ---------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
+| **推荐程度**     | ❌ 不推荐新项目                                           | ✅ **推荐方式**                                               |
+| **参数传递**     | 支持字符串或字符串数组                                   | 仅支持字符串列表（更安全）,能防止命令注入问题                |
+| **环境变量设置** | 不能直接设置，需通过 `String[] envp` 参数传入            | 可通过 `pb.environment().put(key, value)` 动态修改,更灵活    |
+| **工作目录**     | 默认当前进程工作目录，可在第三个参数传入 `File` 对象指定 | 可通过 `pb.directory(File)` 设置,可独立指定运行路            |
+| **错误输出合并** | 不支持直接合并                                           | 可通过 `pb.redirectErrorStream(true)` 合并标准输出和错误输出 |
+| **输出读取**     | 需手动获取 `Process.getInputStream()`                    | 支持灵活的重定向输出，如 `pb.redirectOutput(File)`           |
+| **执行结果**     | 仅返回 `Process` 对象，需要自行处理流                    | 同样返回 `Process`，但支持更多控制                           |
+| **可维护性**     | 较差                                                     | 较高                                                         |
+| **错误处理**     | 不支持自动捕获                                           | 可通过异常或合并流方式处理                                   |
 
 > ⚙️ **建议：** 新代码中应优先使用 `ProcessBuilder`。
 
@@ -41,32 +82,36 @@
 
 ### 1. 基本用法
 
+windows
+
 ```java
 String command = "cmd /c dir";
 Process process = Runtime.getRuntime().exec(command);
 ```
 
-- `/c` 表示执行命令后关闭窗口；
-- `/k` 表示执行命令后保持窗口开启。
+- `/c`：执行后关闭
+- `/k`：执行后不关闭（交互场景）
 
-### 2. 执行 Linux Shell 命令
+ Linux Shell :
 
 ```java
 // 数组形式传递参数可避免空格和特殊字符问题
 Process process = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", "ls -l"});
 ```
 
-### 3. 异步读取输出，防止阻塞
+### 2. 输出流阻塞问题（极其重要）
+
+> **核心事实**：
+> 子进程 stdout / stderr 缓冲区是有限的，不及时读取会导致子进程阻塞。
+
+**JDK 9+：**
 
 ```java
-// JDK9+ 简洁写法
 new Thread(() -> process.getInputStream().transferTo(System.out)).start();
 new Thread(() -> process.getErrorStream().transferTo(System.err)).start();
 ```
 
-> 💡 子进程输出未及时读取会造成缓冲区阻塞，导致 Java 程序挂起。
-
-#### JDK8 兼容方案
+**JDK8 兼容方案**
 
 > ```java
 > // 工具方法：异步复制流
@@ -91,7 +136,7 @@ new Thread(() -> process.getErrorStream().transferTo(System.err)).start();
 > ```
 > 
 
-### 4. 获取退出值
+### 3. 获取退出值
 
 ```java
 int exitCode = process.waitFor(); // 阻塞等待执行完成
@@ -100,13 +145,23 @@ System.out.println("命令退出码: " + exitCode); // 0表示成功
 
 ---
 
-### 5.设置环境变量
+### 4.设置环境变量
 
 ```java
 Process p = Runtime.getRuntime().exec(cmdArray, envp, workDir);
 ```
 
+windows 
 
+```java
+String[] cmd = {"cmd.exe", "/c", "echo %MY_VAR%"};
+String[] envp = {"MY_VAR=HelloFromJava"};
+Process process = Runtime.getRuntime().exec(cmd, envp, null);
+```
+
+
+
+linux:
 
 ```java
 public class RuntimeEnvExample {
@@ -135,17 +190,9 @@ public class RuntimeEnvExample {
 }
 ```
 
-windows 
-
-```java
-String[] cmd = {"cmd.exe", "/c", "echo %MY_VAR%"};
-String[] envp = {"MY_VAR=HelloFromJava"};
-Process process = Runtime.getRuntime().exec(cmd, envp, null);
-```
 
 
-
-### 6. 完整案例（带超时控制）
+### 5. 完整案例（带超时控制）
 
 ```java
 public class RuntimeExecExample {
@@ -237,13 +284,15 @@ public class RuntimeExecExample {
 
 ## 三、ProcessBuilder 使用详解
 
-### 1. 启动外部命令
+### 1. 基础用法
 
 ```java
 // Windows 示例
-ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "dir");
+ProcessBuilder pb1 = new ProcessBuilder("cmd", "/c", "dir");
+Process process = pb1.start();
+
 // Linux/macOS 示例
-// ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", "ls -l");
+ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", "ls -l");
 Process process = pb.start();
 ```
 
@@ -258,7 +307,7 @@ pb.redirectErrorStream(true);
 
 // 设置环境变量
 Map<String, String> env = pb.environment();
-env.put("APP_ENV", "test");
+env.put("APP_ENV", "test");//添加环境变量
 env.remove("TEMP"); // 移除环境变量
 
 
@@ -266,52 +315,233 @@ env.remove("TEMP"); // 移除环境变量
 pb.redirectOutput(new File("command-output.txt"));
 ```
 
+
+
+> **工程建议：**
+>
+> `redirectErrorStream(true)` 是生产环境默认选择。
+
 ```java
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+ProcessBuilder pb = new ProcessBuilder();
 
-public class PBEnvExample {
-    public static void main(String[] args) throws Exception {
-        ProcessBuilder pb = new ProcessBuilder();
+// 创建ProcessBuilder对象并设置命令
+pb.command("cmd.exe", "/c", "echo %MY_VAR%");
+// pb.command("/bin/bash", "-c", "echo $MY_VAR"); // Linux版本
 
-        // 执行命令
-        pb.command("cmd.exe", "/c", "echo %MY_VAR%");
-        // pb.command("/bin/bash", "-c", "echo $MY_VAR"); // Linux版本
+// 设置环境变量
+pb.environment().put("MY_VAR", "HelloFromProcessBuilder");
+// 设置工作目录
+pb.directory(new File("F:\\gg\\ing"));
 
-        // 设置环境变量
-        pb.environment().put("MY_VAR", "HelloFromProcessBuilder");
+// 合并错误流和输出流
+pb.redirectErrorStream(true);
 
-        // 启动进程
-        Process process = pb.start();
+// 启动进程
+Process process = pb.start();
 
-        // 读取输出
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), "GBK"))) {
-            reader.lines().forEach(System.out::println);
-        }
-
-        process.waitFor();
-    }
+// 读取输出
+try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(process.getInputStream(), "GBK"))) {
+    reader.lines().forEach(System.out::println);
 }
 
+process.waitFor();
 ```
 
 
 
-### 3. 读取输出
+
+### 3.ProcessBuilder IO 处理
+
+#### 1. IO 处理概览
+
+`ProcessBuilder` 在启动外部进程时，**核心难点不在命令本身，而在 IO（输入 / 输出 / 错误流）处理**。
+
+Java 为子进程提供了三类 IO 处理方式：
+
+| 方式          | 说明                |
+| ------------- | ------------------- |
+| PIPE（默认）  | Java 程序通过流读取 |
+| Redirect      | 重定向到文件        |
+| **inheritIO** | 直接交给父进程      |
+
+其中，**`inheritIO()` 是最简单、最容易忽略但非常实用的一种方式**。
+
+------
+
+#### 2. inheritIO 是什么？
 
 ```java
-// 读取合并后的输出流（需先调用 redirectErrorStream(true)）
-try (BufferedReader reader = new BufferedReader(
-        new InputStreamReader(process.getInputStream(), "UTF-8"))) {
-    String line;
-    while ((line = reader.readLine()) != null) {
-        System.out.println(line);
-    }
-}
+ProcessBuilder inheritIO()
 ```
 
----
+> **作用：让子进程完全继承父进程（当前 JVM）的 IO**
+
+即：
+
+| 子进程流 | 实际流向                |
+| -------- | ----------------------- |
+| stdin    | 当前 Java 进程的 stdin  |
+| stdout   | 当前 Java 进程的 stdout |
+| stderr   | 当前 Java 进程的 stderr |
+
+📌 **执行效果等同于你在终端里直接敲这条命令**
+
+------
+
+#### 3. inheritIO 的底层等价写法（原理）
+
+```java
+pb.inheritIO();
+```
+
+等价于：
+
+```java
+pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+```
+
+👉 `inheritIO()` 本质是一个 **IO 处理的快捷封装**。
+
+------
+
+#### 4. 最典型使用示例
+
+##### 4.1 像命令行一样执行命令（调试首选）
+
+```java
+ProcessBuilder pb =
+        new ProcessBuilder("java", "-version");
+
+pb.inheritIO();
+Process process = pb.start();
+process.waitFor();
+```
+
+**特点：**
+
+- 不需要 `getInputStream()`
+- 不需要单独处理 stderr
+- 输出直接显示在控制台
+
+------
+
+##### 4.2 ffmpeg / 音视频处理（实时进度）
+
+```java
+ProcessBuilder pb = new ProcessBuilder(
+        "ffmpeg", "-i", "a.m4a", "a.wav"
+);
+
+pb.inheritIO();
+pb.start().waitFor();
+```
+
+📌 非常适合：
+
+- 音视频转码
+- 实时进度输出
+- CLI 工具封装
+
+------
+
+#### 5. inheritIO 与其他 IO API 的关系
+
+##### 5.1 inheritIO vs redirectErrorStream
+
+| 组合方式                                    | 实际效果                 |
+| ------------------------------------------- | ------------------------ |
+| `inheritIO()`                               | stdout / stderr 各自输出 |
+| `redirectErrorStream(true)`                 | stderr 合并到 stdout     |
+| `inheritIO()` + `redirectErrorStream(true)` | ❌ 无意义                 |
+| `inheritIO()` + `redirectOutput(File)`      | ⚠️ 后者覆盖前者           |
+
+📌 **inheritIO 是一次性全继承，优先级低于单独 redirect**
+
+------
+
+#### 6. inheritIO 的优缺点（工程视角）
+
+##### ✅ 优点
+
+- 代码极简
+- 无需处理流
+- 不存在缓冲区阻塞
+- 调试体验极好
+
+##### ❌ 缺点
+
+- 无法程序化获取输出
+- 不适合日志分析
+- 不适合后台 / Web 服务
+
+------
+
+#### 7. 使用场景建议
+
+##### 7.1 推荐使用 inheritIO 的场景
+
+| 场景               |
+| ------------------ |
+| 本地工具           |
+| CLI 程序           |
+| 开发调试           |
+| 构建 / 编译工具    |
+| ffmpeg / git / mvn |
+
+------
+
+##### 7.2 不推荐使用 inheritIO 的场景
+
+| 场景         | 原因       |
+| ------------ | ---------- |
+| Web 服务     | 输出不可控 |
+| 后台任务     | 日志难管理 |
+| 需要解析输出 | 无法读取流 |
+| 高并发执行   | IO 混乱    |
+
+------
+
+#### 8. inheritIO vs 手动读取流（对照）
+
+| 维度       | inheritIO | 手动处理流 |
+| ---------- | --------- | ---------- |
+| 代码复杂度 | ⭐         | ⭐⭐⭐        |
+| 阻塞风险   | 无        | 有         |
+| 可控性     | ❌         | ✅          |
+| 可解析输出 | ❌         | ✅          |
+| 适合生产   | ❌         | ✅          |
+
+------
+
+#### 9. 常见误区（重点）
+
+##### ❌ 误区 1：使用 inheritIO 后仍读取流
+
+```java
+pb.inheritIO();
+process.getInputStream(); // ❌ 无意义
+```
+
+👉 **继承后，流已由父进程接管**
+
+------
+
+##### ❌ 误区 2：服务端程序使用 inheritIO
+
+> 日志直接输出到控制台，难以监控、归档和分析
+
+------
+
+#### 10. 本节总结（手册级）
+
+> `inheritIO()` 是 `ProcessBuilder` 中**最简单的 IO 处理方式**，
+> 适合 **调试、命令行工具、音视频处理等交互式场景**；
+> **一旦需要日志、解析或后台运行，应避免使用 inheritIO**。
+
+
 
 ### 4.完整案例
 
@@ -1706,9 +1936,193 @@ public class PortStatusChecker {
 
 
 
+### 案例7：FFmpeg 按时间拆MP3
+
+#### 命令示例
+
+```bash
+ffmpeg -i input.m4a -f segment -segment_time 300 -c copy out_%03d.m4a
+```
+
+#### Java 调用 FFmpeg
+
+```java
+ProcessBuilder pb = new ProcessBuilder(
+        "ffmpeg",
+        "-i", "input.m4a",
+        "-f", "segment",
+        "-segment_time", "300",
+        "-c", "copy",
+        "out_%03d.m4a"
+);
+pb.inheritIO();
+Process p = pb.start();
+p.waitFor();
+```
+
+✔ 每个 `out_XXX.m4a` 都可播放
+ ✔ 无重新编码，速度快
 
 
 
+### 案例8：查找本地 winRar安装目录
+
+#### 一、最可靠方案 ⭐⭐⭐⭐⭐
+
+👉 通过 Windows 注册表查找（官方安装信息）
+
+> **WinRAR 正规安装一定会写注册表**
+
+常见注册表位置（64 / 32 位）
+
+```
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\WinRAR.exe
+HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\WinRAR.exe
+```
+
+------
+
+##### Java 示例：通过 `reg query` 查询
+
+##### 1️⃣ 查询注册表
+
+```java
+public static String findWinRARByRegistry() throws Exception {
+    String[] keys = {
+        "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\WinRAR.exe",
+        "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\WinRAR.exe"
+    };
+
+    for (String key : keys) {
+        String cmd = "reg query \"" + key + "\" /ve";
+        Process process = new ProcessBuilder("cmd", "/c", cmd)
+                .redirectErrorStream(true)
+                .start();
+
+        try (BufferedReader br = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), "GBK"))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.contains("REG_SZ")) {
+                    // 示例输出： (默认)    REG_SZ    C:\Program Files\WinRAR\WinRAR.exe
+                    return line.substring(line.lastIndexOf("REG_SZ") + 6).trim();
+                }
+            }
+        }
+    }
+    return null;
+}
+```
+
+##### 2️⃣ 使用结果
+
+```java
+String winrarPath = findWinRARByRegistry();
+if (winrarPath != null) {
+    System.out.println("WinRAR 路径：" + winrarPath);
+}
+```
+
+✔ **这是生产环境最推荐方式**
+
+------
+
+#### 二、通过环境变量 PATH 查找 ⭐⭐⭐⭐
+
+> 如果 WinRAR 被加入了 PATH
+
+##### Java 实现
+
+```java
+public static String findWinRARByWhere() throws Exception {
+    Process process = new ProcessBuilder("cmd", "/c", "where winrar")
+            .redirectErrorStream(true)
+            .start();
+
+    try (BufferedReader br = new BufferedReader(
+            new InputStreamReader(process.getInputStream(), "GBK"))) {
+        return br.readLine(); // 第一行就是路径
+    }
+}
+```
+
+✔ 简单
+ ❌ 不保证一定存在（取决于用户是否配置 PATH）
+
+------
+
+#### 三、从常见安装目录猜测 ⭐⭐⭐
+
+> 作为兜底方案（不严谨）
+
+##### 常见目录
+
+```
+C:\Program Files\WinRAR\
+C:\Program Files (x86)\WinRAR\
+```
+
+##### Java 示例
+
+```java
+public static String findWinRARByCommonPath() {
+    String[] paths = {
+        "C:\\Program Files\\WinRAR\\WinRAR.exe",
+        "C:\\Program Files (x86)\\WinRAR\\WinRAR.exe"
+    };
+    for (String path : paths) {
+        if (new File(path).exists()) {
+            return path;
+        }
+    }
+    return null;
+}
+```
+
+------
+
+#### 四、推荐的「组合式查找策略」（工程级）
+
+> **这是我强烈建议你实际使用的方案**
+
+```java
+public static String findWinRAR() throws Exception {
+    String path;
+
+    path = findWinRARByRegistry();
+    if (path != null) return path;
+
+    path = findWinRARByWhere();
+    if (path != null) return path;
+
+    path = findWinRARByCommonPath();
+    return path;
+}
+```
+
+------
+
+#### 五、找到 WinRAR 后如何安全调用（示例）
+
+```java
+String winrar = findWinRAR();
+if (winrar == null) {
+    throw new RuntimeException("未找到 WinRAR，请确认已安装");
+}
+
+ProcessBuilder pb = new ProcessBuilder(
+        winrar,
+        "x",
+        "test.rar",
+        "output\\"
+);
+pb.redirectErrorStream(true);
+pb.start().waitFor();
+```
+
+✔ 参数拆分
+ ✔ 防止空格路径问题
+ ✔ 不拼字符串
 
 ## 参考资料
 
