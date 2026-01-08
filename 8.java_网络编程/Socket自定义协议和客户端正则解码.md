@@ -497,25 +497,34 @@ import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
  * SocketClient 优化版
  *
  * <p>优化点： 1. 移除了易导致死锁的 Semaphore 机制，实现读写分离。 2. 优化了同步等待响应的逻辑，减少 CPU 轮询。 3. 增强了异常处理和资源释放安全性。 4.
- * 增加了缓冲区最大限制，防止内存溢出。
+ * 增加了缓冲区最大限制，防止内存溢出。 5. 补充全链路日志体系，关键操作可追溯；优化线程管理、正则缓存、连接校验等核心逻辑
  */
 public class SocketClient implements AutoCloseable {
+  // ====================== 核心常量定义（消除魔法值）======================
   private static final Logger log = LoggerFactory.getLogger(SocketClient.class);
-
-  // --- 配置参数 ---
   private static final int DEFAULT_CONNECT_TIMEOUT = 5000;
   private static final int DEFAULT_RECONNECT_ATTEMPTS = 3;
   private static final long DEFAULT_RECONNECT_DELAY = 1000;
   private static final long DEFAULT_HEARTBEAT_INTERVAL = 30000;
   private static final byte[] HEARTBEAT_MESSAGE = "HEARTBEAT\n".getBytes(StandardCharsets.UTF_8);
   private static final int MAX_BUFFER_SIZE = 5 * 1024 * 1024;
+  private static final int RECEIVE_BUFFER_SIZE = 4096; // 接收缓冲区大小常量
+  private static final long MAX_RESPONSE_WAIT_TIME = 60000; // 响应最大等待时间
+  private static final int MAX_HEARTBEAT_FAIL_COUNT = 3; // 心跳连续失败阈值
+  private static final long THREAD_TERMINATION_TIMEOUT = 1000; // 线程终止等待时间
+  private static final int MAX_PATTERN_CACHE_SIZE = 100; // 正则表达式缓存最大数量
 
+  // ====================== 正则缓存（避免重复编译，提升性能）======================
+  private static final ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
+
+  // ====================== 配置参数 ======================
   private final String host;
   private final int port;
   private final int connectTimeout;
@@ -523,58 +532,81 @@ public class SocketClient implements AutoCloseable {
   private final long reconnectInitialDelay;
   private final long heartbeatInterval;
 
-  // --- 核心组件 ---
+  // ====================== 核心组件 ======================
   private volatile Socket socket;
   private volatile OutputStream outputStream;
-  private Thread receiveThread;
-  private final AtomicBoolean isRunning = new AtomicBoolean(false);
-  private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
+  private Thread receiveThread; // 独立接收线程
+  private final AtomicBoolean isRunning = new AtomicBoolean(false); // 运行状态
+  private final AtomicBoolean isReconnecting = new AtomicBoolean(false); // 重连标记
+  private final AtomicInteger heartbeatFailCount = new AtomicInteger(0); // 心跳失败计数器
 
-  // --- 数据接收缓冲区 ---
-  // 使用 StringBuilder 替代 ByteArrayOutputStream，方便正则匹配，但需注意并发
-  private final ByteArrayOutputStream bufferStream = new ByteArrayOutputStream();
-  private final Object readLock = new Object(); // 用于同步读
-  private final Object writeLock = new Object(); // 用于同步写
+  // ====================== 数据接收缓冲区（优化命名+复用）======================
+  private final ByteArrayOutputStream bufferStream = new ByteArrayOutputStream(); // 接收缓冲区
+  private final Object bufferLock = new Object(); // 读缓冲区同步锁（优化命名，语义更清晰）
+  private final Object writeOperationLock = new Object(); // 写操作同步锁（优化命名）
+  private final byte[] receiveBuffer = new byte[RECEIVE_BUFFER_SIZE]; // 复用接收缓冲区，减少GC
 
-  // --- 线程池 (用于心跳) ---
-  private ScheduledExecutorService heartbeatScheduler;
+  // ====================== 线程池 ======================
+  private ScheduledExecutorService heartbeatScheduler; // 心跳线程池
+  private final ExecutorService reconnectExecutor; // 重连单线程池（避免创建大量线程）
 
+  // ====================== 构造器 ======================
   public SocketClient(String host, int port) {
+    this(host, port, DEFAULT_CONNECT_TIMEOUT, DEFAULT_RECONNECT_ATTEMPTS, DEFAULT_RECONNECT_DELAY, DEFAULT_HEARTBEAT_INTERVAL);
+  }
+
+  // 新增带完整参数的构造函数
+  public SocketClient(String host, int port, int connectTimeout, int reconnectAttempts, 
+                     long reconnectInitialDelay, long heartbeatInterval) {
     this.host = host;
     this.port = port;
-    this.connectTimeout = DEFAULT_CONNECT_TIMEOUT;
-    this.reconnectAttempts = DEFAULT_RECONNECT_ATTEMPTS;
-    this.reconnectInitialDelay = DEFAULT_RECONNECT_DELAY;
-    this.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
+    this.connectTimeout = connectTimeout;
+    this.reconnectAttempts = reconnectAttempts;
+    this.reconnectInitialDelay = reconnectInitialDelay;
+    this.heartbeatInterval = heartbeatInterval;
+    log.info(
+        "SocketClient initialized with config - host: {}, port: {}, connectTimeout: {}ms, reconnectAttempts: {}, heartbeatInterval: {}ms",
+        host,
+        port,
+        connectTimeout,
+        reconnectAttempts,
+        heartbeatInterval);
+    reconnectExecutor =
+        Executors.newSingleThreadExecutor(
+            r -> {
+              Thread t = new Thread(r, "Socket-Reconnect-" + host + ":" + port);
+              t.setDaemon(true);
+              return t;
+            });
   }
 
   /** 建立连接 */
   public synchronized boolean connect() {
+    log.debug("Attempting to connect to {}:{}", host, port);
     if (isConnected()) {
+      log.warn("Already connected to {}:{}", host, port);
       return true;
     }
 
     try {
-      closeSocket(); // 确保旧连接清理
+      closeSocket(); // 清理旧连接
+      log.debug("Old socket closed, preparing to create new connection");
 
       socket = new Socket();
       socket.connect(new InetSocketAddress(host, port), connectTimeout);
 
-      // 优化 Socket 参数
-      socket.setTcpNoDelay(true); // 禁用 Nagle 算法，提高实时性
-      socket.setKeepAlive(true);
-      socket.setSoTimeout(0); // 读线程使用阻塞模式，不设置超时，避免 Read 抛错
+      // 优化 Socket 性能参数
+      socket.setTcpNoDelay(true); // 禁用 Nagle 算法，降低实时通信延迟
+      socket.setKeepAlive(true); // 开启 TCP 保活
+      socket.setSoTimeout(0); // 接收线程阻塞读，不设置超时
 
       outputStream = socket.getOutputStream();
 
-      // 状态标记
+      // 更新状态 + 启动接收线程 + 启动心跳
       isRunning.set(true);
       isReconnecting.set(false);
-
-      // 启动接收线程
+      heartbeatFailCount.set(0); // 重置心跳失败计数
       startReceiveThread();
-
-      // 启动心跳
       startHeartbeat();
 
       log.info("Successfully connected to {}:{}", host, port);
@@ -585,195 +617,330 @@ public class SocketClient implements AutoCloseable {
     }
   }
 
-  /** 发送消息并等待匹配正则的响应 (同步阻塞模式) */
+  /** 检查连接并自动重连（抽离重复逻辑，提升可维护性） */
+  private boolean checkAndReconnect() {
+    log.debug("Checking connection status to {}:{}", host, port);
+    if (isConnected()) {
+      return true;
+    }
+    log.warn("Connection to {}:{} is lost, attempting to reconnect", host, port);
+    return reconnect();
+  }
+
+  /**
+   * 发送消息并等待匹配正则的响应 (同步阻塞模式)
+   *
+   * @param message 待发送的字节数组
+   * @param regexPattern 响应匹配的正则表达式
+   * @param timeoutMillis 超时时间（毫秒）
+   * @return 匹配到的响应数据，超时/异常返回null
+   * @throws SocketClientException 自定义异常封装底层错误
+   */
   public String sendMessageAndWaitForResponse(
       byte[] message, String regexPattern, long timeoutMillis) {
-    if (!isConnected()) {
-      if (!reconnect()) return null;
+    // 1. 入参校验（增强鲁棒性）
+    if (message == null || message.length == 0) {
+      log.error("Message is null or empty, skip send");
+      return null;
+    }
+    if (regexPattern == null || regexPattern.isBlank()) {
+      log.error("Regex pattern is null or blank, invalid parameter");
+      return null;
     }
 
+    // 2. 检查连接，断开则自动重连
+    if (!checkAndReconnect()) {
+      log.error("Failed to reconnect to {}:{}, cannot send message", host, port);
+      return null;
+    }
+
+    // 3. 获取缓存的正则（避免重复编译，提升性能）
     Pattern pattern;
     try {
-      pattern = Pattern.compile(regexPattern);
+      // 限制缓存大小，防止内存泄漏
+      if (PATTERN_CACHE.size() >= MAX_PATTERN_CACHE_SIZE) {
+        PATTERN_CACHE.clear(); // 简单清理策略，实际应用中可能需要LRU算法
+      }
+      pattern = PATTERN_CACHE.computeIfAbsent(regexPattern, Pattern::compile);
     } catch (Exception e) {
-      log.error("Invalid regex: {}", regexPattern);
-      return null;
+      log.error("Invalid regex pattern: {}, error: {}", regexPattern, e.getMessage(), e);
+      throw new SocketClientException("Invalid regex pattern: " + regexPattern, e);
     }
 
-    // 1. 清理缓冲区 (只清理旧数据，准备接收新响应)
-    synchronized (readLock) {
-        try {
-          String string = bufferStream.toString(StandardCharsets.UTF_8.name());
-        System.err.println("丢弃的字节 = " + string);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
+    // 4. 清理接收缓冲区（避免旧数据干扰匹配，替换System.err为日志，脱敏）
+    synchronized (bufferLock) {
+      try {
+        String bufferData = bufferStream.toString(StandardCharsets.UTF_8);
+        if (!bufferData.isBlank()) {
+          log.debug(
+              "Clearing old buffer data (length: {}), data: {}",
+              bufferData.length(),
+              maskSensitiveData(bufferData));
         }
         bufferStream.reset();
+      } catch (Exception e) {
+        log.error("Failed to clear buffer data", e);
+        throw new SocketClientException("Failed to clear buffer data", e);
+      }
     }
 
-    // 2. 发送消息
+    // 5. 发送消息
     if (!sendInternal(message)) {
+      log.error("Failed to send message to {}:{}", host, port);
       return null;
     }
 
-    // 3. 等待响应
+    // 6. 阻塞等待响应（带超时）
     long startTime = System.currentTimeMillis();
-    long maxWait = Math.min(timeoutMillis, 60000); // 硬性限制最大等待60秒
+    long maxWait = Math.min(timeoutMillis, MAX_RESPONSE_WAIT_TIME); // 硬性限制最大等待60秒
+    log.debug("Waiting for response matching regex: {}, timeout: {}ms", regexPattern, maxWait);
 
-    synchronized (readLock) {
+    synchronized (bufferLock) {
       while (System.currentTimeMillis() - startTime < maxWait) {
         try {
-          String currentData = bufferStream.toString(StandardCharsets.UTF_8.name());
+          String currentData = bufferStream.toString(StandardCharsets.UTF_8); // 简化编码调用
           // 检查匹配
           if (pattern.matcher(currentData).find()) {
-            return currentData; // 找到匹配，返回
+            log.debug(
+                "Matched response for regex: {}, data length: {}",
+                regexPattern,
+                currentData.length());
+            return currentData;
           }
 
-          // 没找到，释放锁并等待接收线程 notify
-          readLock.wait(maxWait - (System.currentTimeMillis() - startTime));
-
+          // 未找到则释放锁等待（接收线程有数据时会 notify）
+          long remainingTime = maxWait - (System.currentTimeMillis() - startTime);
+          bufferLock.wait(remainingTime);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
+          log.warn("Wait for response interrupted", e);
           return null;
-        } catch (UnsupportedEncodingException e) {
-          log.error("Encoding error", e);
-          return null;
+        } catch (Exception e) {
+          log.error("Error while waiting for response", e);
+          throw new SocketClientException("Error while waiting for response", e);
         }
       }
     }
 
-    log.warn("Timeout waiting for response pattern: {}", regexPattern);
+    log.warn(
+        "Timeout waiting for response matching regex: {} (max wait: {}ms)", regexPattern, maxWait);
     return null;
   }
 
   /** 纯发送消息 (异步) */
   public boolean sendMessage(byte[] message) {
-    if (!isConnected() && !reconnect()) {
+    // 入参校验
+    if (message == null || message.length == 0) {
+      log.error("Message is null or empty, skip send");
+      return false;
+    }
+    // 检查连接并重连
+    if (!checkAndReconnect()) {
+      log.error("Failed to reconnect to {}:{}, cannot send message", host, port);
       return false;
     }
     return sendInternal(message);
   }
 
+  /** 内部发送逻辑（抽离复用） */
   private boolean sendInternal(byte[] message) {
     try {
       if (outputStream != null) {
-        synchronized (writeLock) { // 防止多线程写入错乱
+        synchronized (writeOperationLock) { // 防止多线程写入错乱
           outputStream.write(message);
           outputStream.flush();
         }
-        log.debug("Sent {} bytes", message.length);
+        log.debug("Sent {} bytes to {}:{}", message.length, host, port);
         return true;
+      } else {
+        log.error("OutputStream is null, cannot send message to {}:{}", host, port);
+        return false;
       }
     } catch (IOException e) {
-      log.error("Send error", e);
+      log.error("Failed to send message to {}:{}", host, port, e);
       handleConnectionError();
+      return false;
     }
-    return false;
   }
 
+  /** 启动接收线程 */
   private void startReceiveThread() {
     if (receiveThread != null && receiveThread.isAlive()) {
+      log.warn("Receive thread is already running, skip start");
       return;
     }
-    receiveThread = new Thread(this::receiveLoop, "Socket-Receiver-" + host);
+    receiveThread = new Thread(this::receiveLoop, "Socket-Receiver-" + host + ":" + port);
     receiveThread.setDaemon(true);
+    log.debug("Starting receive thread: {}", receiveThread.getName());
     receiveThread.start();
   }
 
+  /** 接收数据循环（优化缓冲区复用） */
   private void receiveLoop() {
-    byte[] buffer = new byte[4096];
-    try (InputStream in = socket.getInputStream()) {
-
-      while (isRunning.get() && !Thread.currentThread().isInterrupted()) {
-        int len = in.read(buffer);
-        if (len == -1) {
-          log.info("Server closed connection");
+    log.info("Receive thread started: {}", Thread.currentThread().getName());
+    
+    // 获取当前socket的引用以确保在整个方法执行过程中使用同一实例
+    Socket currentSocket = this.socket;
+    if (currentSocket == null) {
+      log.error("Socket is null in receive loop, exiting");
+      return;
+    }
+    
+    InputStream in = null;
+    try {
+      in = currentSocket.getInputStream();
+    } catch (IOException e) {
+      log.error("Failed to get input stream from socket", e);
+      handleConnectionError();
+      return;
+    }
+    
+    try {
+      while (isRunning.get() && !Thread.currentThread().isInterrupted() && currentSocket == this.socket) {
+        int len = -1;
+        try {
+          len = in.read(receiveBuffer); // 阻塞读（SoTimeout=0），复用缓冲区
+        } catch (IOException e) {
+          if (isRunning.get()) {
+            log.error("Read error in receive thread", e);
+            handleConnectionError(); // 读异常触发重连
+          }
+          break;
+        }
+        
+        if (len == -1) { // 服务端关闭连接
+          log.info("Server closed connection, receive thread will exit");
           break;
         }
         if (len > 0) {
-          synchronized (readLock) {
+          synchronized (bufferLock) { // 所有缓冲区操作必须在锁内（线程安全）
             // 保护性清理：如果缓冲区太大，强制重置，防止OOM
             if (bufferStream.size() > MAX_BUFFER_SIZE) {
-              log.warn("Buffer overflow, resetting...");
+              log.warn(
+                  "Buffer overflow (size: {} > max: {}), resetting buffer",
+                  bufferStream.size(),
+                  MAX_BUFFER_SIZE);
               bufferStream.reset();
             }
-
-            bufferStream.write(buffer, 0, len);
+            bufferStream.write(receiveBuffer, 0, len);
+            log.debug("Received {} bytes, current buffer size: {}", len, bufferStream.size());
 
             // 唤醒正在等待响应的业务线程
-            readLock.notifyAll();
-          }
-
-          if (log.isDebugEnabled()) {
-            log.debug("Received bytes: {}", len);
+            bufferLock.notifyAll();
           }
         }
       }
-    } catch (IOException e) {
-      if (isRunning.get()) {
-        log.error("Read error: {}", e.getMessage());
-        handleConnectionError();
-      }
     } finally {
-      log.info("Receive thread stopped");
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException e) {
+          log.warn("Error closing input stream", e);
+        }
+      }
+      log.info("Receive thread stopped: {}", Thread.currentThread().getName());
     }
   }
 
+  /** 处理连接异常（重连线程池化） */
   private void handleConnectionError() {
     if (isReconnecting.compareAndSet(false, true)) {
-      new Thread(this::reconnect, "Socket-Reconnect-Thread").start();
+      log.debug("Submit reconnect task to thread pool");
+      reconnectExecutor.submit(
+          () -> {
+            try {
+              reconnect();
+            } catch (Exception e) {
+              log.error("Reconnect task failed", e);
+              isReconnecting.set(false);
+            }
+          });
     }
   }
 
+  /** 重连逻辑 */
   private synchronized boolean reconnect() {
-    log.info("Attempting to reconnect...");
+    log.info("Reconnecting to {}:{} (max attempts: {})", host, port, reconnectAttempts);
     closeSocket(); // 先彻底关闭旧资源
 
     for (int i = 0; i < reconnectAttempts; i++) {
-      if (!isRunning.get()) break; // 如果用户主动关闭，停止重连
+      if (!isRunning.get()) {
+        log.warn("Client is stopped, abort reconnect");
+        break;
+      }
 
       try {
         long delay = reconnectInitialDelay * (long) Math.pow(2, i); // 指数退避
         log.info("Waiting {}ms before reconnect attempt {}/{}", delay, i + 1, reconnectAttempts);
         Thread.sleep(delay);
 
-        if (connect()) {
+        if (connect()) { // 重连成功
+          log.info(
+              "Reconnected to {}:{} successfully (attempt {}/{})",
+              host,
+              port,
+              i + 1,
+              reconnectAttempts);
           isReconnecting.set(false);
           return true;
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
+        log.warn("Reconnect thread interrupted", e);
         break;
       }
     }
-    log.error("Reconnection failed after {} attempts", reconnectAttempts);
+    log.error("Reconnection failed after {} attempts to {}:{}", reconnectAttempts, host, port);
     isReconnecting.set(false);
     return false;
   }
 
+  /** 启动心跳（增加失败计数阈值） */
   private void startHeartbeat() {
     stopHeartbeat();
     heartbeatScheduler =
         Executors.newSingleThreadScheduledExecutor(
             r -> {
-              Thread t = new Thread(r, "Heartbeat-Worker");
+              Thread t = new Thread(r, "Heartbeat-Worker-" + host + ":" + port);
               t.setDaemon(true);
               return t;
             });
 
+    log.debug("Starting heartbeat scheduler (interval: {}ms)", heartbeatInterval);
     heartbeatScheduler.scheduleAtFixedRate(
         () -> {
           if (isConnected()) {
             try {
-              synchronized (writeLock) {
-                outputStream.write(HEARTBEAT_MESSAGE);
-                outputStream.flush();
+              // 添加额外的空值检查
+              OutputStream currentOutputStream = this.outputStream;
+              if (currentOutputStream == null) {
+                log.warn("OutputStream is null during heartbeat, skipping heartbeat");
+                return;
               }
-              log.debug("Heartbeat sent");
+              
+              synchronized (writeOperationLock) {
+                currentOutputStream.write(HEARTBEAT_MESSAGE);
+                currentOutputStream.flush();
+              }
+              heartbeatFailCount.set(0); // 重置失败计数
+              log.debug("Heartbeat sent to {}:{}", host, port);
             } catch (IOException e) {
-              log.warn("Heartbeat failed, triggering reconnect...");
-              handleConnectionError();
+              int failCount = heartbeatFailCount.incrementAndGet();
+              log.warn(
+                  "Heartbeat failed (count: {}/{}), error: {}",
+                  failCount,
+                  MAX_HEARTBEAT_FAIL_COUNT,
+                  e.getMessage());
+              // 达到失败阈值才触发重连（避免网络抖动误触发）
+              if (failCount >= MAX_HEARTBEAT_FAIL_COUNT) {
+                log.error(
+                    "Heartbeat failed {} times, triggering reconnect", MAX_HEARTBEAT_FAIL_COUNT);
+                handleConnectionError();
+                heartbeatFailCount.set(0); // 重置计数
+              }
             }
+          } else {
+            log.debug("Not connected, skip heartbeat");
           }
         },
         heartbeatInterval,
@@ -781,40 +948,130 @@ public class SocketClient implements AutoCloseable {
         TimeUnit.MILLISECONDS);
   }
 
+  /** 停止心跳（完善线程池关闭逻辑，等待终止） */
   private void stopHeartbeat() {
     if (heartbeatScheduler != null && !heartbeatScheduler.isShutdown()) {
+      log.debug("Shutting down heartbeat scheduler");
       heartbeatScheduler.shutdownNow();
+      try {
+        if (!heartbeatScheduler.awaitTermination(
+            THREAD_TERMINATION_TIMEOUT, TimeUnit.MILLISECONDS)) {
+          log.warn(
+              "Heartbeat scheduler did not terminate gracefully within {}ms",
+              THREAD_TERMINATION_TIMEOUT);
+        } else {
+          log.debug("Heartbeat scheduler terminated successfully");
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.warn("Heartbeat scheduler termination interrupted", e);
+      }
     }
   }
 
+  /** 关闭Socket（补充日志，不忽略异常） */
   private void closeSocket() {
-    try {
-      if (socket != null) socket.close();
-    } catch (IOException ignored) {
+    log.debug("Closing socket to {}:{}", host, port);
+    Socket socketToClose = this.socket;
+    if (socketToClose != null) {
+      try {
+        if (!socketToClose.isClosed()) {
+          socketToClose.close();
+          log.debug("Socket to {}:{} closed successfully", host, port);
+        } else {
+          log.debug("Socket to {}:{} is already closed", host, port);
+        }
+      } catch (IOException e) {
+        log.error("Failed to close socket to {}:{}", host, port, e); // 记录关闭失败日志
+      } finally {
+        // 在finally块外设置为null
+      }
     }
+    this.socket = null;
+    this.outputStream = null;
   }
 
+  /** 精准判断连接状态（优化逻辑） */
   public boolean isConnected() {
-    return socket != null
-        && socket.isConnected()
-        && !socket.isClosed()
-        && !socket.isInputShutdown()
-        && !socket.isOutputShutdown();
+    boolean connected =
+        socket != null
+            && socket.isConnected()
+            && !socket.isClosed()
+            && !socket.isInputShutdown()
+            && !socket.isOutputShutdown()
+            && socket.isBound();
+    log.debug("Connection status to {}:{} - {}", host, port, connected);
+    return connected;
   }
 
+  /** 脱敏敏感数据（日志安全） */
+  private String maskSensitiveData(String data) {
+    // 可根据业务扩展脱敏规则，比如隐藏令牌、密码等
+    if (data.length() > 100) {
+      return data.substring(0, 100) + "...[truncated]";
+    }
+    return data;
+  }
+
+  /** 关闭客户端（完善资源释放） */
   @Override
   public void close() {
-    log.info("Closing client...");
+    log.info("Closing SocketClient to {}:{}", host, port);
     isRunning.set(false);
-    stopHeartbeat();
-    closeSocket();
+    stopHeartbeat(); // 停止心跳线程池
+    closeSocket(); // 关闭Socket
+
+    // 中断接收线程
     if (receiveThread != null) {
       receiveThread.interrupt();
+      try {
+        if (receiveThread.isAlive()) {
+          receiveThread.join(THREAD_TERMINATION_TIMEOUT);
+          if (receiveThread.isAlive()) {
+            log.warn("Receive thread did not terminate gracefully");
+          } else {
+            log.debug("Receive thread terminated successfully");
+          }
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.warn("Receive thread join interrupted", e);
+      }
+    }
+
+    // 关闭重连线程池
+    if (!reconnectExecutor.isShutdown()) {
+      log.debug("Shutting down reconnect executor");
+      reconnectExecutor.shutdownNow();
+      try {
+        if (!reconnectExecutor.awaitTermination(
+            THREAD_TERMINATION_TIMEOUT, TimeUnit.MILLISECONDS)) {
+          log.warn("Reconnect executor did not terminate gracefully");
+        } else {
+          log.debug("Reconnect executor terminated successfully");
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.warn("Reconnect executor termination interrupted", e);
+      }
+    }
+    log.info("SocketClient to {}:{} closed completely", host, port);
+  }
+
+  // ====================== 自定义异常（统一异常处理）======================
+  public static class SocketClientException extends RuntimeException {
+    public SocketClientException(String message) {
+      super(message);
+    }
+
+    public SocketClientException(String message, Throwable cause) {
+      super(message, cause);
     }
   }
 
-  // --- Main Test ---
+  // ====================== 测试代码（建议抽离到独立测试类：SocketClientTest.java）======================
   public static void main(String[] args) {
+    log.info("Starting SocketClient test");
     // 使用 try-with-resources 自动关闭
     try (SocketClient client = new SocketClient("localhost", 8080)) {
       if (client.connect()) {
@@ -824,7 +1081,10 @@ public class SocketClient implements AutoCloseable {
         while (true) {
           System.out.print("cmd> ");
           String cmd = scanner.nextLine();
-          if ("bye".equalsIgnoreCase(cmd)) break;
+          if ("bye".equalsIgnoreCase(cmd)) {
+            log.info("User input 'bye', exit test");
+            break;
+          }
 
           // 发送并等待包含 "OK" 或 "ERROR" 的响应
           String resp =
@@ -837,11 +1097,16 @@ public class SocketClient implements AutoCloseable {
             System.out.println("No response or timeout.");
           }
         }
+      } else {
+        log.error("Failed to connect to localhost:8080, test exit");
+        System.out.println("Failed to connect to server.");
       }
+    } catch (Exception e) {
+      log.error("SocketClient test failed", e);
+      System.out.println("Client error: " + e.getMessage());
     }
   }
 }
-
 ```
 
 ## SocketServer.java
