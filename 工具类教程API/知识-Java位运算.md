@@ -1,4 +1,4 @@
-# Java 进制体系
+# Java 进制体系和进制转换
 
 ## 一、计算机基础概念
 ----
@@ -46,7 +46,54 @@
 进制是数值的计数方式，即“逢几进一”。  
 不同进制使用不同基数（base），在计算机中常见四种：二进制、八进制、十进制、十六进制。
 
-### 1. 四种整数表示法（Java）
+### 1、十进制
+十进制是日常生活和工作中最常使用的进位计数制。在十进制数中，每一位有 0~9 十个数码，所以计数的基数是 10。超过 9 的数必须用多位数表示，其中低位和相邻高位之间的关系是“逢十进一”，故称为十进制。例如
+
+\[
+143.75 = 1 \times 10^2 + 4 \times 10^1 + 3 \times 10^0 + 7 \times 10^{-1} + 5 \times 10^{-2}
+\]
+
+所以任意一个多位的十进制数 \(D\) 均可展开为
+\[
+D = \sum k_i \times 10^i
+\tag{1.2.1}
+\]
+
+式中 \(k_i\) 是第 \(i\) 位的系数，它可以是 0~9 这十个数码中的任何一个。若整数部分的位数是 \(n\)、小数部分的位数为 \(m\)，则 \(i\) 包含从 \(n-1\) 到 0 的所有正整数和从 \(-1\) 到 \(-m\) 的所有负整数，整数部分的最高位为 \(n-1\)，最低位为 0；小数部分的最高位为 \(-1\)，最低位为 \(-m\)。
+
+若以 \(N\) 取代式(1.2.1)中的 10，即可得到多位任意进制（\(N\) 进制）数展开式的普遍形式
+\[
+D = \sum k_i N^i
+\tag{1.2.2}
+\]
+式中 \(i\) 的取值与式(1.2.1)的规定相同。\(N\) 称为计数的基数，\(k_i\) 为第 \(i\) 位的系数，\(N^i\) 称为第 \(i\) 位的权。
+
+---
+
+### 2、二进制
+目前在数字电路中应用最广泛的是二进制。在二进制数中，每一位仅有 **0** 和 **1** 两个可能的数码，所以计数基数为 2。低位和相邻高位间的进位关系是“逢二进一”，故称为二进制。
+
+根据式(1.2.2)，任何一个二进制数均可展开为
+\[
+D = \sum k_i 2^i
+\tag{1.2.3}
+\]
+并可用上式计算出它所表示的十进制数的大小。例如
+\[
+\begin{align*}
+(101.11)_2 &= 1 \times 2^2 + 0 \times 2^1 + 1 \times 2^0 + 1 \times 2^{-1} + 1 \times 2^{-2} \\
+&= (5.75)_{10}
+\end{align*}
+\]
+
+上式中分别使用下脚注 2 和 10 表示括号里的数是二进制数和十进制数。有时也用 B（Binary）和 D（Decimal）代替 2 和 10 这两个脚注。
+
+---
+
+
+
+
+### 3. 四种整数表示法（Java）
 
 | 进制                       | 前缀         | 数字范围     | 示例                   | 说明                       |
 | -------------------------- | ------------ | ------------ | ---------------------- | -------------------------- |
@@ -59,7 +106,7 @@
 > 在 Java 中，`010` 是 **八进制** 10（即十进制 8），而非十进制 10。  
 > 因此禁止在普通数字前加前导 `0`。
 
-### 2. 打印不同进制的整数
+### 4. 打印不同进制的整数
 
 ```java
 int num = 42;
@@ -70,7 +117,7 @@ System.out.println(Integer.toHexString(num));     // 输出十六进制：2a
 
 ------
 
-### 3. 字面量示例
+### 5. 字面量示例
 
 ```java
 int a = 10;        // 十进制
@@ -104,7 +151,7 @@ System.out.println(a == b && b == c && c == d);  // 输出 true
 
 ---
 
-#### 1.1 机器数的分类（根据是否有符号位）
+### 2.机器数的分类（根据是否有符号位）
 
 - **无符号数 (Unsigned Number)：**  
   用于表示非负数（0 和正数），所有位都用于表示数值大小，没有符号位。  
@@ -124,7 +171,7 @@ System.out.println(a == b && b == c && c == d);  // 输出 true
 
 ---
 
-#### 1.2 真值与机器数的关系
+### 3. 真值与机器数的关系
 
 - **机器数的“形式值” ≠ 真值：**  
   机器数的二进制序列（尤其带符号位时）直接转换为十进制数并不等于实际真值，需要根据编码规则（原码、反码、补码）解析。
@@ -147,7 +194,7 @@ System.out.println(a == b && b == c && c == d);  // 输出 true
 
 ---
 
-### 2. 为什么需要机器数和真值
+### 4. 为什么需要机器数和真值
 
 #### 💡 (1) 计算机只能理解 0 和 1
 
@@ -512,9 +559,18 @@ CPU 实际做的是：
 
 
 
-## 五、进制转换（含小数）
+## 五、进制转换
 
 ### 1. 二进制 → 十进制
+
+将二进制数转换为等值的十进制数称为二-十转换。转换时只要将二进制数按式展开，然后将所有各项的数值按十进制数相加，就可以得到等值的十进制数了。例如
+
+$$
+\begin{align*}
+(1011.01)_2 &= 1 \times 2^3 + 0 \times 2^2 + 1 \times 2^1 + 1 \times 2^0 + 0 \times 2^{-1} + 1 \times 2^{-2} \\
+&= (11.25)_{10}
+\end{align*}
+$$
 
 #### **方法：按权相加法**
 
@@ -546,9 +602,105 @@ public static double convert(String binary) {
 
 ### 2.十进制-->二进制数
 
+#### 1、数学推理
+
+十进制数转换为等值的二进制数。
+
+首先讨论整数的转换。
+
+假定十进制整数为 \((S)_{10}\)，等值的二进制数为 \((k_nk_{n-1}\dots k_0)_2\)，则可知
+\[
+\begin{align*}
+(S)_{10} &= (k_n2^n + k_{n-1}2^{n-1} + \dots + k_12^1 + k_02^0)_2 \\
+&= 2\bigl(k_n2^{n-1} + k_{n-1}2^{n-2} + \dots + k_1\bigr)_2 + k_0
+\end{align*}
+\tag{1.3.1}
+\]
+
+上式表明，若将 \((S)_{10}\) 除以 2，则得到的商为 \(k_n2^{n-1} + k_{n-1}2^{n-2} + \dots + k_1\)，而余数即 \(k_0\)。
+
+同理，可将式(1.3.1)除以 2 得到的商写成
+\[
+\bigl(k_n2^{n-1} + k_{n-1}2^{n-2} + \dots + k_1\bigr)_2 = 2\bigl(k_n2^{n-2} + k_{n-1}2^{n-3} + \dots + k_2\bigr)_2 + k_1
+\tag{1.3.2}
+\]
+
+由式(1.3.2)不难看出，若将 \((S)_{10}\) 除以 2 所得的商再次除以 2，则所得余数即 \(k_1\)。
+
+依此类推，反复将每次得到的商再除以 2，就可求得二进制数的每一位了。
+
+例如，将 \((173)_{10}\) 化为二进制数可如下进行
+
+```
+2 | 173  ........................ 余数 = 1 = k₀
+2 |  86  ........................ 余数 = 0 = k₁
+2 |  43  ........................ 余数 = 1 = k₂
+2 |  21  ........................ 余数 = 1 = k₃
+2 |  10  ........................ 余数 = 0 = k₄
+2 |   5  ........................ 余数 = 1 = k₅
+2 |   2  ........................ 余数 = 0 = k₆
+2 |   1  ........................ 余数 = 1 = k₇
+     0
+```
+
+故\((173)_{10}\)=\((10101101)_{2}\),
+
+
+
+**其次讨论小数的转换。**
+
+若 \((S)_{10}\) 是一个十进制的小数，对应的二进制小数为 \((0.k_{-1}k_{-2}\dots k_{-m})_2\)，则据式(1.2.3)可知
+\[
+(S)_{10} = \bigl(k_{-1}2^{-1} + k_{-2}2^{-2} + \dots + k_{-m}2^{-m}\bigr)_2
+\]
+
+将上式两边同乘以 2 得到
+\[
+2(S)_{10} = k_{-1} + \bigl(k_{-2}2^{-1} + k_{-3}2^{-2} + \dots + k_{-m}2^{-m+1}\bigr)_2
+\tag{1.3.3}
+\]
+
+式(1.3.3)说明，将小数 \((S)_{10}\) 乘以 2 所得乘积的整数部分即 \(k_{-1}\)。
+
+同理，将乘积的小数部分再乘以 2 又可得到
+\[
+2\bigl(k_{-2}2^{-1} + k_{-3}2^{-2} + \dots + k_{-m}2^{-m+1}\bigr)_2 = k_{-2} + \bigl(k_{-3}2^{-1} + \dots + k_{-m}2^{-m+2}\bigr)_2
+\tag{1.3.4}
+\]
+亦即乘积的整数部分就是 \(k_{-2}\)。
+
+依此类推，将每次乘 2 后所得乘积的小数部分再乘以 2，便可求出二进制小数的每一位了。
+
+例如，将 \((0.8125)_{10}\) 化为二进制小数时可如下进行
+
+```
+      0.8125
+    ×       2
+    ----------
+      1.6250  ........................ 整数部分 = 1 = k_{-1}
+      0.6250
+    ×       2
+    ----------
+      1.2500  ........................ 整数部分 = 1 = k_{-2}
+      0.2500
+    ×       2
+    ----------
+      0.5000  ........................ 整数部分 = 0 = k_{-3}
+      0.5000
+    ×       2
+    ----------
+      1.0000  ........................ 整数部分 = 1 = k_{-4}
+```
+
+故 \((0.8125)_{10} = (0.1101)_2\)
+
+
+
+
+
 ---
 
-#### 1. 转换原理
+#### 2、 转换原理总结
 
 十进制（Base 10）转为二进制（Base 2）时，遵循以下思路：
 
@@ -557,77 +709,77 @@ public static double convert(String binary) {
 
 ---
 
-#### 2. 整数部分的转换 —— “除 2 取余法”
+#### 3、转换案例
 
-✅ 步骤：
+1. 整数部分的转换 —— “除 2 取余法”
 
-1. 用 2 除十进制整数；
-2. 记录 **余数**（0 或 1）；
-3. 再用商继续除 2；
-4. 直到商为 0；
-5. 将余数 **倒序排列** 即为二进制结果。
-
-🔹 示例：十进制 `173` 转二进制
-
-| 步骤    | 商   | 余数 |
-| ------- | ---- | ---- |
-| 173 ÷ 2 | 86   | 1    |
-| 86 ÷ 2  | 43   | 0    |
-| 43 ÷ 2  | 21   | 1    |
-| 21 ÷ 2  | 10   | 1    |
-| 10 ÷ 2  | 5    | 0    |
-| 5 ÷ 2   | 2    | 1    |
-| 2 ÷ 2   | 1    | 0    |
-| 1 ÷ 2   | 0    | 1    |
-
-然后将余数 **倒序排列（从最后一行到第一行）**：
-
-```
-173₁₀ = 10101101₂
-```
-
-✅ 验证：
- `1×128 + 0×64 + 1×32 + 0×16 + 1×8 + 1×4 + 0×2 + 1×1 = 173` ✅
+> ✅ 步骤：
+>
+> 1. 用 2 除十进制整数；
+> 2. 记录 **余数**（0 或 1）；
+> 3. 再用商继续除 2；
+> 4. 直到商为 0；
+> 5. 将余数 **倒序排列** 即为二进制结果。
+>
+> 🔹 示例：十进制 `173` 转二进制
+>
+> | 步骤    | 商   | 余数 |
+> | ------- | ---- | ---- |
+> | 173 ÷ 2 | 86   | 1    |
+> | 86 ÷ 2  | 43   | 0    |
+> | 43 ÷ 2  | 21   | 1    |
+> | 21 ÷ 2  | 10   | 1    |
+> | 10 ÷ 2  | 5    | 0    |
+> | 5 ÷ 2   | 2    | 1    |
+> | 2 ÷ 2   | 1    | 0    |
+> | 1 ÷ 2   | 0    | 1    |
+>
+> 然后将余数 **倒序排列（从最后一行到第一行）**：
+>
+> ```
+> 173₁₀ = 10101101₂
+> ```
+>
+> ✅ 验证：
+>  `1×128 + 0×64 + 1×32 + 0×16 + 1×8 + 1×4 + 0×2 + 1×1 = 173` ✅
 
 ---
 
-#### 3. 小数部分的转换 —— “乘 2 取整法”
+2. 小数部分的转换 —— “乘 2 取整法”
 
-✅ 步骤：
+> ✅ 步骤：
+>
+> 1. 用十进制小数部分 × 2；
+> 2. 记录 **整数部分（0 或 1）**；
+> 3. 取 **小数部分** 继续乘 2；
+> 4. 重复，直到小数为 0 或达到精度要求；
+> 5. 将取到的整数部分 **顺序排列**。
+>
+> 🔹 示例：十进制 `0.8125` 转二进制
+>
+> | 步骤               | 计算 | 整数部分 |
+> | ------------------ | ---- | -------- |
+> | 0.8125 × 2 = 1.625 | 1    |          |
+> | 0.625 × 2 = 1.25   | 1    |          |
+> | 0.25 × 2 = 0.5     | 0    |          |
+> | 0.5 × 2 = 1.0      | 1    |          |
+>
+> 将每次得到的整数部分按顺序排列：
+>
+> ```
+> 0.8125₁₀ = 0.1101₂
+> ```
+>
+> ✅ 验证：
+>  `1×(1/2) + 1×(1/4) + 0×(1/8) + 1×(1/16) = 0.8125` ✅
 
-1. 用十进制小数部分 × 2；
-2. 记录 **整数部分（0 或 1）**；
-3. 取 **小数部分** 继续乘 2；
-4. 重复，直到小数为 0 或达到精度要求；
-5. 将取到的整数部分 **顺序排列**。
-
-🔹 示例：十进制 `0.8125` 转二进制
-
-| 步骤               | 计算 | 整数部分 |
-| ------------------ | ---- | -------- |
-| 0.8125 × 2 = 1.625 | 1    |          |
-| 0.625 × 2 = 1.25   | 1    |          |
-| 0.25 × 2 = 0.5     | 0    |          |
-| 0.5 × 2 = 1.0      | 1    |          |
-
-将每次得到的整数部分按顺序排列：
-
-```
-0.8125₁₀ = 0.1101₂
-```
-
-✅ 验证：
- `1×(1/2) + 1×(1/4) + 0×(1/8) + 1×(1/16) = 0.8125` ✅
-
-
-
-#### 4. 合并整数与小数部分✅
+3. 合并整数与小数部分✅
 
 ```
 (173.8125)₁₀ = (10101101.1101)₂
 ```
 
-#### 5. 验证 🔍 
+4. 验证 🔍 
 
 将二进制 `10101101.1101` 转回十进制验证：
 
@@ -647,7 +799,7 @@ public static double convert(String binary) {
 
 ---
 
-#### 6. Java 实现代码
+#### 4、 Java 实现转换代码
 
 
 
@@ -1228,7 +1380,14 @@ System.out.println(Character.getType(ch)); // 1 (UPPERCASE_LETTER)
 | `~`    | 按位非     | 单目运算符，每一位取反 (0 变 1, 1 变 0)               | 位取反、生成掩码                                             |
 | `^`    | 按位异或   | 对应位不同时结果为 1，相同时为 0                      | 翻转特定位、判断是否相同、简单加密/解密、交换数值 (不使用临时变量) |
 
-
+> 深度对比：算术右移 (`>>`) vs 无符号右移 (`>>>`)
+>
+> 这是 Java 处理负数时的关键点。
+>
+> - **`>>`（算术右移）**：保留符号位。如果左边最高位是 1（负数），移位后左边补 1；如果是 0（正数），补 0。
+>   - *数学意义*：相当于除以 $2^n$ 并向下取整。
+> - **`>>>`（逻辑右移/无符号右移）**：不考虑符号位。无论正负，左边一律补 0。
+>   - *应用场景*：在处理颜色值 (ARGB)、Hash 算法、或将底层字节流视为无符号数处理时，必须使用 `>>>`。
 
 运算过程：
 
@@ -1649,7 +1808,7 @@ public class EvenOddCheck {
 
 
 
-# Java 中字符串与数字转换详解
+# 字符串与数字转换详解
 
 > 💡 本文系统介绍了 Java 中字符串与数字的相互转换方式，涵盖：
 >
@@ -2598,7 +2757,7 @@ System.out.println(Long.toBinaryString(10));//1010
 - `0xFF` 表示一个字节掩码（8bit）。
 - 用于只取低 8 位：
 
-```
+```java
 int x = 0xABCD;
 int lowByte = x & 0xFF; // 0xCD
 ```
@@ -2981,7 +3140,7 @@ public class BitOperationsUtil {
 
 
 
-# 🧮 操作补码特定位与寄存器位
+#  操作补码特定位与寄存器位
 
 > 本笔记系统讲解如何利用 **Java 位运算** 对整数补码的 **特定位进行设置、清除、翻转与校验**，并结合 **寄存器操作** 的实战应用，帮助深入掌握底层二进制控制技巧。
 
@@ -3905,7 +4064,385 @@ public class Differences {
 
 
 
-# 🚀 Java 字符串格式化 (String.format) 可视化指南
+
+
+
+
+
+
+
+
+
+#  拓展：浮点数IEEE 754 拓展
+
+ IEEE 754 标准，这是一个关于浮点数算术的标准，在计算机科学和工程领域至关重要。它定义了浮点数的表示方法、运算规则以及异常处理，确保了不同计算机系统之间浮点数计算的一致性和可移植性。
+
+以下是关于 IEEE 754 标准的详细说明：
+
+### **什么是 IEEE 754 标准？**
+
+IEEE 754 是由电气和电子工程师协会 (IEEE) 制定的国际标准，全称为 "IEEE 754-2019 - IEEE Standard for Floating-Point Arithmetic"。  它定义了：
+
+- **浮点数格式 (Floating-point formats):**  规定了如何用二进制形式表示浮点数，包括单精度 (32 位)、双精度 (64 位) 和其他精度。
+- **浮点数运算 (Floating-point operations):**  定义了加法、减法、乘法、除法、平方根等基本运算的规则，以及舍入规则。
+- **异常处理 (Exception handling):**  规定了如何处理浮点运算中可能出现的异常情况，例如除以零、溢出、无效操作等。
+
+### **为什么 IEEE 754 标准如此重要？**
+
+在 IEEE 754 标准出现之前，不同的计算机系统可能使用不同的浮点数表示方法和运算规则，导致：
+
+- **不一致的计算结果:**  同一个浮点数计算在不同的机器上可能得到不同的结果。
+- **程序不可移植:**  依赖于特定浮点数行为的程序难以在不同系统之间移植。
+- **数值计算的复杂性:**  程序员需要深入了解不同系统的浮点数实现细节，才能编写可靠的数值计算程序。
+
+IEEE 754 标准的出现解决了这些问题，它：
+
+- **实现了浮点数计算的标准化:**  使得在符合 IEEE 754 标准的系统上，浮点数计算结果具有高度的一致性。
+- **提高了程序的可移植性:**  编写符合 IEEE 754 标准的程序更容易在不同平台上运行，并得到预期的结果。
+- **简化了数值计算:**  程序员可以基于统一的标准进行浮点数编程，无需过多关注底层硬件的差异。
+
+### **IEEE 754 浮点数格式**
+
+IEEE 754 标准定义了多种浮点数格式，最常用的是：
+
+- **单精度浮点数 (Single-precision, 32-bit, `float` in Java/C):**
+  - 总共 32 位，分为三个部分：
+    - **符号位 (Sign bit, 1 bit):**  `0` 表示正数，`1` 表示负数。
+    - **指数部分 (Exponent, 8 bits):**  使用偏移量表示法 (biased exponent) 存储指数值，偏移量为 127。
+    - **尾数部分 (Fraction/Mantissa, 23 bits):**  存储规格化后的尾数 (有效数字)，小数点前有一位隐含的 `1`。
+- **双精度浮点数 (Double-precision, 64-bit, `double` in Java/C):**
+  - 总共 64 位，分为三个部分：
+    - **符号位 (Sign bit, 1 bit):**  `0` 表示正数，`1` 表示负数。
+    - **指数部分 (Exponent, 11 bits):**  使用偏移量表示法存储指数值，偏移量为 1023。
+    - **尾数部分 (Fraction/Mantissa, 52 bits):**  存储规格化后的尾数，小数点前有一位隐含的 `1`。
+
+### **IEEE 754 浮点数的表示方法 (简述)**
+
+IEEE 754 浮点数采用科学计数法的思想来表示数字，形式上类似于：
+
+```
+± 尾数 × 2^指数
+```
+
+具体来说，一个 IEEE 754 浮点数的表示过程包括：
+
+1. **符号位 (Sign):**  确定浮点数的正负号。
+2. 指数 (Exponent):
+   - 将实际指数值加上一个偏移量 (bias) 存储在指数部分。
+   - 单精度偏移量为 127，双精度偏移量为 1023。
+   - 这样做可以将指数表示为无符号整数，方便比较大小。
+3. 尾数 (Mantissa/Significand):
+   - 将浮点数规格化为 `1.xxxx... × 2^指数` 的形式 (除了 0 和非规格化数)。
+   - 由于规格化后小数点前总是 `1`，因此 IEEE 754 标准将这个 `1` 隐含地存储，只存储小数点后的部分，从而节省一位存储空间，提高精度。
+
+### **特殊值**
+
+IEEE 754 标准还定义了一些特殊值，用于表示特殊情况：
+
+- **零 (Zero):**  符号位为 `0` 或 `1`，指数部分和尾数部分都为 `0`。  区分正零和负零。
+- **无穷大 (Infinity):**  指数部分为最大值 (全 `1`)，尾数部分为 `0`。  区分正无穷大和负无穷大。
+- **NaN (Not a Number):**  指数部分为最大值 (全 `1`)，尾数部分不为 `0`。  表示无效操作的结果，例如 `0/0` 或 `sqrt(-1)`。
+- **非规格化数 (Denormalized numbers):**  用于表示非常接近于 0 的数。  指数部分为最小值 (全 `0`)，尾数部分不为 `0`。  非规格化数牺牲了精度来表示更小的数值。
+
+### **Endianness 与 IEEE 754**
+
+正如之前讨论的，Endianness (大小端) 也会影响 IEEE 754 浮点数在内存中的字节存储顺序。
+
+- **大端系统 (Big-Endian):**  浮点数的最高有效字节 (包括符号位、指数高位、尾数高位) 存储在较低的内存地址。
+- **小端系统 (Little-Endian):**  浮点数的最低有效字节存储在较低的内存地址。
+
+**Java 和 IEEE 754**
+
+Java 语言和 Java 虚拟机 (JVM) 完全遵循 IEEE 754 标准来处理 `float` 和 `double` 类型的浮点数运算。 这保证了 Java 程序在不同平台上浮点数计算结果的一致性。
+
+**总结 IEEE 754 标准的优点**
+
+- **标准化和一致性:**  统一了浮点数的表示和运算规则，避免了不同系统之间的差异。
+- **可移植性:**  基于 IEEE 754 标准编写的程序更容易在不同平台上移植。
+- **数值计算的可靠性:**  提供了对特殊值和异常情况的处理机制，提高了数值计算的可靠性。
+- **广泛应用:**  几乎所有现代计算机系统都支持 IEEE 754 标准，成为浮点数运算的行业标准。
+
+
+
+### **案例 1: 单精度浮点数 (float) 转换 -  十进制 123.456f  转换为 IEEE 754 二进制表示**
+
+为了更深入地理解 IEEE 754 标准，我们来补充一些浮点数和 IEEE 754 二进制表示之间转换的案例，包括单精度 (float) 和双精度 (double)。
+
+
+
+**步骤 1:  确定符号位 (Sign bit)**
+
+- 123.456 是正数，所以符号位为 **0**。
+
+**步骤 2:  转换为二进制形式 (整数部分和小数部分)**
+
+- **整数部分 (123):**  123 的二进制是 `1111011`
+
+- **小数部分 (0.456):**  需要将小数部分转换为二进制。 我们可以通过不断乘以 2 并取整数部分来得到二进制小数：
+
+  ```sh
+  0.456 * 2 = 0.912  -> 整数部分: 0
+  0.912 * 2 = 1.824  -> 整数部分: 1
+  0.824 * 2 = 1.648  -> 整数部分: 1
+  0.648 * 2 = 1.296  -> 整数部分: 1
+  0.296 * 2 = 0.592  -> 整数部分: 0
+  0.592 * 2 = 1.184  -> 整数部分: 1
+  0.184 * 2 = 0.368  -> 整数部分: 0
+  0.368 * 2 = 0.736  -> 整数部分: 0
+  0.736 * 2 = 1.472  -> 整数部分: 1
+  0.472 * 2 = 0.944  -> 整数部分: 0
+  ... (继续下去，直到达到所需的精度或重复)
+  ```
+
+  所以，0.456 的二进制近似为 `011101001...`
+
+- **合并整数和小数部分:**  123.456 的二进制近似为 `1111011.011101001...`
+
+**步骤 3:  规格化 (Normalization) 并确定指数 (Exponent) 和尾数 (Mantissa)**
+
+- **规格化:** 将二进制数表示为 `1.xxxx... × 2^指数` 的形式。  将小数点左移 6 位，得到 `1.111011011101001... × 2^6`
+- **尾数 (Mantissa):**  小数点后的部分 `111011011101001...`  单精度尾数部分为 23 位，我们需要截取或舍入到 23 位。 假设我们截取前 23 位： `11101101110100100000000`
+- **指数 (Exponent):**  指数是 6。  对于单精度浮点数，指数偏移量 (bias) 是 127。  所以，存储的指数值是 `6 + 127 = 133`。  133 的二进制是 `10000101`。
+
+**步骤 4:  组合符号位、指数和尾数**
+
+- **符号位:** `0`
+
+- **指数:** `10000101`
+
+- **尾数:** `11101101110100100000000`
+
+- **IEEE 754 二进制表示 (单精度):**
+
+  `0 10000101 11101101110100100000000`
+
+  转换为十六进制表示（每 4 位二进制转换为 1 位十六进制）：
+
+  `4 2 F 6 E 9 7 9`  ->  `0x42F6E979`
+
+**验证 (使用 Java 代码)**
+
+```Java
+float floatValue = 123.456f;
+int floatBits = Float.floatToIntBits(floatValue);
+String hexString = String.format("%08X", floatBits); // 格式化为 8 位十六进制
+System.out.println("Float 123.456f 的 IEEE 754 十六进制表示: 0x" + hexString);
+// 输出: Float 123.456f 的 IEEE 754 十六进制表示: 0x42F6E979Java
+```
+
+
+
+## Float 类型与 byte 数组互相转换的 Java 工具类
+
+你需要的是一个能将 Float 类型与 byte 数组互相转换的 Java 工具类，并且要求同时实现基于**位操作**和**ByteBuffer** 两种方式，
+
+### 完整工具类代码
+```java
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+/**
+ * Float 与 byte 数组互转工具类
+ * 提供基于位操作和 ByteBuffer 两种实现方式
+ */
+public class FloatByteConverter {
+
+    // ====================== 基于 ByteBuffer 的转换方式 ======================
+    /**
+     * ByteBuffer 方式：Float 转 byte 数组（默认大端序）
+     * @param value 待转换的 Float 值
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByByteBuffer(float value) {
+        return floatToBytesByByteBuffer(value, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * ByteBuffer 方式：Float 转 byte 数组（指定字节序）
+     * @param value 待转换的 Float 值
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByByteBuffer(float value, ByteOrder order) {
+        ByteBuffer buffer = ByteBuffer.allocate(4); // Float 占4个字节
+        buffer.order(order); // 设置字节序
+        buffer.putFloat(value);
+        return buffer.array();
+    }
+
+    /**
+     * ByteBuffer 方式：byte 数组转 Float（默认大端序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByByteBuffer(byte[] bytes) {
+        return bytesToFloatByByteBuffer(bytes, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * ByteBuffer 方式：byte 数组转 Float（指定字节序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByByteBuffer(byte[] bytes, ByteOrder order) {
+        if (bytes == null || bytes.length != 4) {
+            throw new IllegalArgumentException("byte数组长度必须为4！");
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        buffer.order(order);
+        return buffer.getFloat();
+    }
+
+    // ====================== 基于位操作的转换方式 ======================
+    /**
+     * 位操作方式：Float 转 byte 数组（大端序）
+     * 原理：先将 Float 转成 int（通过 Float.floatToIntBits），再对 int 按位拆分
+     * @param value 待转换的 Float 值
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByBitOperation(float value) {
+        return floatToBytesByBitOperation(value, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * 位操作方式：Float 转 byte 数组（指定字节序）
+     * @param value 待转换的 Float 值
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByBitOperation(float value, ByteOrder order) {
+        // 将 Float 转换为对应的 int 位模式（符合 IEEE 754 标准）
+        int intValue = Float.floatToIntBits(value);
+        byte[] bytes = new byte[4];
+        
+        if (order == ByteOrder.BIG_ENDIAN) {
+            // 大端序：高位在前（第0位存最高8位，第3位存最低8位）
+            bytes[0] = (byte) (intValue >> 24);
+            bytes[1] = (byte) (intValue >> 16);
+            bytes[2] = (byte) (intValue >> 8);
+            bytes[3] = (byte) intValue;
+        } else {
+            // 小端序：低位在前（第0位存最低8位，第3位存最高8位）
+            bytes[0] = (byte) intValue;
+            bytes[1] = (byte) (intValue >> 8);
+            bytes[2] = (byte) (intValue >> 16);
+            bytes[3] = (byte) (intValue >> 24);
+        }
+        return bytes;
+    }
+
+    /**
+     * 位操作方式：byte 数组转 Float（大端序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByBitOperation(byte[] bytes) {
+        return bytesToFloatByBitOperation(bytes, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * 位操作方式：byte 数组转 Float（指定字节序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByBitOperation(byte[] bytes, ByteOrder order) {
+        if (bytes == null || bytes.length != 4) {
+            throw new IllegalArgumentException("byte数组长度必须为4！");
+        }
+        
+        int intValue = 0;
+        if (order == ByteOrder.BIG_ENDIAN) {
+            // 大端序：拼接 int（注意 & 0xFF 防止符号位扩展）
+            intValue = ((bytes[0] & 0xFF) << 24) 
+                    | ((bytes[1] & 0xFF) << 16) 
+                    | ((bytes[2] & 0xFF) << 8) 
+                    | (bytes[3] & 0xFF);
+        } else {
+            // 小端序：拼接 int
+            intValue = (bytes[0] & 0xFF) 
+                    | ((bytes[1] & 0xFF) << 8) 
+                    | ((bytes[2] & 0xFF) << 16) 
+                    | ((bytes[3] & 0xFF) << 24);
+        }
+        // 将 int 位模式转回 Float
+        return Float.intBitsToFloat(intValue);
+    }
+
+    // ====================== 测试方法 ======================
+    public static void main(String[] args) {
+        float testValue = 123.456f;
+        ByteOrder order = ByteOrder.BIG_ENDIAN; // 可切换为 LITTLE_ENDIAN 测试
+
+        // 测试 ByteBuffer 方式
+        byte[] bytes1 = floatToBytesByByteBuffer(testValue, order);
+        float restore1 = bytesToFloatByByteBuffer(bytes1, order);
+        System.out.println("=== ByteBuffer 方式 ===");
+        System.out.println("原始值：" + testValue);
+        System.out.println("转换后的byte数组：" + java.util.Arrays.toString(bytes1));
+        System.out.println("恢复后的值：" + restore1);
+
+        // 测试位操作方式
+        byte[] bytes2 = floatToBytesByBitOperation(testValue, order);
+        float restore2 = bytesToFloatByBitOperation(bytes2, order);
+        System.out.println("\n=== 位操作方式 ===");
+        System.out.println("原始值：" + testValue);
+        System.out.println("转换后的byte数组：" + java.util.Arrays.toString(bytes2));
+        System.out.println("恢复后的值：" + restore2);
+
+        // 验证两种方式的结果是否一致
+        System.out.println("\n两种方式转换的byte数组是否一致：" + java.util.Arrays.equals(bytes1, bytes2));
+    }
+}
+```
+
+### 关键代码解释
+1. **ByteBuffer 方式核心逻辑**：
+   - `ByteBuffer.allocate(4)`：分配4字节缓冲区（Float 固定占4字节）。
+   - `buffer.order(order)`：指定字节序（大端/小端），大端序是网络传输默认格式，小端序是大部分CPU的本地格式。
+   - `buffer.putFloat()`/`buffer.getFloat()`：直接完成 Float 与字节数组的互转，底层已封装位操作，简洁且不易出错。
+
+2. **位操作方式核心逻辑**：
+   - `Float.floatToIntBits(value)`：将 Float 按 IEEE 754 标准转换为对应的 int 位模式（保留符号、指数、尾数的二进制结构）。
+   - 按位拆分/拼接：通过移位（`>>`）和按位与（`& 0xFF`）操作拆分/拼接 int，`& 0xFF` 是为了将 byte 转换为无符号的8位值，避免符号位扩展导致错误。
+   - `Float.intBitsToFloat(intValue)`：将 int 位模式还原为 Float。
+
+3. **异常处理**：
+   - 校验 byte 数组长度必须为4，避免数组越界或转换错误。
+
+### 测试输出示例（大端序）
+```
+=== ByteBuffer 方式 ===
+原始值：123.456
+转换后的byte数组：[66, -4, 73, -52]
+恢复后的值：123.45600128173828
+
+=== 位操作方式 ===
+原始值：123.456
+转换后的byte数组：[66, -4, 73, -52]
+恢复后的值：123.45600128173828
+
+两种方式转换的byte数组是否一致：true
+```
+（注：Float 是单精度浮点数，存在微小精度损失，属于正常现象。）
+
+### 总结
+1. **ByteBuffer 方式**：代码简洁、可读性高、不易出错，推荐日常开发使用，底层已优化，性能足够。
+2. **位操作方式**：更贴近底层原理，适合理解 Float 二进制存储结构，或需要手动控制位操作的场景。
+3. **关键注意点**：转换和恢复时必须使用**相同的字节序**，否则会得到错误结果；byte 数组长度必须为4（Float 固定占4字节）。
+
+
+
+
+
+
+
+# Java 字符串格式化 (String.format) 可视化指南
 
 ## ✅ 简介
 
@@ -4323,473 +4860,3 @@ Binary 16-bit : 0000000011111111
 
 
 
-
-
-
-
-
-
-
-
-
-#  拓展：IEEE 754 标准
-
- IEEE 754 标准，这是一个关于浮点数算术的标准，在计算机科学和工程领域至关重要。它定义了浮点数的表示方法、运算规则以及异常处理，确保了不同计算机系统之间浮点数计算的一致性和可移植性。
-
-以下是关于 IEEE 754 标准的详细说明：
-
-### **什么是 IEEE 754 标准？**
-
-IEEE 754 是由电气和电子工程师协会 (IEEE) 制定的国际标准，全称为 "IEEE 754-2019 - IEEE Standard for Floating-Point Arithmetic"。  它定义了：
-
-- **浮点数格式 (Floating-point formats):**  规定了如何用二进制形式表示浮点数，包括单精度 (32 位)、双精度 (64 位) 和其他精度。
-- **浮点数运算 (Floating-point operations):**  定义了加法、减法、乘法、除法、平方根等基本运算的规则，以及舍入规则。
-- **异常处理 (Exception handling):**  规定了如何处理浮点运算中可能出现的异常情况，例如除以零、溢出、无效操作等。
-
-### **为什么 IEEE 754 标准如此重要？**
-
-在 IEEE 754 标准出现之前，不同的计算机系统可能使用不同的浮点数表示方法和运算规则，导致：
-
-- **不一致的计算结果:**  同一个浮点数计算在不同的机器上可能得到不同的结果。
-- **程序不可移植:**  依赖于特定浮点数行为的程序难以在不同系统之间移植。
-- **数值计算的复杂性:**  程序员需要深入了解不同系统的浮点数实现细节，才能编写可靠的数值计算程序。
-
-IEEE 754 标准的出现解决了这些问题，它：
-
-- **实现了浮点数计算的标准化:**  使得在符合 IEEE 754 标准的系统上，浮点数计算结果具有高度的一致性。
-- **提高了程序的可移植性:**  编写符合 IEEE 754 标准的程序更容易在不同平台上运行，并得到预期的结果。
-- **简化了数值计算:**  程序员可以基于统一的标准进行浮点数编程，无需过多关注底层硬件的差异。
-
-### **IEEE 754 浮点数格式**
-
-IEEE 754 标准定义了多种浮点数格式，最常用的是：
-
-- **单精度浮点数 (Single-precision, 32-bit, `float` in Java/C):**
-  - 总共 32 位，分为三个部分：
-    - **符号位 (Sign bit, 1 bit):**  `0` 表示正数，`1` 表示负数。
-    - **指数部分 (Exponent, 8 bits):**  使用偏移量表示法 (biased exponent) 存储指数值，偏移量为 127。
-    - **尾数部分 (Fraction/Mantissa, 23 bits):**  存储规格化后的尾数 (有效数字)，小数点前有一位隐含的 `1`。
-- **双精度浮点数 (Double-precision, 64-bit, `double` in Java/C):**
-  - 总共 64 位，分为三个部分：
-    - **符号位 (Sign bit, 1 bit):**  `0` 表示正数，`1` 表示负数。
-    - **指数部分 (Exponent, 11 bits):**  使用偏移量表示法存储指数值，偏移量为 1023。
-    - **尾数部分 (Fraction/Mantissa, 52 bits):**  存储规格化后的尾数，小数点前有一位隐含的 `1`。
-
-### **IEEE 754 浮点数的表示方法 (简述)**
-
-IEEE 754 浮点数采用科学计数法的思想来表示数字，形式上类似于：
-
-```
-± 尾数 × 2^指数
-```
-
-具体来说，一个 IEEE 754 浮点数的表示过程包括：
-
-1. **符号位 (Sign):**  确定浮点数的正负号。
-2. 指数 (Exponent):
-   - 将实际指数值加上一个偏移量 (bias) 存储在指数部分。
-   - 单精度偏移量为 127，双精度偏移量为 1023。
-   - 这样做可以将指数表示为无符号整数，方便比较大小。
-3. 尾数 (Mantissa/Significand):
-   - 将浮点数规格化为 `1.xxxx... × 2^指数` 的形式 (除了 0 和非规格化数)。
-   - 由于规格化后小数点前总是 `1`，因此 IEEE 754 标准将这个 `1` 隐含地存储，只存储小数点后的部分，从而节省一位存储空间，提高精度。
-
-### **特殊值**
-
-IEEE 754 标准还定义了一些特殊值，用于表示特殊情况：
-
-- **零 (Zero):**  符号位为 `0` 或 `1`，指数部分和尾数部分都为 `0`。  区分正零和负零。
-- **无穷大 (Infinity):**  指数部分为最大值 (全 `1`)，尾数部分为 `0`。  区分正无穷大和负无穷大。
-- **NaN (Not a Number):**  指数部分为最大值 (全 `1`)，尾数部分不为 `0`。  表示无效操作的结果，例如 `0/0` 或 `sqrt(-1)`。
-- **非规格化数 (Denormalized numbers):**  用于表示非常接近于 0 的数。  指数部分为最小值 (全 `0`)，尾数部分不为 `0`。  非规格化数牺牲了精度来表示更小的数值。
-
-### **Endianness 与 IEEE 754**
-
-正如之前讨论的，Endianness (大小端) 也会影响 IEEE 754 浮点数在内存中的字节存储顺序。
-
-- **大端系统 (Big-Endian):**  浮点数的最高有效字节 (包括符号位、指数高位、尾数高位) 存储在较低的内存地址。
-- **小端系统 (Little-Endian):**  浮点数的最低有效字节存储在较低的内存地址。
-
-**Java 和 IEEE 754**
-
-Java 语言和 Java 虚拟机 (JVM) 完全遵循 IEEE 754 标准来处理 `float` 和 `double` 类型的浮点数运算。 这保证了 Java 程序在不同平台上浮点数计算结果的一致性。
-
-**总结 IEEE 754 标准的优点**
-
-- **标准化和一致性:**  统一了浮点数的表示和运算规则，避免了不同系统之间的差异。
-- **可移植性:**  基于 IEEE 754 标准编写的程序更容易在不同平台上移植。
-- **数值计算的可靠性:**  提供了对特殊值和异常情况的处理机制，提高了数值计算的可靠性。
-- **广泛应用:**  几乎所有现代计算机系统都支持 IEEE 754 标准，成为浮点数运算的行业标准。
-
-
-
-### **案例 1: 单精度浮点数 (float) 转换 -  十进制 123.456f  转换为 IEEE 754 二进制表示**
-
-为了更深入地理解 IEEE 754 标准，我们来补充一些浮点数和 IEEE 754 二进制表示之间转换的案例，包括单精度 (float) 和双精度 (double)。
-
-
-
-**步骤 1:  确定符号位 (Sign bit)**
-
-- 123.456 是正数，所以符号位为 **0**。
-
-**步骤 2:  转换为二进制形式 (整数部分和小数部分)**
-
-- **整数部分 (123):**  123 的二进制是 `1111011`
-
-- **小数部分 (0.456):**  需要将小数部分转换为二进制。 我们可以通过不断乘以 2 并取整数部分来得到二进制小数：
-
-  ```sh
-  0.456 * 2 = 0.912  -> 整数部分: 0
-  0.912 * 2 = 1.824  -> 整数部分: 1
-  0.824 * 2 = 1.648  -> 整数部分: 1
-  0.648 * 2 = 1.296  -> 整数部分: 1
-  0.296 * 2 = 0.592  -> 整数部分: 0
-  0.592 * 2 = 1.184  -> 整数部分: 1
-  0.184 * 2 = 0.368  -> 整数部分: 0
-  0.368 * 2 = 0.736  -> 整数部分: 0
-  0.736 * 2 = 1.472  -> 整数部分: 1
-  0.472 * 2 = 0.944  -> 整数部分: 0
-  ... (继续下去，直到达到所需的精度或重复)
-  ```
-
-  所以，0.456 的二进制近似为 `011101001...`
-
-- **合并整数和小数部分:**  123.456 的二进制近似为 `1111011.011101001...`
-
-**步骤 3:  规格化 (Normalization) 并确定指数 (Exponent) 和尾数 (Mantissa)**
-
-- **规格化:** 将二进制数表示为 `1.xxxx... × 2^指数` 的形式。  将小数点左移 6 位，得到 `1.111011011101001... × 2^6`
-- **尾数 (Mantissa):**  小数点后的部分 `111011011101001...`  单精度尾数部分为 23 位，我们需要截取或舍入到 23 位。 假设我们截取前 23 位： `11101101110100100000000`
-- **指数 (Exponent):**  指数是 6。  对于单精度浮点数，指数偏移量 (bias) 是 127。  所以，存储的指数值是 `6 + 127 = 133`。  133 的二进制是 `10000101`。
-
-**步骤 4:  组合符号位、指数和尾数**
-
-- **符号位:** `0`
-
-- **指数:** `10000101`
-
-- **尾数:** `11101101110100100000000`
-
-- **IEEE 754 二进制表示 (单精度):**
-
-  `0 10000101 11101101110100100000000`
-
-  转换为十六进制表示（每 4 位二进制转换为 1 位十六进制）：
-
-  `4 2 F 6 E 9 7 9`  ->  `0x42F6E979`
-
-**验证 (使用 Java 代码)**
-
-```Java
-float floatValue = 123.456f;
-int floatBits = Float.floatToIntBits(floatValue);
-String hexString = String.format("%08X", floatBits); // 格式化为 8 位十六进制
-System.out.println("Float 123.456f 的 IEEE 754 十六进制表示: 0x" + hexString);
-// 输出: Float 123.456f 的 IEEE 754 十六进制表示: 0x42F6E979Java
-```
-
-### **Java 代码示例 -  浮点数和字节数组双向转换 (包含字节顺序控制)**
-
-以下代码综合了之前的示例，并展示了如何使用 `ByteBuffer` 进行浮点数和字节数组的双向转换，并控制字节顺序：
-
-```Java
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-
-public class IEEE754ConversionExample {
-
-    public static void main(String[] args) {
-        float floatValue = 123.456f;
-        double doubleValue = -0.75;
-
-        // Float 转换为字节数组 (大端和小端)
-        byte[] floatBigEndianBytes = floatToBytes(floatValue, ByteOrder.BIG_ENDIAN);
-        byte[] floatLittleEndianBytes = floatToBytes(floatValue, ByteOrder.LITTLE_ENDIAN);
-
-        System.out.println("Float value: " + floatValue);
-        System.out.print("Float Big-Endian Bytes: "); printHexBytes(floatBigEndianBytes);
-        System.out.print("Float Little-Endian Bytes: "); printHexBytes(floatLittleEndianBytes);
-
-        // 字节数组转换为 Float (大端和小端)
-        float floatFromBigEndian = bytesToFloat(floatBigEndianBytes, ByteOrder.BIG_ENDIAN);
-        float floatFromLittleEndian = bytesToFloat(floatLittleEndianBytes, ByteOrder.LITTLE_ENDIAN);
-
-        System.out.println("Float from Big-Endian Bytes: " + floatFromBigEndian);
-        System.out.println("Float from Little-Endian Bytes: " + floatFromLittleEndian);
-
-
-        System.out.println("\n---------------------\n");
-
-        // Double 转换为字节数组 (大端和小端)
-        byte[] doubleBigEndianBytes = doubleToBytes(doubleValue, ByteOrder.BIG_ENDIAN);
-        byte[] doubleLittleEndianBytes = doubleToBytes(doubleValue, ByteOrder.LITTLE_ENDIAN);
-
-        System.out.println("Double value: " + doubleValue);
-        System.out.print("Double Big-Endian Bytes: "); printHexBytes(doubleBigEndianBytes);
-        System.out.print("Double Little-Endian Bytes: "); printHexBytes(doubleLittleEndianBytes);
-
-        // 字节数组转换为 Double (大端和小端)
-        double doubleFromBigEndian = bytesToDouble(doubleBigEndianBytes, ByteOrder.BIG_ENDIAN);
-        double doubleFromLittleEndian = bytesToDouble(doubleLittleEndianBytes, ByteOrder.LITTLE_ENDIAN);
-
-        System.out.println("Double from Big-Endian Bytes: " + doubleFromBigEndian);
-        System.out.println("Double from Little-Endian Bytes: " + doubleFromLittleEndian);
-    }
-
-
-    // Float to byte array
-    public static byte[] floatToBytes(float value, ByteOrder byteOrder) {
-        ByteBuffer buffer = ByteBuffer.allocate(4);
-        buffer.order(byteOrder);
-        buffer.putFloat(value);
-        return buffer.array();
-    }
-
-    // Byte array to float
-    public static float bytesToFloat(byte[] bytes, ByteOrder byteOrder) {
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        buffer.order(byteOrder);
-        return buffer.getFloat();
-    }
-
-    // Double to byte array
-    public static byte[] doubleToBytes(double value, ByteOrder byteOrder) {
-        ByteBuffer buffer = ByteBuffer.allocate(8);
-        buffer.order(byteOrder);
-        buffer.putDouble(value);
-        return buffer.array();
-    }
-
-    // Byte array to double
-    public static double bytesToDouble(byte[] bytes, ByteOrder byteOrder) {
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        buffer.order(byteOrder);
-        return buffer.getDouble();
-    }
-
-    // Helper function to print byte array in hex
-    public static void printHexBytes(byte[] bytes) {
-        for (byte b : bytes) {
-            System.out.printf("%02X ", b);
-        }
-        System.out.println();
-    }
-}
-```
-
-## 工具类ByteBuffer
-
-在 Java 中，`ByteBuffer` 类是处理字节顺序的关键工具。它允许你显式地控制数据的字节顺序，这在处理二进制数据、网络编程以及与不同系统交互时至关重要。
-
-**ByteBuffer 和字节顺序**
-
-`ByteBuffer` 是 Java NIO (New I/O) 库的一部分，它提供了一种高效的方式来操作字节缓冲区。  `ByteBuffer` 实例可以被配置为使用大端 (Big-Endian) 或小端 (Little-Endian) 字节顺序。
-
-**设置字节顺序**
-
-你可以使用 `ByteBuffer` 的 `order()` 方法来设置字节顺序。 `order()` 方法接受一个 `ByteOrder` 枚举类型作为参数，`ByteOrder` 枚举类型有两个常量：
-
-- `ByteOrder.BIG_ENDIAN`: 设置为大端字节顺序。
-- `ByteOrder.LITTLE_ENDIAN`: 设置为小端字节顺序。
-
-如果你不显式地设置字节顺序，`ByteBuffer` 默认使用 **大端 (Big-Endian)** 字节顺序。
-
-### 使用 ByteBuffer 处理网络编程中的大小端处理
-
-以下代码示例演示了如何使用 `ByteBuffer` 来写入和读取不同字节顺序的整数：
-
-```Java
-public class ByteBufferEndianness {
-
-    public static void main(String[] args) {
-        int intValue = 0x12345678; // 要存储的整数值
-
-        // 1. 使用大端字节顺序 (默认)
-        ByteBuffer bigEndianBuffer = ByteBuffer.allocate(4); // 分配 4 字节缓冲区 (int 类型)
-        bigEndianBuffer.order(ByteOrder.BIG_ENDIAN); // 显式设置为大端 (虽然默认已经是大端)
-        bigEndianBuffer.putInt(intValue); // 写入整数
-
-        System.out.println("大端字节顺序：");
-        System.out.println("原始整数值: 0x" + Integer.toHexString(intValue));
-        System.out.println("字节数组 (十六进制): " + byteArrayToHex(bigEndianBuffer.array()));
-
-        bigEndianBuffer.rewind(); // 重置缓冲区位置以便读取
-        int bigEndianReadValue = bigEndianBuffer.getInt(); // 从大端缓冲区读取整数
-        System.out.println("从大端缓冲区读取的整数值: 0x" + Integer.toHexString(bigEndianReadValue));
-
-
-        System.out.println("\n---------------------\n");
-
-        // 2. 使用小端字节顺序
-        ByteBuffer littleEndianBuffer = ByteBuffer.allocate(4);
-        littleEndianBuffer.order(ByteOrder.LITTLE_ENDIAN); // 设置为小端字节顺序
-        littleEndianBuffer.putInt(intValue); // 写入整数
-
-        System.out.println("小端字节顺序：");
-        System.out.println("原始整数值: 0x" + Integer.toHexString(intValue));
-        System.out.println("字节数组 (十六进制): " + byteArrayToHex(littleEndianBuffer.array()));
-
-        littleEndianBuffer.rewind(); // 重置缓冲区位置以便读取
-        int littleEndianReadValue = littleEndianBuffer.getInt(); // 从小端缓冲区读取整数
-        System.out.println("从小端缓冲区读取的整数值: 0x" + Integer.toHexString(littleEndianReadValue));
-
-    }
-
-    // 辅助方法：将字节数组转换为十六进制字符串
-    private static String byteArrayToHex(byte[] byteArray) {
-        StringBuilder hexString = StringBuilder.newBuilder();
-        for (byte b : byteArray) {
-            hexString.append(String.format("%02X ", b)); // 格式化为两位十六进制
-        }
-        return hexString.toString();
-    }
-}
-```
-
-**代码解释:**
-
-1. **创建 ByteBuffer:**  `ByteBuffer.allocate(4)` 创建一个容量为 4 字节的 `ByteBuffer`，足以存储一个 `int` 类型的数据。
-2. 设置字节顺序:
-   - `bigEndianBuffer.order(ByteOrder.BIG_ENDIAN);`  显式地将 `bigEndianBuffer` 设置为大端字节顺序。 虽然默认已经是大端，但为了代码清晰，建议显式设置。
-   - `littleEndianBuffer.order(ByteOrder.LITTLE_ENDIAN);` 将 `littleEndianBuffer` 设置为小端字节顺序。
-3. **写入整数:** `buffer.putInt(intValue);`  将整数值 `intValue` 写入到 `ByteBuffer` 中。 `putInt()` 方法会根据 `ByteBuffer` 当前的字节顺序来写入字节。
-4. **查看字节数组:**  `buffer.array()`  返回 `ByteBuffer` 底层字节数组。 `byteArrayToHex()` 方法将字节数组转换为十六进制字符串，方便我们查看字节的实际存储顺序。
-5. **重置缓冲区位置:** `buffer.rewind();`  将 `ByteBuffer` 的位置重置为 0，以便从缓冲区的开头开始读取数据。
-6. **读取整数:** `buffer.getInt();`  从 `ByteBuffer` 中读取一个整数。 `getInt()` 方法会根据 `ByteBuffer` 当前的字节顺序来解释字节并返回整数值.
-
-**运行结果 (示例):**
-
-```
-大端字节顺序：
-原始整数值: 0x12345678
-字节数组 (十六进制): 12 34 56 78
-从大端缓冲区读取的整数值: 0x12345678
-
----------------------
-
-小端字节顺序：
-原始整数值: 0x12345678
-字节数组 (十六进制): 78 56 34 12
-从小端缓冲区读取的整数值: 0x12345678
-```
-
-**结果分析:**
-
-- **大端:** 字节数组 `12 34 56 78`  与原始整数值 `0x12345678` 的十六进制表示一致，最高有效字节 `12` 在最前面。
-- **小端:** 字节数组 `78 56 34 12`  字节顺序反转，最低有效字节 `78` 在最前面。
-
-**ByteBuffer 的其他重要方法:**
-
-- `allocateDirect(int capacity)`:  创建直接字节缓冲区。直接缓冲区可能在某些 I/O 操作中提供更好的性能，但分配和释放的开销可能更高。
-- `asIntBuffer()`, `asLongBuffer()`, `asFloatBuffer()`, `asDoubleBuffer()`, `asShortBuffer()`, `asCharBuffer()`:  创建视图缓冲区，允许你以特定的数据类型（int, long, float, double, short, char）来操作 `ByteBuffer` 的内容，同时保持对字节顺序的控制。
-- `putXXX()`, `getXXX()`:  提供各种 `put` 和 `get` 方法来写入和读取不同数据类型的数据 (例如 `putInt()`, `getInt()`, `putFloat()`, `getFloat()`, 等等)。 这些方法都会考虑 `ByteBuffer` 当前的字节顺序。
-
-**总结与最佳实践**
-
-- **显式设置字节顺序:**  为了代码清晰和避免混淆，建议始终显式地使用 `ByteBuffer.order()` 方法设置所需的字节顺序，即使你想要使用默认的大端顺序。
-- **网络编程和二进制数据处理:**  在网络编程和处理二进制数据文件时，务必仔细考虑字节顺序。 确保你的 Java 代码使用的字节顺序与外部系统或协议要求的字节顺序一致。
-- **ByteBuffer 的灵活性:** `ByteBuffer` 提供了强大的字节顺序控制能力，可以满足各种场景下的需求。  熟悉 `ByteBuffer` 的 API 对于处理字节数据至关重要。
-- **默认大端:** 记住 Java `ByteBuffer` 默认使用大端字节顺序，这通常与网络协议一致。
-
-通过使用 `ByteBuffer` 和 `ByteOrder` 枚举，你可以精确地控制 Java 中字节数据的字节顺序，从而确保数据在不同系统和环境之间正确地交换和解释。
-
-### 浮点数（`Float.floatToIntBits` ）和字节数组转换
-
-在 Java 中，浮点数（`float` 和 `double`）和字节数组之间的转换是常见的操作，尤其是在处理二进制数据、网络通信或文件存储时。  Java 提供了多种方式来实现这些转换，其中使用 `ByteBuffer` 类是推荐的方法，因为它允许你显式地控制字节顺序（Endianness）。
-
-#### **1. `float` 转换为字节数组 (float to byte array)**
-
-要将 `float` 转换为字节数组，你需要执行以下步骤：
-
-1. **获取 `float` 的整数位表示:**  使用 `Float.floatToIntBits(float)` 方法将 `float` 值转换为其 IEEE 754 单精度浮点数的整数位表示 (int)。
-2. **将整数位写入 `ByteBuffer`:** 创建一个 `ByteBuffer`，并使用 `putInt(int)` 方法将整数位写入缓冲区。  你可以根据需要设置 `ByteBuffer` 的字节顺序（大端或小端）。
-3. **从 `ByteBuffer` 获取字节数组:** 使用 `ByteBuffer.array()` 方法获取底层的字节数组。
-
-**示例代码 (float to byte array):**
-
-```Java
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-
-public class FloatByteConversion {
-
-    public static void main(String[] args) {
-        float floatValue = 123.456f;
-
-        // 1. 获取 float 的整数位表示
-        int floatBits = Float.floatToIntBits(floatValue);
-
-        // 2. 创建 ByteBuffer 并写入整数位 (默认大端)
-        ByteBuffer byteBuffer = ByteBuffer.allocate(4); // float 是 4 字节
-        byteBuffer.putInt(floatBits);
-
-        // 3. 获取字节数组
-        byte[] byteArray = byteBuffer.array();
-
-        System.out.println("Float value: " + floatValue);
-        System.out.print("Byte array (Big-Endian): ");
-        for (byte b : byteArray) {
-            System.out.printf("%02X ", b); // 打印十六进制表示
-        }
-        System.out.println();
-
-        // 示例：转换为小端字节顺序
-        ByteBuffer littleEndianBuffer = ByteBuffer.allocate(4);
-        littleEndianBuffer.order(ByteOrder.LITTLE_ENDIAN); // 设置为小端
-        littleEndianBuffer.putInt(floatBits);
-        byte[] littleEndianByteArray = littleEndianBuffer.array();
-
-        System.out.print("Byte array (Little-Endian): ");
-        for (byte b : littleEndianByteArray) {
-            System.out.printf("%02X ", b);
-        }
-        System.out.println();
-    }
-}
-```
-
-#### **2. 字节数组转换为 `float` (byte array to float)**
-
-要将字节数组转换回 `float`，你需要执行相反的步骤：
-
-1. **将字节数组包装到 `ByteBuffer`:** 创建一个 `ByteBuffer`，并使用 `ByteBuffer.wrap(byte[])` 方法将字节数组包装到缓冲区中。 确保设置与写入时相同的字节顺序。
-2. **从 `ByteBuffer` 读取整数位:** 使用 `ByteBuffer.getInt()` 方法从缓冲区读取整数位。
-3. **将整数位转换为 `float`:** 使用 `Float.intBitsToFloat(int)` 方法将整数位表示转换回 `float` 值。
-
-**示例代码 (byte array to float):**
-
-```Java
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-
-public class FloatByteConversion {
-
-    public static void main(String[] args) {
-        // 假设我们有之前大端字节数组
-        byte[] bigEndianByteArray = {0x42, 0xF6, 0xE9, 0x79}; // 123.456f 的大端字节表示
-
-        // 1. 包装字节数组到 ByteBuffer (默认大端)
-        ByteBuffer byteBuffer = ByteBuffer.wrap(bigEndianByteArray);
-
-        // 2. 从 ByteBuffer 读取整数位
-        int floatBits = byteBuffer.getInt();
-
-        // 3. 将整数位转换为 float
-        float floatValue = Float.intBitsToFloat(floatBits);
-
-        System.out.println("Byte array (Big-Endian): 42 F6 E9 79");
-        System.out.println("Float value: " + floatValue);
-
-        // 示例：从小端字节数组转换
-        byte[] littleEndianByteArray = {0x79, (byte)0xE9, (byte)0xF6, 0x42}; // 123.456f 的小端字节表示
-        ByteBuffer littleEndianBuffer = ByteBuffer.wrap(littleEndianByteArray);
-        littleEndianBuffer.order(ByteOrder.LITTLE_ENDIAN); // 设置为小端
-        int littleEndianFloatBits = littleEndianBuffer.getInt();
-        float littleEndianFloatValue = Float.intBitsToFloat(littleEndianFloatBits);
-
-        System.out.println("Byte array (Little-Endian): 79 E9 F6 42");
-        System.out.println("Float value (Little-Endian): " + littleEndianFloatValue);
-    }
-}
-```
