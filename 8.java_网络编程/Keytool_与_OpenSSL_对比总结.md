@@ -1,13 +1,13 @@
 
-# 🔐 Keytool 与 OpenSSL 工具的介绍与使用
+# Keytool 与 OpenSSL 工具的介绍与使用
 
 ## 一、概述
 
 在软件开发与服务器安全通信中，**Keytool** 与 **OpenSSL** 是最常用的两种证书与密钥管理工具。
 二者虽然功能有重叠，但应用领域与格式体系不同：
 
-- **Keytool**：JDK 自带，用于管理 Java 应用中的 keystore 与 truststore。
-- **OpenSSL**：通用命令行工具，用于生成、签发、转换各种格式的证书文件。
+- **Keytool**：JDK 内置工具，聚焦 Java 生态，专用于管理 keystore/truststore（密钥库 / 信任库），满足 Java 应用的证书 / 密钥管理需求。
+- **OpenSSL**：跨平台通用安全工具（C 实现），功能覆盖证书生成、签发、校验、格式转换等全场景，适用于各类系统 / 服务（Nginx、自建 CA 等）。
 
 ---
 
@@ -16,10 +16,10 @@
 | 项目 | Keytool | OpenSSL |
 |------|----------|----------|
 | 所属生态 | Java SDK | 通用工具（C实现） |
-| 主要用途 | 管理 Java keystore/truststore | 生成/签发/校验证书 |
+| 主要用途 | 管理 Java keystore/truststore | 生成 / 签发 / 校验各类证书、密钥 |
 | 默认格式 | JKS、PKCS12 | PEM、DER、CRT、CER、KEY |
-| 是否支持CA签发 | ❌ 需外部CA | ✅ 可模拟CA |
-| 是否能导出私钥 | 不直接支持 | 支持 |
+| 是否支持CA签发 | ⚠️ 支持（但能力有限） | ✅ 支持模拟 CA 完成证书签发 |
+| 是否能导出私钥 | ❌ 不能直接导出私钥（JKS内部保护）JKS → PKCS12 → OpenSSL → 私钥 | 原生支持 |
 | 常见使用者 | Java开发者 | 系统管理员、安全工程师 |
 
 ---
@@ -28,12 +28,12 @@
 
 | 后缀 | 工具 | 类型 | 说明 |
 |------|------|------|------|
-| `.jks` | Keytool | 密钥库 | Java KeyStore，含公私钥 |
-| `.p12` / `.pfx` | Keytool/OpenSSL | PKCS#12 | 含证书与私钥，跨平台 |
-| `.pem` | OpenSSL | Base64文本 | 可存私钥、公钥或两者 |
-| `.crt` / `.cer` | 两者皆可 | 公钥证书 | PEM或DER编码 |
+| `.jks` | Keytool | 密钥库 | Java KeyStore，Java 专属密钥容器，存储公私钥对 |
+| `.p12` / `.pfx` | Keytool/OpenSSL | PKCS#12 | **行业标准格式**，跨平台，包含证书与私钥 |
+| `.pem` | OpenSSL | Base64文本 | 可存储私钥、公钥或完整证书链最常见格式，包含 `-----BEGIN...-----` 标记 |
+| `.crt` / `.cer` | 两者皆可 | 公钥证书 | 支持 PEM/DER 编码，Windows/Linux 通用 |
 | `.key` | OpenSSL | 私钥文件 | 通常配合`.crt`使用 |
-| `.csr` | 两者皆可 | 证书签名请求 | 向CA申请证书 |
+| `.csr` | 两者皆可 | 证书签名请求 | 像 CA 申请证书时的“申请表” |
 | `.der` | OpenSSL | 二进制格式证书 | Windows常见 |
 | `.keystore` / `.truststore` | Keytool | 密钥容器 | keystore存自己证书；truststore存受信任证书 |
 
@@ -41,41 +41,117 @@
 
 ## 四、Keytool 使用详解
 
-### 1️⃣ 生成自签名证书
+### 1. 生成密钥对（自签名证书）
 
 ```bash
-keytool -genkeypair -alias server -keyalg RSA -keysize 2048 -keystore keystore.jks -storepass 123456 -validity 3650 -dname "CN=localhost, OU=Dev, O=Company, C=CN"
+keytool -genkeypair \
+-alias server \
+-keyalg RSA \
+-keysize 2048 \
+-keystore keystore.jks \
+-storepass 123456 \
+-validity 3650 \
+-dname "CN=localhost, OU=Dev, O=Company, C=CN"
 ```
 
-### 2️⃣ 导出证书
+> **字段解释**
+>
+> - `-genkeypair` 生成密钥对
+> - `-alias` 别名
+> - `-keyalg` 加密算法（一般 RSA）
+> - `-keysize` 密钥长度（2048 起步）
+> - `-keystore` 密钥库文件名
+> - `-storepass` 密钥库密码
+> - `-validity` 有效期（天）
+> - `-dname` 证书身份信息
+>
+> `-dname` 含义
+>
+> - **CN**：域名 / IP（最重要）
+> - **OU**：部门
+> - **O**：公司
+> - **C**：国家（两位字母）
 
-```bash
-keytool -exportcert -alias server -keystore keystore.jks -storepass 123456 -rfc -file server.crt
-```
+------
 
-### 3️⃣ 生成 CSR 申请文件
-
-```bash
-keytool -certreq -alias server -keystore keystore.jks -storepass 123456 -file server.csr
-```
-
-### 4️⃣ 导入签发证书或信任证书
-
-```bash
-keytool -importcert -alias server -file server.crt -keystore keystore.jks -storepass 123456
-```
-
-### 5️⃣ 查看 keystore 内容
+### 2. 查看密钥库内容
 
 ```bash
 keytool -list -v -keystore keystore.jks -storepass 123456
 ```
 
-### 6️⃣ 典型用途
+- `-list` 列出条目
+- `-v` 显示详细信息
 
-- Tomcat、Spring Boot、Netty HTTPS 服务配置
-- Java 客户端验证服务器证书（单向/双向认证）
-- 证书格式转换与导入 truststore
+------
+
+### 3. 导出公钥证书（给别人信任用）
+
+```bash
+keytool -exportcert \
+-alias server \
+-keystore keystore.jks \
+-storepass 123456 \
+-rfc \
+-file server.crt
+```
+
+- `-rfc` 输出 Base64 文本格式（PEM）
+
+------
+
+### 4. 生成证书签名请求 CSR（给 CA 签名）
+
+```bash
+keytool -certreq \
+-alias server \
+-keystore keystore.jks \
+-storepass 123456 \
+-file server.csr
+```
+
+------
+
+### 5. 导入证书到密钥库（信任证书）
+
+```bash
+keytool -importcert \
+-alias client_ca \
+-file ca.crt \
+-keystore truststore.jks \
+-storepass 123456
+```
+
+------
+
+### 6. 删除密钥库中的条目
+
+```bash
+keytool -delete \
+-alias server \
+-keystore keystore.jks \
+-storepass 123456
+```
+
+------
+
+### 7. 修改密钥库密码
+
+```bash
+keytool -storepasswd \
+-keystore keystore.jks
+```
+
+------
+
+### 8. JKS 转 P12（通用格式）
+
+```bash
+keytool -importkeystore \
+-srckeystore keystore.jks \
+-destkeystore keystore.p12 \
+-deststoretype PKCS12
+```
 
 
 
@@ -95,7 +171,7 @@ keytool -genkeypair -alias rootca -keyalg RSA -keysize 2048 -dname "CN=RootCA, O
 keytool -export -alias rootca -file rootca.crt -keystore rootca.jks -storepass rootpass
 ```
 
-##### 2. 生成服务器证书并签名
+##### 2. 生成服务器证书并由CA签名
 
 ```bash
 # 生成服务器密钥对
@@ -114,7 +190,7 @@ keytool -import -trustcacerts -alias rootca -file rootca.crt -keystore server.jk
 keytool -import -trustcacerts -alias server -file server.crt -keystore server.jks -storepass serverpass
 ```
 
-##### 3. 生成客户端证书并签名
+##### 3. 生成客户端证书并由CA签名
 
 ```bash
 # 生成客户端密钥对
@@ -135,7 +211,7 @@ keytool -import -trustcacerts -alias client -file client.crt -keystore client.jk
 
 ------
 
-#### 二、Java 服务器端配置（支持双向验证）
+#### 二、Java 服务器端配置（强制双向验证）
 
 ```java
 import javax.net.ssl.*;
@@ -239,46 +315,74 @@ public class MutualTLSClient {
 
 ---
 
-## 五、OpenSSL 使用详解
+## 五、 OpenSSL：万能安全工具
 
-### 1️⃣ 创建自签名 CA 根证书
+适用于 Nginx 配置、自建私有 CA 等场景。
 
+**创建私有 CA（三步走）：**
+
+1. **生成 CA 私钥**：`openssl genrsa -out ca.key 2048`
+2. **生成 CA 证书请求**：`openssl req -new -key ca.key -out ca.csr`
+3. **自签名生成根证书**：`openssl x509 -req -days 3650 -in ca.csr -signkey ca.key -out ca.crt`
+
+**用 CA 签发服务器证书：**
+
+```Bash
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 3650
+```
+
+**格式转换（JKS ↔ PKCS12 ↔ PEM）：**
+
+- **JKS 转 P12**：`keytool -importkeystore -srckeystore ks.jks -destkeystore ks.p12 -deststoretype PKCS12`
+- **P12 提取私钥**：`openssl pkcs12 -in ks.p12 -out key.pem -nodes`
+
+## 常见命令
+
+#### 1. 生成 RSA 私钥（最基础）
 ```bash
 openssl genrsa -out ca.key 2048
+```
+- `genrsa`：生成 RSA 私钥
+- `2048`：密钥长度（安全标准）
+
+#### 2. 生成证书签名请求（CSR）
+```bash
 openssl req -new -key ca.key -out ca.csr
+```
+- 输入证书信息（CN/OU/O/C）
+
+#### 3. 生成自签名证书（CA 根证书）
+```bash
 openssl x509 -req -days 3650 -in ca.csr -signkey ca.key -out ca.crt
 ```
+- 自己给自己签发证书（根 CA 专用）
 
-### 2️⃣ 签发服务器证书
-
+#### 4. 用 CA 签发服务器/客户端证书
 ```bash
-openssl genrsa -out server.key 2048
-openssl req -new -key server.key -out server.csr
-openssl x509 -req -days 3650 -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -sha256
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 3650
 ```
 
-### 3️⃣ 校验证书签发
+#### 5. 查看证书内容
+```bash
+openssl x509 -in server.crt -text -noout
+```
 
+#### 6. 验证证书是否由 CA 签发
 ```bash
 openssl verify -CAfile ca.crt server.crt
-# 输出：server.crt: OK
 ```
 
-### 4️⃣ 证书格式转换
-
+#### 7. 私钥 + 证书 → 合成 p12（给 Java 用）
 ```bash
-# PEM → DER
-openssl x509 -inform pem -in cert.pem -outform der -out cert.der
-
-# DER → PEM
-openssl x509 -inform der -in cert.der -outform pem -out cert.pem
+openssl pkcs12 -export -in server.crt -inkey server.key -out server.p12 -name server
 ```
 
-### 5️⃣ 生成和导出 PKCS12 文件
-
+#### 8. 格式转换 PEM ↔ DER
 ```bash
-openssl pkcs12 -export -in server.crt -inkey server.key -out server.p12 -name "server"
+openssl x509 -in cert.crt -outform der -out cert.der
 ```
+
+
 
 ---
 
@@ -304,14 +408,91 @@ keytool -import -trustcacerts -alias server -file server.pem -keystore keystore.
 
 ---
 
+## 七、openssl 实战：一步一步创建私有 CA（最常用）
+### 1️⃣ 创建自签名 CA 根证书
+#### 步骤 1：生成 CA 私钥
+```bash
+openssl genrsa -out ca.key 2048
+```
+生成：`ca.key`（根私钥，必须保密）
+
+#### 步骤 2：生成 CA 证书请求
+```bash
+openssl req -new -key ca.key -out ca.csr
+```
+按提示填写信息：
+- CN：CN 建议填`RootCA`，标识根证书
+- OU：部门
+- O：公司
+- C：国家
+
+#### 步骤 3：生成 CA 根证书（自签名）
+```bash
+openssl x509 -req -days 3650 -in ca.csr -signkey ca.key -out ca.crt
+```
+生成：`ca.crt`（根证书，可公开分发）
+
+✅ **现在你拥有了自己的私有 CA！**
+
+---
+
+### 2️⃣ 用 CA 签发服务器证书
+#### 步骤 1：生成服务器私钥
+```bash
+openssl genrsa -out server.key 2048
+```
+
+#### 步骤 2：生成服务器 CSR
+```bash
+openssl req -new -key server.key -out server.csr
+```
+**CN 必须写域名/IP**（如 localhost / 192.168.x.x）
+
+#### 步骤 3：CA 签发服务器证书
+```bash
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 3650
+```
+
+最终得到：
+- `server.key` 服务器私钥
+- `server.crt` 服务器证书
+
+---
+
+### 3️⃣ 用 CA 签发客户端证书（双向 TLS）
+```bash
+openssl genrsa -out client.key 2048
+openssl req -new -key client.key -out client.csr
+openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -out client.crt -days 3650
+```
+
+
+
+---
+
+### 一句话记住 OpenSSL 核心流程
+**生成私钥 → 生成请求 → CA 签名 → 得到证书**
+
+---
+
+#### 总结
+- OpenSSL 是**万能证书工具**，可自建 CA、签发证书、格式转换
+- 核心流程：**私钥 → CSR → 签名 → 证书**
+- 与 Java 无缝互通，支持 **Spring Boot、Nginx、双向 TLS**
+
+
+
 ## 七、实际应用配置示例
 
 ### 🔸 Spring Boot
 
 ```properties
 server.port=8443
+# 指定密钥库文件（JKS/P12均可）
 server.ssl.key-store=classpath:keystore.jks
+# 密钥库密码
 server.ssl.key-store-password=123456
+# 证书别名
 server.ssl.key-alias=server
 ```
 
@@ -320,9 +501,16 @@ server.ssl.key-alias=server
 ```nginx
 server {
     listen 443 ssl;
-    server_name example.com;
-    ssl_certificate     /etc/ssl/server.crt;
+    server_name localhost;
+
+    # 服务器证书（PEM格式）
+    ssl_certificate /etc/ssl/server.crt;
+    # 服务器私钥（PEM格式）
     ssl_certificate_key /etc/ssl/server.key;
+    
+    # 双向认证配置（可选）
+    ssl_client_certificate /etc/ssl/ca.crt;
+    ssl_verify_client on;
 }
 ```
 
@@ -331,7 +519,9 @@ server {
 ```apache
 <VirtualHost *:443>
     SSLEngine on
+    # 服务器证书
     SSLCertificateFile "/path/to/server.crt"
+    # 服务器私钥
     SSLCertificateKeyFile "/path/to/server.key"
 </VirtualHost>
 ```
@@ -356,231 +546,39 @@ server {
 
 ---
 
-> ✅ 建议学习路径：  
-> 1. 先掌握 Keytool 常用命令，理解 keystore/truststore 概念；  
-> 2. 再学习 OpenSSL 的 CA 签发与证书链管理；  
-> 3. 最后实践双向认证与格式转换流程，掌握完整 SSL 通信体系。
 
 
 
-# 十、CA证书
 
+# 理论深度：HTTPS 认证本质
 
+### 1. CA 证书里有什么？
 
-## 一、CA 证书包含的内容
+- **基本信息**：颁发者、有效期、主体名称（CN，通常是域名）。
+- 核心信息：**公钥**用于加密会话密钥）,最重要的部分。
+- 安全保障：**数字签名**,（CA 用私钥加密的摘要，防止证书篡改）。
 
-CA 证书本质上是一个 **X.509 标准证书**，它用于证明某个实体（这里是 CA）公钥的合法性。一个完整的 CA 证书主要包含以下信息：
+### 2. HTTPS 握手五步曲
 
-### 1. 基本信息（证书主体、颁发者等）
+1. **Client Hello**：客户端发送随机数 A + 支持的加密算法；
+2. **Server Hello**：服务器返回随机数 B + 服务器证书；
+3. **证书校验**：客户端用内置 CA 公钥验证服务器证书的合法性（域名、有效期、签名）；
+4. **密钥交换**：客户端生成预主密钥 C，用服务器公钥加密后发送；
+5. **会话密钥生成**：双方通过 A+B+C 生成对称密钥，后续通信均用该密钥加密。
 
-- **版本号（Version）**：X.509 版本，一般是 v3。
-- **序列号（Serial Number）**：CA 证书的唯一标识，用于防止重复或撤销。
-- **签名算法（Signature Algorithm）**：CA 用来签名证书的算法，例如 `SHA256withRSA`。
-- **颁发者（Issuer）**：CA 自己的名称信息（CN、O、OU 等）。
-- **有效期（Validity）**：
-  - **Not Before**：证书开始生效时间。
-  - **Not After**：证书失效时间。
-- **主体（Subject）**：证书所有者信息，对于根 CA 来说，通常是自己（自签名）。
+> 核心逻辑：非对称加密解决 “信任与密钥交换” 问题，对称加密解决 “通信性能” 问题。
 
-### 2. 公钥信息
+## 运维与避坑指南
 
-- **公钥（Public Key）**：CA 的公钥，用于验证由 CA 签发的证书。
-- **公钥算法（Key Algorithm）**：如 RSA、ECC。
+### 1. 实际应用配置
 
-### 3. 扩展字段（v3 扩展）
+- **Spring Boot**: 使用 `server.ssl.key-store` 指定 JKS 或 P12 文件。
+- **Nginx**: 使用 `ssl_certificate` (PEM 格式) 和 `ssl_certificate_key`。双向认证需配置 `ssl_verify_client on`。
 
-常见扩展包括：
+### 2. 常见错误处理
 
-- **Basic Constraints**：标识是否为 CA（`CA:TRUE`）。
-- **Key Usage**：允许用途（如 `keyCertSign`、`cRLSign`）。
-- **Subject Key Identifier**：主体公钥标识符。
-- **Authority Key Identifier**：签发者公钥标识符，用于验证证书链。
-- **CRL Distribution Points**：证书撤销列表 URL。
-- **Extended Key Usage**（可选）：如 TLS、客户端认证等用途。
-
-### 4. 签名信息
-
-- **签名值（Signature）**：CA 用自己的私钥对证书内容生成的签名，用于验证证书合法性。
-
-**总结**：CA 证书可以理解为“CA 的身份证 + 公钥 + 签名”，并带有一些用途和限制信息。
-
-------
-
-## 二、CA 证书生成过程
-
-CA 证书的生成可分为 **密钥生成 → 证书请求 → 签发 → 导出** 这几个步骤。
-
-### 1. 生成密钥对
-
-- 使用 RSA 或 ECC 生成一对公私钥：
-
-```
-CA_PrivateKey.key   # 私钥
-CA_PublicKey.key    # 公钥
-```
-
-- 私钥保密，用于签发证书。
-- 公钥嵌入到 CA 证书中，供外部验证。
-
-### 2. 生成证书签名请求（CSR，Certificate Signing Request）
-
-- CSR 中包含：
-  - 公钥
-  - 主体信息（CN、O、OU 等）
-  - 可选扩展信息
-- CSR 是申请证书的“申请表”，可以自己签发（自签名）或送交上级 CA 签发。
-
-### 3. 自签名生成 CA 证书
-
-- 根 CA 是自签名证书：
-  1. 用私钥对 CSR 中的内容进行签名。
-  2. 将签名、有效期、扩展信息等组合成 X.509 证书。
-- 结果生成：
-
-```
-CA_Certificate.crt  # PEM 或 DER 格式
-```
-
-### 4. 配置证书用途和扩展
-
-- **Basic Constraints**：设置 `CA:TRUE`。
-- **Key Usage**：允许签发子证书、生成 CRL。
-- **有效期**：一般根 CA 很久（5–20 年），中级 CA 较短（1–5 年）。
-
-### 5. 导出并部署
-
-- 导出为 PEM 或 DER 格式：
-
-```
-PEM：Base64 编码 + ----BEGIN CERTIFICATE---- / ----END CERTIFICATE----
-DER：二进制格式
-```
-
-- 部署到服务器、客户端或操作系统信任库中。
-
-------
-
-## 小结流程图
-
-```
-生成密钥对 → 生成 CSR → CA 使用私钥签名 → 生成 X.509 CA 证书 → 导出部署
-```
-
-
-
-# 十一、HTTPS 认证过程
-
-好的，我们来系统讲解 **HTTPS 认证过程**，从头到尾解释每一步是如何建立安全通信的。为了清晰，我会分为 **前提知识**、**过程步骤** 和 **关键点分析**。
-
-------
-
-## 一、前提知识
-
-HTTPS 是 **HTTP over TLS/SSL**，它在普通 HTTP 基础上增加了加密和认证，保证以下三点：
-
-1. **身份认证**：确认服务器（或客户端）身份，防止中间人攻击。
-2. **数据加密**：保护数据在传输过程中不被窃听。
-3. **数据完整性**：保证数据在传输中不被篡改。
-
-涉及的主要概念：
-
-- **公钥/私钥**：非对称加密。
-- **证书**：由 CA 签发，证明服务器身份。
-- **对称密钥**：用于会话加密（效率比公钥高）。
-- **握手（Handshake）**：客户端和服务器协商加密方式、密钥和认证信息的过程。
-
-------
-
-## 二、HTTPS 认证和连接过程（TLS 握手）
-
-假设浏览器访问 `https://example.com`：
-
-### 1. 客户端发起请求
-
-- 浏览器向服务器发送 **ClientHello**：
-  - 支持的 TLS 版本
-  - 支持的加密套件列表（如 AES-GCM + RSA）
-  - 一个随机数（ClientRandom）
-
-### 2. 服务器响应
-
-- 服务器返回 **ServerHello**：
-  - 选择 TLS 版本和加密套件
-  - 服务器随机数（ServerRandom）
-- 服务器发送 **证书（Certificate）**：
-  - 包含服务器公钥和身份信息
-  - 由可信 CA 签名
-- 服务器可能发送 **ServerHelloDone** 表示握手初步完成
-
-### 3. 客户端验证证书
-
-浏览器进行以下验证：
-
-1. **检查签名合法性**：
-   - 用操作系统或浏览器内置的 CA 公钥验证证书签名。
-2. **检查域名匹配**：
-   - 证书 CN / SAN 是否和访问域名一致。
-3. **检查有效期**：
-   - 证书是否过期。
-4. **检查撤销列表（CRL/OCSP）**：
-   - 证书是否被吊销。
-
-✅ 验证通过后，浏览器信任服务器身份。
-
-### 4. 客户端生成会话密钥
-
-- 浏览器生成一个 **随机的对称会话密钥（Pre-Master Secret）**
-- 用服务器证书中的公钥加密该对称密钥，发送给服务器
-
-> 这样保证只有服务器能解密，因为只有服务器拥有对应私钥。
-
-### 5. 服务器解密会话密钥
-
-- 服务器用私钥解密，得到客户端发送的对称密钥
-- 双方现在共享相同的对称密钥（Session Key）
-
-### 6. 握手完成，建立加密通道
-
-- 双方发送 **Finished** 消息，用共享的对称密钥加密验证
-- 从此，所有 HTTP 数据通过 **对称加密**传输
-
-------
-
-## 三、总结流程图
-
-```
-客户端             服务器
-  |  ClientHello   |
-  |--------------->|
-  |                | ServerHello + 证书 + ServerHelloDone
-  |                |<-----------------
-  | 验证证书        |
-  | 生成对称密钥     |
-  | 用服务器公钥加密 |
-  |---------------->|
-  |                | 解密获得会话密钥
-  |                |
-  |<-------------->|
-  |  Finished       |
-  |                | Finished
-  | 加密通信开始     |
-```
-
-------
-
-## 四、关键点说明
-
-1. **证书作用**：
-   - 验证服务器身份，防止中间人攻击。
-   - 证书中公钥用于加密会话密钥。
-2. **公钥加密 + 对称加密组合**：
-   - 公钥加密效率低，只用于会话密钥传输。
-   - 对称加密用于实际 HTTP 数据加密，提高效率。
-3. **中间人攻击防护**：
-   - 如果证书不可信，中间人无法生成合法签名证书，客户端会报错。
-4. **HTTPS 的延伸**：
-   - 双向认证（客户端证书）可用于企业内网安全。
-   - TLS 1.3 优化握手，减少往返次数。
-
-------
-
+| **错误现象**              | **可能原因**                     | **解决方案**                                |
+| ------------------------- | -------------------------------- | ------------------------------------------- |
+| **证书与域名不匹配**      | 证书 CN 与访问的 URL 不一致      | 重新生成证书，CN 填入正确的域名或 IP        |
+| **Untrusted Certificate** | 客户端 Truststore 缺少根 CA      | 将 `ca.crt` 导入客户端的信任库              |
+| **SSL Handshake Failed**  | 协议版本不匹配或缺少双向认证证书 | 检查 `setNeedClientAuth` 配置及证书链完整性 |
