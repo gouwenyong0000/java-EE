@@ -1936,32 +1936,268 @@ public class PortStatusChecker {
 
 
 
-### 案例7：FFmpeg 按时间拆MP3
+### 案例7：Java 调用FFmpeg 
 
-#### 命令示例
+给你一套**Java 调用 FFmpeg 的完整实战方案**，从“最简单命令调用”到“进阶封装”，直接能用。
+
+---
+
+#### 一、方式选择（先看这个）
+
+Java 调 FFmpeg 常见有 3 种方式：
+
+1️⃣ **Runtime / ProcessBuilder（推荐）**
+
+* 本质：调用系统里的 `ffmpeg.exe`
+* 优点：简单、稳定、无 JNI
+* 缺点：依赖本地环境
+
+2️⃣ **JavaCV（FFmpeg 封装库）**
+
+* 优点：纯 Java 调用
+* 缺点：包大、复杂
+
+3️⃣ **JNA / JNI**
+
+* 优点：底层控制强
+* 缺点：复杂（不推荐）
+
+👉 实战建议：**90% 场景用 ProcessBuilder**
+
+---
+
+#### 二、前置准备
+
+###### 1️⃣ 安装 FFmpeg
+
+下载：
+[https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+
+配置环境变量后测试：
 
 ```bash
-ffmpeg -i input.m4a -f segment -segment_time 300 -c copy out_%03d.m4a
+ffmpeg -version
 ```
 
-#### Java 调用 FFmpeg
+---
+
+#### 三、基础案例：Java 调用 FFmpeg 转码
+
+##### 🎯 示例：MP4 转 mp3
+
+###### ✅ Java 代码（推荐写法）
+
+```java
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+
+public class FFmpegDemo {
+
+    public static void main(String[] args) {
+        // F:\BaiduNetdiskDownload\豪斯医生S06.House.M.D.2009.1080p.Blu-ray.x265.AC3￡cXcY@FRDS
+        String path = "F:\\BaiduNetdiskDownload\\鲍鹏山-先秦诸子";
+        String input = "1 .商鞅,作法自毙的枭雄1.mp4";
+        String output = "output.mp3";
+
+        // ffmpeg -i "有声书 听书 看见（柴静）01.mp4" -vn -c:a libmp3lame -q:a 2 "有声书 听书 看见（柴静）01.mp3"
+        String[] cmds = {
+                "ffmpeg",
+                "-i", input,
+                "-vn", "-c:a", "libmp3lame", "-q:a", "2",
+                output};
+        
+        
+        ProcessBuilder pb = new ProcessBuilder(cmds);
+        pb.directory(new File(path)); // 设置工作目录
+        pb.redirectErrorStream(true); // 合并错误输出流和正常输出流
+
+        try {
+            Process process = pb.start();
+
+            // 读取 FFmpeg 输出日志
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line);
+            }
+
+            int exitCode = process.waitFor(); // 等待 FFmpeg 运行完成
+            System.out.println("执行完成，退出码：" + exitCode);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+```
+
+---
+
+#### 四、进阶案例
+
+##### 🎯 1. 获取视频信息（类似 ffprobe）
 
 ```java
 ProcessBuilder pb = new ProcessBuilder(
         "ffmpeg",
-        "-i", "input.m4a",
-        "-f", "segment",
-        "-segment_time", "300",
-        "-c", "copy",
-        "out_%03d.m4a"
+        "-i", "input.mp4"
 );
-pb.inheritIO();
-Process p = pb.start();
-p.waitFor();
 ```
 
-✔ 每个 `out_XXX.m4a` 都可播放
- ✔ 无重新编码，速度快
+👉 FFmpeg 会把信息输出到 stderr（已合并）
+
+---
+
+##### 🎯 2. 截取视频片段
+
+```java
+ProcessBuilder pb = new ProcessBuilder(
+        "ffmpeg",
+        "-ss", "00:00:10",
+        "-to", "00:00:20",
+        "-i", "input.mp4",
+        "-c", "copy",
+        "output.mp4"
+);
+```
+
+---
+
+##### 🎯 3. 截图（生成缩略图）
+
+```java
+ProcessBuilder pb = new ProcessBuilder(
+        "ffmpeg",
+        "-i", "input.mp4",
+        "-ss", "00:00:05",
+        "-vframes", "1",
+        "cover.jpg"
+);
+```
+
+---
+
+##### 🎯 4. 压缩视频
+
+```java
+ProcessBuilder pb = new ProcessBuilder(
+        "ffmpeg",
+        "-i", "input.mp4",
+        "-b:v", "1000k",
+        "-b:a", "128k",
+        "output.mp4"
+);
+```
+
+---
+
+#### 五、生产级封装（建议你用这个）
+
+##### ✅ 工具类封装
+
+```java
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.List;
+
+public class FFmpegUtil {
+
+    public static int execute(List<String> command) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+
+            Process process = pb.start();
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream())
+            );
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println("[FFmpeg] " + line);
+            }
+
+            return process.waitFor();
+
+        } catch (Exception e) {
+            throw new RuntimeException("FFmpeg 执行失败", e);
+        }
+    }
+}
+```
+
+---
+
+##### ✅ 使用方式
+
+```java
+import java.util.Arrays;
+
+public class Test {
+    public static void main(String[] args) {
+        int code = FFmpegUtil.execute(Arrays.asList(
+                "ffmpeg",
+                "-i", "input.mp4",
+                "-vf", "scale=1280:720",
+                "output.mp4"
+        ));
+
+        System.out.println("exit code = " + code);
+    }
+}
+```
+
+---
+
+#### 六、关键坑点（非常重要）
+
+###### ⚠️ 1. 中文路径问题
+
+```java
+new ProcessBuilder("ffmpeg", "-i", "D:\\视频\\测试.mp4", ...)
+```
+
+👉 Windows 可能乱码
+✔ 解决：统一 UTF-8 或避免中文路径
+
+---
+
+###### ⚠️ 2. FFmpeg 不在 PATH
+
+```java
+"ffmpeg"
+```
+
+👉 会报错
+
+✔ 解决：
+
+```java
+"D:\\ffmpeg\\bin\\ffmpeg.exe"
+```
+
+---
+
+###### ⚠️ 3. 阻塞问题
+
+必须消费输出流，否则：
+
+👉 **进程卡死**
+
+---
+
+###### ⚠️ 4. 大文件建议异步执行
+
+```java
+CompletableFuture.runAsync(() -> FFmpegUtil.execute(cmd));
+```
+
+---
+
+
 
 
 
