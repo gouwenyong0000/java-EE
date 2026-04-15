@@ -1991,46 +1991,110 @@ ffmpeg -version
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class FFmpegDemo {
 
-    public static void main(String[] args) {
-        // F:\BaiduNetdiskDownload\豪斯医生S06.House.M.D.2009.1080p.Blu-ray.x265.AC3￡cXcY@FRDS
-        String path = "F:\\BaiduNetdiskDownload\\鲍鹏山-先秦诸子";
-        String input = "1 .商鞅,作法自毙的枭雄1.mp4";
-        String output = "output.mp3";
-
-        // ffmpeg -i "有声书 听书 看见（柴静）01.mp4" -vn -c:a libmp3lame -q:a 2 "有声书 听书 看见（柴静）01.mp3"
+    /**
+     * 从视频文件中提取音频并转换为MP3格式
+     *
+     * <p>使用FFmpeg工具将输入的视频文件中的音频轨道提取出来，
+     * 并使用libmp3lame编码器转换为MP3格式。
+     * </p>
+     *<pre>
+     *     ffmpeg -i input_video.mp4 -vn -c:a libmp3lame output_audio.mp3
+     *          -i input_video.mp4: 指定输入视频文件。
+     *          -vn: 禁用视频流（Video None），即不处理视频。
+     *          -c:a libmp3lame: 指定音频编码器为 LAME（MP3标准编码器）。
+     *          output_audio.mp3: 输出的 MP3 文件名。
+     *</pre>
+     * 
+     * @param input  输入文件名（包含扩展名），例如："有声书 听书 看见（柴静）01.mp4"
+     * @param output 输出文件名（包含扩展名），例如："有声书 听书 看见（柴静）01.mp3"
+     * @param path   FFmpeg执行的工作目录路径，视频和音频文件所在的目录
+     */
+    public static void extractAudio(String input, String output, String path) {
         String[] cmds = {
                 "ffmpeg",
                 "-i", input,
                 "-vn", "-c:a", "libmp3lame", "-q:a", "2",
                 output};
-        
-        
+
         ProcessBuilder pb = new ProcessBuilder(cmds);
-        pb.directory(new File(path)); // 设置工作目录
-        pb.redirectErrorStream(true); // 合并错误输出流和正常输出流
+        pb.directory(new File(path));//设置工作目录
+        pb.redirectErrorStream(true);// 错误信息输出到标准输出
 
         try {
             Process process = pb.start();
 
-            // 读取 FFmpeg 输出日志
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println(Thread.currentThread().getName() + " - " + line);
+                }
             }
 
-            int exitCode = process.waitFor(); // 等待 FFmpeg 运行完成
-            System.out.println("执行完成，退出码：" + exitCode);
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                System.out.println(Thread.currentThread().getName() + " - 执行成功: " + output);
+            } else {
+                System.err.println(Thread.currentThread().getName() + " - 执行失败，退出码: " + exitCode + ", 文件: " + output);
+            }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("执行FFmpeg命令时出错: " + e.getMessage());
+            Thread.currentThread().interrupt();
         }
     }
-}
 
+    public static void main(String[] args) {
+        String rootpath = "F:\\BaiduNetdiskDownload\\看见";
+        File rootDir = new File(rootpath);
+        File[] files = rootDir.listFiles();
+        int threadPoolSize = 4;
+        ExecutorService executor = Executors.newFixedThreadPool(threadPoolSize);
+
+        for (File file : files) {
+
+            String fileName = file.getName();
+            int lastDotIndex = fileName.lastIndexOf('.');
+
+            // 获取文件名和后缀
+            String suffix = fileName.substring(lastDotIndex + 1);
+            String name = fileName.substring(0, lastDotIndex);
+
+            if ("mp4".equalsIgnoreCase(suffix)) {
+
+                String inputFileName = name + "." + "mp4";
+                String outputFileName = name + "." + "mp3";
+
+                executor.submit(() -> {
+                    try {
+                        extractAudio(inputFileName, outputFileName, rootpath);
+                    } catch (Exception e) {
+                        System.err.println("处理文件失败: " + inputFileName + ", 错误: " + e.getMessage());
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+        }
+
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(1, TimeUnit.HOURS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        System.out.println("所有任务处理完成");
+    }
+
+}
 ```
 
 ---
