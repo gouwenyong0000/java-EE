@@ -19,7 +19,7 @@ Java 执行系统命令
 │   ├── Runtime.exec（旧）
 │   └── ProcessBuilder（推荐）
 │
-├── 进程交互
+├── 进程交互（核心难点）
 │   ├── 标准输出 stdout
 │   ├── 错误输出 stderr
 │   └── 标准输入 stdin
@@ -28,21 +28,22 @@ Java 执行系统命令
 │   ├── Windows（cmd.exe）
 │   └── Linux / macOS（/bin/sh / bash）
 │
-├── 关键问题
-│   ├── 死锁（必须并发读流）
-│   ├── 中文乱码（字符集）
-│   ├── 命令注入（安全）
+├── 关键陷阱（必读）
+│   ├── 死锁 → 必须并发读流
+│   ├── 中文乱码 → 字符集
+│   ├── 命令注入 → 安全
 │   └── 超时与进程回收
 │
 ├── 高级方案
 │   ├── Apache Commons Exec
 │   └── 工具类封装
 │
-└── 实战
-    ├── 执行系统命令
-    ├── 端口检测 / ping
-    ├── 构建 / 部署脚本
-    └── 运维自动化
+└── 实战案例
+    ├── 系统命令 / 端口检测 / ping
+    ├── 调用 FFmpeg 转码
+    ├── 查找 WinRAR 安装路径
+    ├── 跨平台脚本执行
+    └── 远程 SSH 执行
 ```
 
 > **学习建议**：先完整看一遍 → 再回到对应章节查用法。
@@ -51,12 +52,14 @@ Java 执行系统命令
 
 ## 前言
 
-在 Java 中，我们可以通过两种主要方式执行系统命令或外部程序：
+在 Java 中执行外部命令（系统命令、脚本、第三方工具）有两种主流 API：
 
-1. **`Runtime.exec()`** —— 经典方式，简单直接；
-2. **`ProcessBuilder`** —— 现代方式，更灵活、可控。
+| API              | 特点                 | 推荐度         |
+| :--------------- | :------------------- | :------------- |
+| `Runtime.exec()` | 古老、简洁、但缺陷多 | ❌ 不推荐新项目 |
+| `ProcessBuilder` | 灵活、可控、安全     | ✅ **首选**     |
 
-两者最终都返回一个 `Process` 对象，用于与子进程交互，包括输入输出流、退出状态、资源销毁等操作。
+两者都返回 `Process` 对象，用于控制子进程（输入输出流、退出码、销毁等）。
 
 ---
 
@@ -69,78 +72,70 @@ Java 执行系统命令
 | **环境变量设置** | 不能直接设置，需通过 `String[] envp` 参数传入            | 可通过 `pb.environment().put(key, value)` 动态修改,更灵活    |
 | **工作目录**     | 默认当前进程工作目录，可在第三个参数传入 `File` 对象指定 | 可通过 `pb.directory(File)` 设置,可独立指定运行路            |
 | **错误输出合并** | 不支持直接合并                                           | 可通过 `pb.redirectErrorStream(true)` 合并标准输出和错误输出 |
-| **输出读取**     | 需手动获取 `Process.getInputStream()`                    | 支持灵活的重定向输出，如 `pb.redirectOutput(File)`           |
+| **输出读取**     | 需手动获取 `Process.getInputStream()`                    | 可重定向到文件 / 继承父进程，如 `pb.redirectOutput(File)`    |
 | **执行结果**     | 仅返回 `Process` 对象，需要自行处理流                    | 同样返回 `Process`，但支持更多控制                           |
 | **可维护性**     | 较差                                                     | 较高                                                         |
 | **错误处理**     | 不支持自动捕获                                           | 可通过异常或合并流方式处理                                   |
 
-> ⚙️ **建议：** 新代码中应优先使用 `ProcessBuilder`。
+> 🔥 **重点**：：新代码一律使用 `ProcessBuilder`。
 
 ---
 
-## 二、Runtime.exec() 使用详解
+## 二、Runtime.exec() 详解（理解即可，不建议新项目使用）
 
 ### 1. 基本用法
 
-windows
-
 ```java
-String command = "cmd /c dir";
-Process process = Runtime.getRuntime().exec(command);
-```
+// Windows 内部命令必须通过 cmd /c
+Process process = Runtime.getRuntime().exec("cmd /c dir");
 
-- `/c`：执行后关闭
-- `/k`：执行后不关闭（交互场景）
-
- Linux Shell :
-
-```java
-// 数组形式传递参数可避免空格和特殊字符问题
+// Linux 外部命令 数组形式传递参数可避免空格和特殊字符问题
 Process process = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", "ls -l"});
 ```
 
-### 2. 输出流阻塞问题（极其重要）
+> windows cmd
+>
+> - `/c`：执行后关闭
+> - `/k`：执行后不关闭（交互场景）
 
-> **核心事实**：
-> 子进程 stdout / stderr 缓冲区是有限的，不及时读取会导致子进程阻塞。
 
-**JDK 9+：**
+
+### 2. 输出流阻塞（最经典坑）
+
+> ⚠️ **易错点**：子进程的 stdout / stderr 缓冲区有限，如果父进程不读取，子进程会阻塞等待，导致程序“卡死”。
+
+**正确做法**：异步并发读取两个流。
 
 ```java
+// JDK 9+
 new Thread(() -> process.getInputStream().transferTo(System.out)).start();
 new Thread(() -> process.getErrorStream().transferTo(System.err)).start();
+
+// JDK 8 兼容方案（手动复制流）
+// 使用方式
+copyStream(process.getInputStream(), System.out);
+copyStream(process.getErrorStream(), System.err);
+private static void copyStream(InputStream in, OutputStream out) {
+    new Thread(() -> {
+        try (BufferedInputStream bis = new BufferedInputStream(in)) {
+            byte[] buffer = new byte[1024];
+            int len;
+            while ((len = bis.read(buffer)) != -1) {
+                out.write(buffer, 0, len);
+                out.flush();
+            }
+        } catch (IOException e) { /* log */ }
+    }).start();
+}
 ```
 
-**JDK8 兼容方案**
 
-> ```java
-> // 工具方法：异步复制流
-> private static void copyStream(InputStream in, OutputStream out) {
->        new Thread(() -> {
->            try (BufferedInputStream bis = new BufferedInputStream(in)) {
->                byte[] buffer = new byte[1024];
->                int len;
->                while ((len = bis.read(buffer)) != -1) {
->                    out.write(buffer, 0, len);
->                    out.flush();
->                }
->            } catch (IOException e) {
->                e.printStackTrace();
->            }
->        }).start();
-> }
-> 
-> // 使用方式
-> copyStream(process.getInputStream(), System.out);
-> copyStream(process.getErrorStream(), System.err);
-> ```
-> 
 
 ### 3. 获取退出值
 
 ```java
-int exitCode = process.waitFor(); // 阻塞等待执行完成
-System.out.println("命令退出码: " + exitCode); // 0表示成功
+int exitCode = process.waitFor();   // 阻塞等待
+// 0 表示成功，非0表示失败
 ```
 
 ---
@@ -156,7 +151,8 @@ windows
 ```java
 String[] cmd = {"cmd.exe", "/c", "echo %MY_VAR%"};
 String[] envp = {"MY_VAR=HelloFromJava"};
-Process process = Runtime.getRuntime().exec(cmd, envp, null);
+File workDir = new File("C:\\temp");
+Process process = Runtime.getRuntime().exec(cmd, envp, workDir);
 ```
 
 
@@ -193,6 +189,8 @@ public class RuntimeEnvExample {
 
 
 ### 5. 完整案例（带超时控制）
+
+> 🔥 **重点**：生产环境必须加入超时控制，防止命令永久挂起。
 
 ```java
 public class RuntimeExecExample {
@@ -282,16 +280,14 @@ public class RuntimeExecExample {
 
 
 
-## 三、ProcessBuilder 使用详解
+## 三、ProcessBuilder 详解（核心重点）
 
 ### 1. 基础用法
 
 ```java
-// Windows 示例
-ProcessBuilder pb1 = new ProcessBuilder("cmd", "/c", "dir");
-Process process = pb1.start();
-
-// Linux/macOS 示例
+// Windows
+ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "dir");
+// Linux
 ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", "ls -l");
 Process process = pb.start();
 ```
@@ -300,26 +296,23 @@ Process process = pb.start();
 
 ```java
 // 设置工作目录
-pb.directory(new File("D:/workspace"));
+pb.directory(new File("/home/user"));
 
-// 合并错误输出到标准输出（避免死锁）
+// 合并错误流到标准输出（强烈推荐）
 pb.redirectErrorStream(true);
 
 // 设置环境变量
 Map<String, String> env = pb.environment();
-env.put("APP_ENV", "test");//添加环境变量
-env.remove("TEMP"); // 移除环境变量
-
+env.put("APP_ENV", "production");
+env.remove("TEMP");
 
 // 重定向输出到文件
-pb.redirectOutput(new File("command-output.txt"));
+pb.redirectOutput(ProcessBuilder.Redirect.to(new File("out.log")));
 ```
 
 
 
-> **工程建议：**
->
-> `redirectErrorStream(true)` 是生产环境默认选择。
+> 🔥 **重点**：`redirectErrorStream(true)` 是生产环境默认选项，能避免单独处理 stderr，简化并发读取逻辑。
 
 ```java
 ProcessBuilder pb = new ProcessBuilder();
@@ -353,197 +346,66 @@ process.waitFor();
 
 ### 3.ProcessBuilder IO 处理
 
-#### 1. IO 处理概览
-
 `ProcessBuilder` 在启动外部进程时，**核心难点不在命令本身，而在 IO（输入 / 输出 / 错误流）处理**。
 
 Java 为子进程提供了三类 IO 处理方式：
 
-| 方式          | 说明                |
-| ------------- | ------------------- |
-| PIPE（默认）  | Java 程序通过流读取 |
-| Redirect      | 重定向到文件        |
-| **inheritIO** | 直接交给父进程      |
+| 方式                | 说明                             | 适用场景                 |
+| :------------------ | :------------------------------- | :----------------------- |
+| **默认 PIPE**       | Java 代码通过流读取              | 需要解析输出内容         |
+| **Redirect 到文件** | 输出直接写入文件                 | 日志量大、无需实时读取   |
+| **inheritIO()**     | 子进程 IO 直接绑定到父进程控制台 | 调试、本地工具、CLI 程序 |
+
+
 
 其中，**`inheritIO()` 是最简单、最容易忽略但非常实用的一种方式**。
 
-------
-
-#### 2. inheritIO 是什么？
+java
 
 ```java
-ProcessBuilder inheritIO()
+pb.inheritIO();   // 等价于下面三行
+// pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+// pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+// pb.redirectError(ProcessBuilder.Redirect.INHERIT);
 ```
 
-> **作用：让子进程完全继承父进程（当前 JVM）的 IO**
-
-即：
-
-| 子进程流 | 实际流向                |
-| -------- | ----------------------- |
-| stdin    | 当前 Java 进程的 stdin  |
-| stdout   | 当前 Java 进程的 stdout |
-| stderr   | 当前 Java 进程的 stderr |
+✅ **优点**：代码极简，无阻塞风险，输出实时显示
+❌ **缺点**：无法程序化获取输出，不适合后台服务
 
 📌 **执行效果等同于你在终端里直接敲这条命令**
 
-------
-
-#### 3. inheritIO 的底层等价写法（原理）
+**典型使用场景**：
 
 ```java
-pb.inheritIO();
+// 编译项目
+new ProcessBuilder("mvn", "clean", "package").inheritIO().start().waitFor();
+
+// 音视频转码
+new ProcessBuilder("ffmpeg", "-i", "in.mp4", "out.mp3").inheritIO().start();
 ```
 
-等价于：
+> ⚠️ **易错点**：使用 `inheritIO()` 后不要再调用 `getInputStream()`，否则无意义。
 
-```java
-pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
-pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-```
-
-👉 `inheritIO()` 本质是一个 **IO 处理的快捷封装**。
-
-------
-
-#### 4. 最典型使用示例
-
-##### 4.1 像命令行一样执行命令（调试首选）
-
-```java
-ProcessBuilder pb =
-        new ProcessBuilder("java", "-version");
-
-pb.inheritIO();
-Process process = pb.start();
-process.waitFor();
-```
-
-**特点：**
-
-- 不需要 `getInputStream()`
-- 不需要单独处理 stderr
-- 输出直接显示在控制台
-
-------
-
-##### 4.2 ffmpeg / 音视频处理（实时进度）
-
-```java
-ProcessBuilder pb = new ProcessBuilder(
-        "ffmpeg", "-i", "a.m4a", "a.wav"
-);
-
-pb.inheritIO();
-pb.start().waitFor();
-```
-
-📌 非常适合：
-
-- 音视频转码
-- 实时进度输出
-- CLI 工具封装
-
-------
-
-#### 5. inheritIO 与其他 IO API 的关系
-
-##### 5.1 inheritIO vs redirectErrorStream
-
-| 组合方式                                    | 实际效果                 |
-| ------------------------------------------- | ------------------------ |
-| `inheritIO()`                               | stdout / stderr 各自输出 |
-| `redirectErrorStream(true)`                 | stderr 合并到 stdout     |
-| `inheritIO()` + `redirectErrorStream(true)` | ❌ 无意义                 |
-| `inheritIO()` + `redirectOutput(File)`      | ⚠️ 后者覆盖前者           |
-
-📌 **inheritIO 是一次性全继承，优先级低于单独 redirect**
-
-------
-
-#### 6. inheritIO 的优缺点（工程视角）
-
-##### ✅ 优点
-
-- 代码极简
-- 无需处理流
-- 不存在缓冲区阻塞
-- 调试体验极好
-
-##### ❌ 缺点
-
-- 无法程序化获取输出
-- 不适合日志分析
-- 不适合后台 / Web 服务
-
-------
-
-#### 7. 使用场景建议
-
-##### 7.1 推荐使用 inheritIO 的场景
-
-| 场景               |
-| ------------------ |
-| 本地工具           |
-| CLI 程序           |
-| 开发调试           |
-| 构建 / 编译工具    |
-| ffmpeg / git / mvn |
-
-------
-
-##### 7.2 不推荐使用 inheritIO 的场景
-
-| 场景         | 原因       |
-| ------------ | ---------- |
-| Web 服务     | 输出不可控 |
-| 后台任务     | 日志难管理 |
-| 需要解析输出 | 无法读取流 |
-| 高并发执行   | IO 混乱    |
-
-------
-
-#### 8. inheritIO vs 手动读取流（对照）
-
-| 维度       | inheritIO | 手动处理流 |
-| ---------- | --------- | ---------- |
-| 代码复杂度 | ⭐         | ⭐⭐⭐        |
-| 阻塞风险   | 无        | 有         |
-| 可控性     | ❌         | ✅          |
-| 可解析输出 | ❌         | ✅          |
-| 适合生产   | ❌         | ✅          |
-
-------
-
-#### 9. 常见误区（重点）
-
-##### ❌ 误区 1：使用 inheritIO 后仍读取流
-
-```java
-pb.inheritIO();
-process.getInputStream(); // ❌ 无意义
-```
-
-👉 **继承后，流已由父进程接管**
-
-------
-
-##### ❌ 误区 2：服务端程序使用 inheritIO
-
-> 日志直接输出到控制台，难以监控、归档和分析
-
-------
-
-#### 10. 本节总结（手册级）
-
-> `inheritIO()` 是 `ProcessBuilder` 中**最简单的 IO 处理方式**，
-> 适合 **调试、命令行工具、音视频处理等交互式场景**；
-> **一旦需要日志、解析或后台运行，应避免使用 inheritIO**。
+> inheritIO vs redirectErrorStream
+>
+> | 组合方式                                    | 实际效果                 |
+> | ------------------------------------------- | ------------------------ |
+> | `inheritIO()`                               | stdout / stderr 各自输出 |
+> | `redirectErrorStream(true)`                 | stderr 合并到 stdout     |
+> | `inheritIO()` + `redirectErrorStream(true)` | ❌ 无意义                 |
+> | `inheritIO()` + `redirectOutput(File)`      | ⚠️ 后者覆盖前者           |
+>
+> 📌 **inheritIO 是一次性全继承，优先级低于单独 redirect**
 
 
 
-### 4.完整案例
+### 4.ProcessBuilder 完整案例（5 种典型场景）
+
+- 重定向输出到文件 + 环境变量 + 超时
+- `inheritIO()` 直接控制台输出
+- 内存中并发读取 stdout/stderr（避免死锁）
+- 向子进程 stdin 写入数据（交互式命令）
+- 合并错误流后单流读取
 
 ```java
 /** ProcessBuilder 完整用法学习指南. 
@@ -848,16 +710,16 @@ public class ProcessBuilderCompleteStudy {
 
 
 
-## 四、CMD 与 Shell 执行机制
+## 四、平台差异与命令执行机制（难点）
 
-### 命令类型区分
+### 1. 内部命令 vs 外部命令
 
-1. **内部命令**（如 `dir`, `cd`, `echo`）
-   1. 内置在 `cmd.exe` 或 `shell` 中
-   2. 必须通过解释器执行：`cmd /c dir` 或 `/bin/sh -c "cd /tmp"`
-2. **外部命令**（如 `ping.exe`, `ls`）
-   1. 独立可执行文件（.exe, .com 等）
-   2. 可直接调用：`new ProcessBuilder("ping", "127.0.0.1")`
+| 类型     | 说明            | 示例                 | 调用方式                                               |
+| :------- | :-------------- | :------------------- | :----------------------------------------------------- |
+| 内部命令 | 集成在 shell 中 | `dir`, `echo`, `cd`  | 必须通过解释器：`cmd /c dir` 或 `/bin/sh -c "cd /tmp"` |
+| 外部命令 | 独立可执行文件  | `ping`, `ls`, `java` | 可直接调用：`new ProcessBuilder("ping", "127.0.0.1")`  |
+
+
 
 ### Windows
 - 内部命令如 `dir`, `echo` 必须通过 `cmd.exe` 解释执行。
@@ -1200,12 +1062,12 @@ pause
 
 
 
-## 五、Apache Commons Exec 实践
+## 五、Apache Commons Exec —— 生产级首选库
 
 
  `Apache Commons Exec` 是 Apache Commons 项目中的一个专门用于**执行外部进程**的库，它在功能上类似于 `Runtime.exec()` 或 `ProcessBuilder`，但**更强大、更安全、更易扩展**。
 
-### 一、简介
+### 1. 为什么需要它？
 
 `Apache Commons Exec` 是对 Java 自带进程管理 API 的高级封装，
  提供了以下功能增强：
@@ -1222,7 +1084,7 @@ pause
 
 ------
 
-### 二、依赖引入
+### 2. Maven 依赖
 
 如果使用 Maven：
 
@@ -1242,96 +1104,61 @@ implementation 'org.apache.commons:commons-exec:1.4.0'
 
 ------
 
-### 三、基础使用示例
+### 3. 核心功能示例
 
-#### 1️⃣ 执行命令并输出结果
+#### 同步执行 + 超时
 
 ```java
 CommandLine cmd = new CommandLine("ping");
 cmd.addArgument("www.baidu.com");
-
+ExecuteWatchdog watchdog = new ExecuteWatchdog(5000); // 5秒超时
 DefaultExecutor executor = new DefaultExecutor();
+executor.setWatchdog(watchdog);
 int exitCode = executor.execute(cmd);
-System.out.println("退出码: " + exitCode);
 ```
 
-> `DefaultExecutor.execute()` 会阻塞直到命令执行结束。
+
 
 ------
 
-#### 2️⃣ 异步执行命令（非阻塞）
+#### 异步执行 + 结果回调
 
 ```java
-CommandLine cmd = new CommandLine("ping");
-cmd.addArgument("www.baidu.com");
-
-// 异步结果处理器
+CommandLine cmd = new CommandLine("ping").addArgument("baidu.com");
 DefaultExecuteResultHandler handler = new DefaultExecuteResultHandler() {
     @Override
     public void onProcessComplete(int exitValue) {
-        System.out.println("执行完成，退出码: " + exitValue);
+        System.out.println("成功，退出码：" + exitValue);
     }
-    
     @Override
     public void onProcessFailed(ExecuteException e) {
-        System.err.println("执行失败: " + e.getMessage());
+        System.err.println("失败：" + e.getMessage());
     }
 };
-
 DefaultExecutor executor = new DefaultExecutor();
 executor.execute(cmd, handler);
-handler.waitFor(); // 等待执行完成
+// 可选：handler.waitFor();
 ```
 
 > 适合需要后台执行的任务，例如文件压缩、网络探测等。
 
 ------
 
-#### 3️⃣ 超时控制（防止命令卡死）
+#### 捕获输出流
 
 ```java
-CommandLine cmd = new CommandLine("ping");
-cmd.addArgument("www.baidu.com");
-
-// 5秒超时
-ExecuteWatchdog watchdog = new ExecuteWatchdog(5000);
-DefaultExecutor executor = new DefaultExecutor();
-executor.setWatchdog(watchdog);
-
-try {
-    executor.execute(cmd);
-} catch (ExecuteException e) {
-    if (watchdog.killedProcess()) {
-        System.err.println("命令超时被终止");
-    }
-}
-```
-
-------
-
-#### 4️⃣ 捕获标准输出与错误输出
-
-```java
-CommandLine cmd = new CommandLine("ping");
-cmd.addArgument("www.google.com");
-
-ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-ByteArrayOutputStream errorStream = new ByteArrayOutputStream();
-
-PumpStreamHandler streamHandler = new PumpStreamHandler(outputStream, errorStream);
-DefaultExecutor executor = new DefaultExecutor();
+ByteArrayOutputStream out = new ByteArrayOutputStream();
+PumpStreamHandler streamHandler = new PumpStreamHandler(out);
 executor.setStreamHandler(streamHandler);
-
-int exitCode = executor.execute(cmd);
-System.out.println(\"标准输出：\\n\" + outputStream.toString());
-System.out.println(\"错误输出：\\n\" + errorStream.toString());
+executor.execute(cmd);
+System.out.println(out.toString(StandardCharsets.UTF_8));
 ```
 
-> `PumpStreamHandler` 用于管理输入输出流，可替代 `System.out`，也可重定向到文件。
+> 🔥 **重点**：Commons Exec 内部已经处理了并发读取流的问题，无需自己写线程。
 
 ------
 
-#### 5️⃣ 指定工作目录与环境变量
+#### 指定工作目录与环境变量
 
 ```java
 CommandLine cmd = new CommandLine("ls");
@@ -1687,19 +1514,17 @@ public class Test1 {
 
 
 
-## 七、常见错误与调试技巧
+## 七、经典陷阱与调试技巧（必读）
 
----
-
-| 问题现象               | 根本原因                     | 解决方案                                                |
-| ---------------------- | ---------------------------- | ------------------------------------------------------- |
-| 程序卡死/无响应        | 未及时读取输出流导致缓冲区满 | 异步并行读取 stdout 和 stderr                           |
-| 命令执行失败（无结果） | Windows 内部命令缺少 cmd /c  | 使用 `cmd.exe /c 命令` 形式执行                         |
-| 中文乱码               | 编码不匹配                   | 明确指定字符集（如 GBK 或 UTF-8）                       |
-| 路径带空格导致命令错误 | 字符串参数未正确分割         | 使用数组/列表形式传递参数（避免字符串拼接）             |
-| 命令注入风险           | 使用字符串拼接用户输入参数   | 采用参数化方式：`new ProcessBuilder("ping", userInput)` |
-| 进程无法终止           | 未设置超时控制               | 使用 `process.waitFor(timeout)` 或 `ExecuteWatchdog`    |
-| 脚本权限不足           | Linux 无执行权限             | `chmod +x script.sh`                                    |
+| 问题现象              | 根本原因                      | 解决方案                                         |
+| :-------------------- | :---------------------------- | :----------------------------------------------- |
+| 程序卡死、无响应      | 未读取输出流导致缓冲区满      | 并发读取 stdout 和 stderr                        |
+| 命令执行无结果        | Windows 内部命令缺少 `cmd /c` | 使用 `cmd.exe /c 命令`                           |
+| 中文乱码              | 编码不匹配                    | 明确指定字符集（Windows 用 GBK，Linux 用 UTF-8） |
+| 路径带空格出错        | 字符串参数未正确分割          | 使用数组/列表形式传递参数                        |
+| 命令注入              | 拼接用户输入                  | 参数化：`new ProcessBuilder("ping", userInput)`  |
+| 进程无法终止          | 未设置超时                    | 使用 `waitFor(timeout)` 或 `ExecuteWatchdog`     |
+| 脚本权限不足（Linux） | 无执行权限                    | `chmod +x script.sh`                             |
 
 
 
@@ -1767,34 +1592,43 @@ System.out.println("exit value = " + exitValue);
 
 这里的教训是：**为了确保子进程能够结束，你必须排空它的输出流；对于错误流（error stream）也是一样**，而且它可能会更麻烦，因为你无法预测进程什么时候会倾倒（dump）一些输出到这个流中。在 5.0 版本中，加入了一个名为ProcessBuilder 的类用于排空这些流。它的 redirectErrorStream 方法将各个流合并起来，所以你只需要排空这一个流**。如果你决定不合并输出流和错误流，你必须并行地（concurrently）排空它们**。试图顺序化地（sequentially）排空它们会导致子进程被挂起。多年以来，很多程序员都被这个缺陷所刺痛。这里对于 API 计者们的教训是，Process 类应该避免这个错误，也许应该自动地排空输出流和错误流，除非用户表示要读取它们。更一般的讲，API 应该设计得更容易做出正确的事，而很难或不可能做出错误的事。
 
-## 八、安全性与最佳实践
+## 八、安全性最佳实践（生产环境红线）
 
-1. **避免命令注入：**
-   ```java
-   // 不安全
-   Runtime.getRuntime().exec("ping " + userInput);
-   // 安全
-   new ProcessBuilder("ping", userInput).start();
-   ```
+### 1. 命令注入防护
 
-2. **资源释放：**
-   
-   - 使用 `try-with-resources` 自动关闭流。
-   - 在 `finally` 中调用 `process.destroy()`。
-   
-3. **命令超时控制：**
-   
-   ```java
-   process.waitFor(10, TimeUnit.SECONDS);
-   ```
-   
-4. **合并输出流避免死锁：**
-   ```java
-   pb.redirectErrorStream(true);
-   ```
+```java
+// ❌ 极度危险
+Runtime.getRuntime().exec("ping " + userInput);
 
-5. **日志与审计：**
-   - 建议记录执行的命令与返回结果。
+// ✅ 安全
+new ProcessBuilder("ping", userInput).start();
+```
+
+### 2. 资源释放
+
+- 使用 `try-with-resources` 自动关闭流
+- 在 `finally` 中调用 `process.destroy()`
+
+### 3. 超时控制
+
+```java
+if (!process.waitFor(10, TimeUnit.SECONDS)) {
+    process.destroyForcibly();
+    throw new RuntimeException("命令超时");
+}
+```
+
+### 4. 记录审计日志
+
+建议记录：执行命令、退出码、输出摘要、耗时。
+
+### 5. 合并输出流避免死锁：
+
+```java
+pb.redirectErrorStream(true);
+```
+
+
 
 ---
 
@@ -2101,7 +1935,7 @@ public class FFmpegDemo {
 
 #### 四、进阶案例
 
-##### 🎯 1. 获取视频信息（类似 ffprobe）
+##### 1. 获取视频信息（类似 ffprobe）
 
 ```java
 ProcessBuilder pb = new ProcessBuilder(
@@ -2114,7 +1948,7 @@ ProcessBuilder pb = new ProcessBuilder(
 
 ---
 
-##### 🎯 2. 截取视频片段
+##### 2. 截取视频片段
 
 ```java
 ProcessBuilder pb = new ProcessBuilder(
@@ -2127,9 +1961,7 @@ ProcessBuilder pb = new ProcessBuilder(
 );
 ```
 
----
-
-##### 🎯 3. 截图（生成缩略图）
+#####  3. 截图（生成缩略图）
 
 ```java
 ProcessBuilder pb = new ProcessBuilder(
@@ -2143,7 +1975,7 @@ ProcessBuilder pb = new ProcessBuilder(
 
 ---
 
-##### 🎯 4. 压缩视频
+##### 4. 压缩视频
 
 ```java
 ProcessBuilder pb = new ProcessBuilder(
@@ -2424,13 +2256,6 @@ pb.start().waitFor();
  ✔ 防止空格路径问题
  ✔ 不拼字符串
 
-## 参考资料
-
-- [Oracle Docs - ProcessBuilder](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ProcessBuilder.html)
-- [Apache Commons Exec 官方文档](https://commons.apache.org/proper/commons-exec/)
-- [Java Tutorials: Process API](https://docs.oracle.com/javase/tutorial/essential/environment/process.html)
-- [Stack Overflow: ProcessBuilder vs Runtime.exec()](https://stackoverflow.com/questions/3643936/difference-between-runtime-getruntime-exec-and-processbuilder)
-
 
 
 
@@ -2446,22 +2271,58 @@ pb.start().waitFor();
 
 
 
+### 案例9 执行带空格的语句命令，cmd无法识别带空格路径的问题
+
+参考：https://www.cnblogs.com/philo-zhou/p/14225885.html
+
+**问题的现象是**：在 Java 中使用 `Runtime.getRuntime().exec()` 执行带空格的路径（例如 `D:/Program Files`）时，系统无法正确识别，导致命令执行失败。
+
+**问题的根本原因是**：在 CMD 控制台中，**空格**是默认的**参数分隔符**。因此，`"D:/Program Files"` 会被错误地拆分为 `"D:/Program"` 和 `"Files"` 两个独立的参数，从而导致路径解析失败
+
+原文中提到了两种主要的解决思路：
+
+- **使用 CMD 的 start 命令**：可以为路径设置一个空的窗口标题（title），从而将其作为一个整体参数传递。
+
+  ```java
+  Runtime.getRuntime().exec("cmd /c start \"\" \"D:/Program Files\"");
+  ```
+
+  该命令的作用是打开 `D:/Program Files` 文件夹。
+
+- **使用引号包裹**：将整个包含空格的路径用**英文双引号**（ASCII码为 `"`）包裹起来，强制 CMD 将其识别为一个完整的参数。`"D:/Program Files"`
 
 
-# Java 程序在 Windows 或 Linux 下调用 Linux shell 脚本（.sh）🧩 
+
+- **`Runtime.exec()` 的局限**：正如之前的笔记中提到的，`Runtime.exec()` 本质上是启动了一个独立的进程，但**不会经过 Shell（如 cmd.exe）的解析**。它只是简单地将命令字符串按空格分割成一个数组。当遇到含有空格的路径时，这种简单的分割就会出错。
+
+- **`ProcessBuilder` 的改进**：相比之下，`ProcessBuilder` 在设计上通过接受 `String...` 类型的命令列表，**直接规避了字符串分割和命令注入的风险**。使用 `ProcessBuilder`，你可以清晰地定义命令的每个部分：
+
+  
+
+  ```java
+  // 用列表的形式传递参数，每个参数独立，空格不再成为障碍
+  ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "start", "", "D:/Program Files");
+  ```
+
+  
+
+- **核心要点**：在处理文件路径，特别是可能包含空格的路径时，最安全的做法是**使用 `ProcessBuilder` 并将路径作为独立的命令参数传递**，而不是将其拼接在命令字符串中。
+
+
+
+
+
+# 执行脚本
 
 ## 一、核心原理
 
-Java 调用系统命令的方式主要有两种：
+Java 调用系统命令的方式主要有两种：**`Runtime.getRuntime().exec()`**、 **`ProcessBuilder`**两者都能执行 Linux 命令或 `.sh` 脚本。
 
-1. ✅ **`Runtime.getRuntime().exec()`**
-2. ✅ **`ProcessBuilder`**
-
-两者都能执行 Linux 命令或 `.sh` 脚本。
+当需要在 Windows 上运行 Java 程序控制远程 Linux 服务器时，可**使用 JSch 库**。
 
 ------
 
-## 🧱 二、前提准备
+##  二、前提准备
 
 假设你有一个脚本：
 
@@ -2485,7 +2346,7 @@ chmod +x /home/gouwe/test.sh
 
 ------
 
-## ⚙️ 三、Java 调用方式（推荐用 ProcessBuilder）
+## 三、本地调用方式（推荐用 ProcessBuilder）
 
 ```java
 import java.io.BufferedReader;
@@ -2535,7 +2396,7 @@ String[] cmd = {"/bin/bash", "-c", "sudo /home/gouwe/test.sh arg1"};
 
 ------
 
-## 🧩 五、在 Windows 调用远程 Linux 脚本
+## 五、调用远程 Linux 脚本
 
 如果你想在 Windows 上运行 Java 程序，远程执行 Linux 脚本：
 
@@ -2587,13 +2448,35 @@ public class SSHExample {
 }
 ```
 
+> 💡 替代方案：使用 Apache Mina SSHD 或直接调用系统 `ssh` 命令。
+
+
+
+# 📌 总结与选型建议
+
+| 场景                       | 推荐方案                                  |
+| :------------------------- | :---------------------------------------- |
+| 简单本地命令，偶尔执行     | `ProcessBuilder` + 手动处理流             |
+| 需要超时、异步、健壮性     | **Apache Commons Exec**                   |
+| 调试、命令行工具、快速验证 | `ProcessBuilder.inheritIO()`              |
+| 远程执行 Linux 命令        | JSch 或 SSH 命令调用                      |
+| 音视频处理、大量数据       | `ProcessBuilder` + 异步 + 超时 + 日志记录 |
+| 生产环境通用封装           | 使用本文提供的 `CommandExecutor` 工具类   |
+
+### 核心原则（牢记）
+
+1. ✅ **始终消费子进程的输出流和错误流**
+2. ✅ **始终设置超时控制**
+3. ✅ **使用参数化命令避免注入**
+4. ✅ **明确指定字符集（Windows用GBK，Linux用UTF-8）**
+5. ✅ **优先使用 ProcessBuilder 而非 Runtime.exec**
+6. ✅ **对于复杂需求，引入 Apache Commons Exec**
+
 ------
 
-## ✅ 总结对比
+## 📚 参考资料
 
-| 方式             | 场景         | 优点         | 缺点         |
-| ---------------- | ------------ | ------------ | ------------ |
-| `ProcessBuilder` | 本机执行脚本 | 简单、轻量   | 仅限本地     |
-| JSch (SSH)       | 远程执行脚本 | 可远程管理   | 需依赖 jar   |
-| 调用系统 ssh     | 任意平台     | 无第三方依赖 | 不易捕获输出 |
+- [Oracle Docs - ProcessBuilder](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ProcessBuilder.html)
+- [Apache Commons Exec](https://commons.apache.org/proper/commons-exec/)
+- [JSch - Java Secure Channel](http://www.jcraft.com/jsch/)
 
