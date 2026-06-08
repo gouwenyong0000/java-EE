@@ -67,11 +67,8 @@ public class RegexTestHarness {
         }
         while (true) {
 
-            Pattern pattern = 
-            Pattern.compile(console.readLine("%nEnter your regex: "));
-
-            Matcher matcher = 
-            pattern.matcher(console.readLine("Enter input string to search: "));
+            Pattern pattern =Pattern.compile(console.readLine("%nEnter your regex: "));
+            Matcher matcher =pattern.matcher(console.readLine("Enter input string to search: "));
 
             boolean found = false;
             while (matcher.find()) {
@@ -1673,6 +1670,48 @@ while (m.find()) {
 
 
 
+
+## Java 正则核心 API（含关键坑点）
+
+### 1. 核心类
+
+- `Pattern`：正则表达式编译后的对象
+- `Matcher`：匹配器，执行匹配操作
+
+### 2. 关键方法
+
+- `matcher.find()`：**尝试在文本中查找下一个匹配子串**（必须先调用！）
+
+- `matcher.groupCount()`：**返回正则表达式里定义的捕获组数量**
+
+  ✅ 重要：它和是否匹配成功无关！即使 `find()` 失败，`groupCount()` 依然会返回数字！
+
+- `matcher.group(int n)`：获取第 n 个分组的内容
+
+- `matcher.matches()`：全串匹配
+
+### 3. ✅ 正确使用规则（必记）
+
+```java
+// 1. 编译正则
+Pattern pattern = Pattern.compile("(\\d+)-(\\w+)");
+Matcher matcher = pattern.matcher("123-abc");
+
+// 2. 必须先判断 find() / matches()
+if (matcher.find()) {
+    // 3. 再获取分组
+    String group1 = matcher.group(1);
+    String group2 = matcher.group(2);
+}
+```
+
+### 4. ❌ 错误写法（千万避免）
+
+```java
+// 错误：直接用 groupCount 判断是否匹配
+if (matcher.groupCount() > 0) {  // 永远不可靠！
+}
+```
 
 
 
