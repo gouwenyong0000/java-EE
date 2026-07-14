@@ -13,12 +13,8 @@
 
 **字节（Byte，大写 B）**：计算机中常用的数据与存储容量的基本单位。**1 Byte = 8 bits**。
 
-- **存储占用**：一个英文字母或数字通常占用 1 字节；一个汉字根据编码不同通常占用 2～4 字节（如 GBK 占 2 字节，UTF-8 占 3～4 字节）。
-
-**为什么 1 字节是 8 位？**
-
-- **历史标准**：早期计算机存在 6 位、7 位字节，后由 IBM 体系奠定了 8 位的主流标准。
-- **状态覆盖**：8 位二进制可表示 $2^8 = 256$ 种状态，足以完美覆盖标准 ASCII 字符集。
+- 常见存储占用：单字符/数字占1字节，GBK编码汉字占2字节，UTF-8编码汉字占3~4字节。
+- 历史背景：早期存在6位、7位字节标准，IBM体系最终奠定8位主流标准，8位二进制可覆盖256种状态，完全兼容标准ASCII字符集。
 
 
 
@@ -56,7 +52,7 @@ $$D = \sum k_i \times N^i$$
 
 
 
-### 1、十进制
+### 2、十进制
 十进制是日常生活和工作中最常使用的进位计数制。在十进制数中，每一位有 0~9 十个数码，所以计数的基数是 10。超过 9 的数必须用多位数表示，其中低位和相邻高位之间的关系是“逢十进一”，故称为十进制。例如
 
 \[
@@ -90,7 +86,7 @@ D = \sum k_i N^i
 
 ---
 
-### 2、二进制
+### 3、二进制
 目前在数字电路中应用最广泛的是二进制。在二进制数中，每一位仅有 **0** 和 **1** 两个可能的数码，所以计数基数为 2。低位和相邻高位间的进位关系是“逢二进一”，故称为二进制。
 
 根据式(1.2.2)，任何一个二进制数均可展开为
@@ -118,7 +114,7 @@ D = \sum k_i 2^i
 
 
 
-### 3. 四种整数表示法（Java）
+### 4. 常见进制表示法（Java）
 
 | **进制**     | **前缀**     | **字符范围** | **Java 字面量示例** | **对应十进制值** | **说明**                   |
 | ------------ | ------------ | ------------ | ------------------- | ---------------- | -------------------------- |
@@ -127,31 +123,121 @@ D = \sum k_i 2^i
 | **十进制**   | 无前缀       | `0~9`        | `10`                | `10`             | 日常开发、业务逻辑默认进制 |
 | **十六进制** | `0x` 或 `0X` | `0~9, A~F`   | `0xA`               | `10`             | 4位二进制可对应1位十六进制 |
 
-
-
 > ⚠️ **Java 避坑指南**： 在普通整数字面量前加上前导 `0` 会被 Java 编译器识别为**八进制**数。例如 `int price = 010;` 代表的实际是十进制的 `8`，在开发中应当严格禁止对普通十进制数加前导 `0`。
-
-### 4. 打印不同进制的整数
 
 ```java
 int num = 42;
 System.out.println(Integer.toBinaryString(num));  // 输出二进制：101010
 System.out.println(Integer.toOctalString(num));   // 输出八进制：52
 System.out.println(Integer.toHexString(num));     // 输出十六进制：2a
-```
 
-------
-
-### 5. 字面量示例
-
-```java
 int a = 10;        // 十进制
 int b = 0b1010;    // 二进制
 int c = 012;       // 八进制
 int d = 0xA;       // 十六进制
-
 System.out.println(a == b && b == c && c == d);  // 输出 true
 ```
+
+
+
+### 5. 16 进制（Hex）和 10 进制（Decimal）的相互转换
+
+在 Java 中，16 进制（Hex）和 10 进制（Decimal）的相互转换非常频繁。主要可以分为**字面量表达**（直接写在代码里）和**字符串/数值转换**（运行时动态转换）两种场景。
+
+#### 一、 字面量表达（在代码中直接书写）
+
+在编写代码时，你可以直接使用特定的前缀来表示不同进制的数字，Java 编译器会自动将其识别为 10 进制数值。
+
+- **10 进制字面量**：正常书写。
+- **16 进制字面量**：以 `0x` 或 `0X` 开头。
+
+```Java
+int decimal = 42;       // 10 进制
+int hex = 0x2A;         // 16 进制（2A 对应 10 进制的 42）
+
+// 它们在内存中是一样的，可以直接比较
+System.out.println(decimal == hex); // 输出: true
+```
+
+#### 二、 16 进制转 10 进制
+
+通常是将一个代表 16 进制的**字符串**转换为 10 进制的**数值**。
+
+##### 1. 使用 `Integer.parseInt()` 或 `Long.parseLong()`
+
+这是最常用的方法，通过指定基数（Radix）为 `16` 来解析字符串。
+
+> ⚠️ **注意**：输入的字符串**不能**包含 `0x` 前缀，否则会报 `NumberFormatException`。
+
+```Java
+String hexStr = "2a"; // 大小写均可
+
+// 转换为 int
+int decimal = Integer.parseInt(hexStr, 16); 
+System.out.println(decimal); // 输出: 42
+```
+
+##### 2. 使用 `Integer.decode()`
+
+如果你的字符串**带有 `0x` 或 `#` 前缀**，使用 `decode()` 会非常方便，它会自动识别前缀并转换。
+
+```Java
+String hexWithPrefix = "0x2A";
+
+int decimal = Integer.decode(hexWithPrefix);
+System.out.println(decimal); // 输出: 42
+```
+
+##### 3. 处理大数：`BigInteger`
+
+如果 16 进制字符串非常长，超出了 `long` 的范围，需要使用 `BigInteger`。
+
+```Java
+String longHex = "7fffffffffffffff"; // 很大的16进制数
+
+BigInteger bigDec = new BigInteger(longHex, 16);
+System.out.println(bigDec); // 输出: 9223372036854775807
+```
+
+#### 三、 10 进制转 16 进制
+
+将 10 进制的**数值**转换为 16 进制的**字符串**。
+
+##### 1. 使用 `Integer.toHexString()`
+
+这是最直接的方法，返回的是**小写**的 16 进制字符串，且不带 `0x` 前缀。
+
+```Java
+int decimal = 42;
+
+String hexStr = Integer.toHexString(decimal);
+System.out.println(hexStr); // 输出: 2a
+```
+
+##### 2. 使用 `String.format()`
+
+如果你需要控制输出格式（比如固定长度、补零、大写、带前缀等），`String.format()` 是绝佳选择。
+
+```Java
+int decimal = 42;
+
+// %x 表示小写，%X 表示大写
+String hexStr1 = String.format("%x", decimal);  // "2a"
+String hexStr2 = String.format("%X", decimal);  // "2A"
+
+// 补零到4位长度
+String hexStr3 = String.format("%04X", decimal); // "002A"
+```
+
+#### 总结速查表
+
+| **转换方向**                        | **数据类型变化**             | **核心方法**                 | **备注**                          |
+| ----------------------------------- | ---------------------------- | ---------------------------- | --------------------------------- |
+| **16进制字面量**                    | `0x2A` $\rightarrow$ `int`   | 直接赋值 `int s = 0x2A;`     | 编译器自动处理                    |
+| **16进制串 $\rightarrow$ 10进制数** | `String` $\rightarrow$ `int` | `Integer.parseInt(str, 16)`  | 字符串不能带 `0x`                 |
+| **16进制串 $\rightarrow$ 10进制数** | `String` $\rightarrow$ `int` | `Integer.decode(str)`        | 字符串**必须/可以**带 `0x` 或 `#` |
+| **10进制数 $\rightarrow$ 16进制串** | `int` $\rightarrow$ `String` | `Integer.toHexString(num)`   | 返回纯小写字符串                  |
+| **10进制数 $\rightarrow$ 16进制串** | `int` $\rightarrow$ `String` | `String.format("%02X", num)` | 可灵活控制大小写及补零            |
 
 
 
@@ -242,54 +328,7 @@ $$\text{真值} = (-1 \times 2^3) + (1 \times 2^2) + (0 \times 2^1) + (1 \times 
 
 $$\text{真值} = -8 + 4 + 0 + 1 + 0 + 0.25 + 0.125 = -2.625$$
 
-#### 拓展：位数扩展--符号位扩展
 
-你提到的“位数扩展”，在数字系统中最核心的应用就是“符号位扩展”。这是一种保持数值大小不变，但增加二进制表示位数的技术。
-
-##### 1. 核心原理
-
-**符号位扩展**的本质是：在二进制数的左侧（高位）不断复制符号位（即最高位）的数值，直到达到目标位数。
-
-*   **正数**：符号位为 `0`。因此，所有扩展的高位都填 `0`。
-    *   例如：8位表示的 `00001010`（十进制 `10`），扩展为16位就是 `0000000000001010`。
-*   **负数**：符号位为 `1`。因此，所有扩展的高位都填 `1`。
-    *   例如：8位表示的 `11101010`（十进制 `-42`），扩展为16位就是 `1111111111101010`。
-
-这种操作之所以可行，是因为补码表示法的数学特性：在一个数的二进制表示中，在其左侧添加任意个 `0` 或 `1`，其值都不会改变。
-
-##### 2. 应用场景
-
-符号位扩展主要用于解决**不同位数数据在运算时的对齐问题**。
-
-*   **示例：加法运算**
-    假设我们要计算 `10`（8位，`00001010`）和 `-42`（8位，`11101010`）的和。
-    为了让两个数的位数相同，我们需要对它们进行符号位扩展：
-    *   `10` (8位) → `00001010` (16位)
-    *   `-42` (8位) → `1111111111101010` (16位)
-    现在可以直接对这两个16位的数进行二进制加法：
-    `  0000000000001010`
-    `+ 1111111111101010`
-    `-------------------`
-    `= 1111111111110100`
-    将结果 `1111111111110100` 再还原为8位，得到 `11110100`，其对应的十进制值为 `-32`。计算结果 `10 + (-42) = -32` 是正确的。
-
-*   **其他场景**
-    这种技术也广泛应用于其他需要统一数据位数的场景，例如：
-    *   **移位操作**：在执行左移或右移操作时，为了保持符号不变，需要对结果进行符号位扩展。
-    *   **比较运算**：在比较不同位数的有符号数时，需要先将它们扩展到相同的位数。
-
-##### 3. 符号位与“零扩展”的区别
-
-另一种常见的位数扩展是“零扩展”（Zero Extension），它与符号位扩展的主要区别在于：
-
-| 特性         | 符号位扩展 (Sign-Extending)                      | 零扩展 (Zero-Extending)                         |
-| :----------- | :----------------------------------------------- | :---------------------------------------------- |
-| **扩展规则** | 高位填入**符号位**的值（0或1）                   | 高位填入**0**                                   |
-| **适用对象** | **有符号数**（补码）                             | **无符号数**                                    |
-| **目的**     | 保持数值大小不变                                 | 保持数值大小不变                                |
-| **示例**     | 8位 `-42` (11101010) → 16位 (`1111111111101010`) | 8位 `10` (00001010) → 16位 (`0000000000001010`) |
-
-总而言之，**符号位扩展**是处理有符号数运算和操作时必不可少的基础技术。
 
 
 
@@ -598,9 +637,7 @@ public class DecimalToBinary {
 }
 ```
 
-`
 
-------
 
 ## 六、数据存储与字节序（Endianness）
 
@@ -622,7 +659,7 @@ public class DecimalToBinary {
 
 ---
 
-### 3. Java 与 Endianness
+### 3. JVM 内部一律采用大端序
 
 Java 屏蔽了底层操作系统的字节序差异，**JVM 内部一律采用大端序**。当需要与外部 C/C++ 原生库（JNI）或特定文件流进行二进制交互时，需借助 `ByteBuffer` 调整字节序：
 
@@ -671,26 +708,286 @@ System.out.printf("0x%08X", buffer.getInt()); // 输出：0x78563412
 
 ------
 
-### 3. 案例：123.456f → IEEE 754 单精度浮点数的二进制
+### 3. **案例 : 单精度浮点数 (float) 转换 -  十进制 123.456f  转换为 IEEE 754 二进制表示**
 
-| 步骤     | 结果                                                |
-| -------- | --------------------------------------------------- |
-| 符号位   | 0                                                   |
-| 规格化   | 1.111011011101001 × 2⁶                              |
-| 指数     | 6 + 127 = 133 → `10000101`                          |
-| 尾数     | `11101101110100100000000`                           |
-| 最终结果 | `0 10000101 11101101110100100000000` → `0x42F6E979` |
+为了更深入地理解 IEEE 754 标准，我们来补充一些浮点数和 IEEE 754 二进制表示之间转换的案例，包括单精度 (float) 和双精度 (double)。
 
-验证代码：
 
-```java
-// 将 float 类型的数转换成 IEEE 754 单精度浮点数的二进制表示，然后以十六进制打印出来
-float f = 123.456f;
-System.out.printf("0x%08X", Float.floatToIntBits(f));// 
-// 输出：0x42F6E979
+
+**步骤 1:  确定符号位 (Sign bit)**
+
+- 123.456 是正数，所以符号位为 **0**。
+
+**步骤 2:  转换为二进制形式 (整数部分和小数部分)**
+
+- **整数部分 (123):**  123 的二进制是 `1111011`
+
+- **小数部分 (0.456):**  需要将小数部分转换为二进制。 我们可以通过不断乘以 2 并取整数部分来得到二进制小数：
+
+  ```sh
+  0.456 * 2 = 0.912  -> 整数部分: 0
+  0.912 * 2 = 1.824  -> 整数部分: 1
+  0.824 * 2 = 1.648  -> 整数部分: 1
+  0.648 * 2 = 1.296  -> 整数部分: 1
+  0.296 * 2 = 0.592  -> 整数部分: 0
+  0.592 * 2 = 1.184  -> 整数部分: 1
+  0.184 * 2 = 0.368  -> 整数部分: 0
+  0.368 * 2 = 0.736  -> 整数部分: 0
+  0.736 * 2 = 1.472  -> 整数部分: 1
+  0.472 * 2 = 0.944  -> 整数部分: 0
+  ... (继续下去，直到达到所需的精度或重复)
+  ```
+
+  所以，0.456 的二进制近似为 `011101001...`
+
+- **合并整数和小数部分:**  123.456 的二进制近似为 `1111011.011101001...`
+
+**步骤 3:  规格化 (Normalization) 并确定指数 (Exponent) 和尾数 (Mantissa)**
+
+- **规格化:** 将二进制数表示为 `1.xxxx... × 2^指数` 的形式。  将小数点左移 6 位，得到 `1.111011011101001... × 2^6`
+- **尾数 (Mantissa):**  小数点后的部分 `111011011101001...`  单精度尾数部分为 23 位，我们需要截取或舍入到 23 位。 假设我们截取前 23 位： `11101101110100100000000`
+- **指数 (Exponent):**  指数是 6。  对于单精度浮点数，指数偏移量 (bias) 是 127。  所以，存储的指数值是 `6 + 127 = 133`。  133 的二进制是 `10000101`。
+
+**步骤 4:  组合符号位、指数和尾数**
+
+- **符号位:** `0`
+
+- **指数:** `10000101`
+
+- **尾数:** `11101101110100100000000`
+
+- **IEEE 754 二进制表示 (单精度):**
+
+  `0 10000101 11101101110100100000000`
+
+  转换为十六进制表示（每 4 位二进制转换为 1 位十六进制）：
+
+  `4 2 F 6 E 9 7 9`  ->  `0x42F6E979`
+
+**验证 (使用 Java 代码)**
+
+```Java
+float floatValue = 123.456f;
+int floatBits = Float.floatToIntBits(floatValue);
+String hexString = String.format("%08X", floatBits); // 格式化为 8 位十六进制
+System.out.println("Float 123.456f 的 IEEE 754 十六进制表示: 0x" + hexString);
+// 输出: Float 123.456f 的 IEEE 754 十六进制表示: 0x42F6E979Java
 ```
 
-------
+
+
+### Float 类型与 byte 数组互相转换的 Java 工具类
+
+你需要的是一个能将 Float 类型与 byte 数组互相转换的 Java 工具类，并且要求同时实现基于**位操作**和**ByteBuffer** 两种方式，
+
+完整工具类代码
+
+```java
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+/**
+ * Float 与 byte 数组互转工具类
+ * 提供基于位操作和 ByteBuffer 两种实现方式
+ */
+public class FloatByteConverter {
+
+    // ====================== 基于 ByteBuffer 的转换方式 ======================
+    /**
+     * ByteBuffer 方式：Float 转 byte 数组（默认大端序）
+     * @param value 待转换的 Float 值
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByByteBuffer(float value) {
+        return floatToBytesByByteBuffer(value, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * ByteBuffer 方式：Float 转 byte 数组（指定字节序）
+     * @param value 待转换的 Float 值
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByByteBuffer(float value, ByteOrder order) {
+        ByteBuffer buffer = ByteBuffer.allocate(4); // Float 占4个字节
+        buffer.order(order); // 设置字节序
+        buffer.putFloat(value);
+        return buffer.array();
+    }
+
+    /**
+     * ByteBuffer 方式：byte 数组转 Float（默认大端序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByByteBuffer(byte[] bytes) {
+        return bytesToFloatByByteBuffer(bytes, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * ByteBuffer 方式：byte 数组转 Float（指定字节序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByByteBuffer(byte[] bytes, ByteOrder order) {
+        if (bytes == null || bytes.length != 4) {
+            throw new IllegalArgumentException("byte数组长度必须为4！");
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        buffer.order(order);
+        return buffer.getFloat();
+    }
+
+    // ====================== 基于位操作的转换方式 ======================
+    /**
+     * 位操作方式：Float 转 byte 数组（大端序）
+     * 原理：先将 Float 转成 int（通过 Float.floatToIntBits），再对 int 按位拆分
+     * @param value 待转换的 Float 值
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByBitOperation(float value) {
+        return floatToBytesByBitOperation(value, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * 位操作方式：Float 转 byte 数组（指定字节序）
+     * @param value 待转换的 Float 值
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 转换后的 byte 数组（长度固定为4）
+     */
+    public static byte[] floatToBytesByBitOperation(float value, ByteOrder order) {
+        // 将 Float 转换为对应的 int 位模式（符合 IEEE 754 标准）
+        int intValue = Float.floatToIntBits(value);
+        byte[] bytes = new byte[4];
+        
+        if (order == ByteOrder.BIG_ENDIAN) {
+            // 大端序：高位在前（第0位存最高8位，第3位存最低8位）
+            bytes[0] = (byte) (intValue >> 24);
+            bytes[1] = (byte) (intValue >> 16);
+            bytes[2] = (byte) (intValue >> 8);
+            bytes[3] = (byte) intValue;
+        } else {
+            // 小端序：低位在前（第0位存最低8位，第3位存最高8位）
+            bytes[0] = (byte) intValue;
+            bytes[1] = (byte) (intValue >> 8);
+            bytes[2] = (byte) (intValue >> 16);
+            bytes[3] = (byte) (intValue >> 24);
+        }
+        return bytes;
+    }
+
+    /**
+     * 位操作方式：byte 数组转 Float（大端序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByBitOperation(byte[] bytes) {
+        return bytesToFloatByBitOperation(bytes, ByteOrder.BIG_ENDIAN);
+    }
+
+    /**
+     * 位操作方式：byte 数组转 Float（指定字节序）
+     * @param bytes 待转换的 byte 数组（长度必须为4）
+     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
+     * @return 恢复后的 Float 值
+     * @throws IllegalArgumentException 数组长度非法时抛出
+     */
+    public static float bytesToFloatByBitOperation(byte[] bytes, ByteOrder order) {
+        if (bytes == null || bytes.length != 4) {
+            throw new IllegalArgumentException("byte数组长度必须为4！");
+        }
+        
+        int intValue = 0;
+        if (order == ByteOrder.BIG_ENDIAN) {
+            // 大端序：拼接 int（注意 & 0xFF 防止符号位扩展）
+            intValue = ((bytes[0] & 0xFF) << 24) 
+                    | ((bytes[1] & 0xFF) << 16) 
+                    | ((bytes[2] & 0xFF) << 8) 
+                    | (bytes[3] & 0xFF);
+        } else {
+            // 小端序：拼接 int
+            intValue = (bytes[0] & 0xFF) 
+                    | ((bytes[1] & 0xFF) << 8) 
+                    | ((bytes[2] & 0xFF) << 16) 
+                    | ((bytes[3] & 0xFF) << 24);
+        }
+        // 将 int 位模式转回 Float
+        return Float.intBitsToFloat(intValue);
+    }
+
+    // ====================== 测试方法 ======================
+    public static void main(String[] args) {
+        float testValue = 123.456f;
+        ByteOrder order = ByteOrder.BIG_ENDIAN; // 可切换为 LITTLE_ENDIAN 测试
+
+        // 测试 ByteBuffer 方式
+        byte[] bytes1 = floatToBytesByByteBuffer(testValue, order);
+        float restore1 = bytesToFloatByByteBuffer(bytes1, order);
+        System.out.println("=== ByteBuffer 方式 ===");
+        System.out.println("原始值：" + testValue);
+        System.out.println("转换后的byte数组：" + java.util.Arrays.toString(bytes1));
+        System.out.println("恢复后的值：" + restore1);
+
+        // 测试位操作方式
+        byte[] bytes2 = floatToBytesByBitOperation(testValue, order);
+        float restore2 = bytesToFloatByBitOperation(bytes2, order);
+        System.out.println("\n=== 位操作方式 ===");
+        System.out.println("原始值：" + testValue);
+        System.out.println("转换后的byte数组：" + java.util.Arrays.toString(bytes2));
+        System.out.println("恢复后的值：" + restore2);
+
+        // 验证两种方式的结果是否一致
+        System.out.println("\n两种方式转换的byte数组是否一致：" + java.util.Arrays.equals(bytes1, bytes2));
+    }
+}
+```
+
+关键代码解释
+
+1. **ByteBuffer 方式核心逻辑**：
+   - `ByteBuffer.allocate(4)`：分配4字节缓冲区（Float 固定占4字节）。
+   - `buffer.order(order)`：指定字节序（大端/小端），大端序是网络传输默认格式，小端序是大部分CPU的本地格式。
+   - `buffer.putFloat()`/`buffer.getFloat()`：直接完成 Float 与字节数组的互转，底层已封装位操作，简洁且不易出错。
+
+2. **位操作方式核心逻辑**：
+   - `Float.floatToIntBits(value)`：将 Float 按 IEEE 754 标准转换为对应的 int 位模式（保留符号、指数、尾数的二进制结构）。
+   - 按位拆分/拼接：通过移位（`>>`）和按位与（`& 0xFF`）操作拆分/拼接 int，`& 0xFF` 是为了将 byte 转换为无符号的8位值，避免符号位扩展导致错误。
+   - `Float.intBitsToFloat(intValue)`：将 int 位模式还原为 Float。
+
+3. **异常处理**：
+   - 校验 byte 数组长度必须为4，避免数组越界或转换错误。
+
+测试输出示例（大端序）
+
+```
+=== ByteBuffer 方式 ===
+原始值：123.456
+转换后的byte数组：[66, -4, 73, -52]
+恢复后的值：123.45600128173828
+
+=== 位操作方式 ===
+原始值：123.456
+转换后的byte数组：[66, -4, 73, -52]
+恢复后的值：123.45600128173828
+
+两种方式转换的byte数组是否一致：true
+```
+
+（注：Float 是单精度浮点数，存在微小精度损失，属于正常现象。）
+
+总结
+
+1. **ByteBuffer 方式**：代码简洁、可读性高、不易出错，推荐日常开发使用，底层已优化，性能足够。
+2. **位操作方式**：更贴近底层原理，适合理解 Float 二进制存储结构，或需要手动控制位操作的场景。
+3. **关键注意点**：转换和恢复时必须使用**相同的字节序**，否则会得到错误结果；byte 数组长度必须为4（Float 固定
+
+
+
+
 
 ## 八、Java 基本数据类型与包装类
 
@@ -711,276 +1008,96 @@ System.out.printf("0x%08X", Float.floatToIntBits(f));//
 
 ### 2. Java 包装类方法汇总（JDK 标准类库中）
 
-> 包装类的完整定义在 `java.lang` 包中。大多数数值包装类都继承自抽象类 `Number`，因此具有相同的类型转换方法。
+去除了冷门、底层的位操作（如字节反转、书写方向等），保留了 80% 开发场景中会用到的 20% 核心方法。
 
-------
+#### 🔷 1. Boolean 类（最常用）
 
-#### 🔷 1. Boolean 类
+| **方法名**                      | **返回类型** | **核心作用**       | **避坑/小贴士**                                           |
+| ------------------------------- | ------------ | ------------------ | --------------------------------------------------------- |
+| `parseBoolean(String s)`        | `boolean`    | 字符串转基本布尔值 | 只有 `IgnoreCase("true")` 才返回 `true`，其余皆为 `false` |
+| `valueOf(String/boolean)`       | `Boolean`    | 获取包装类对象     | 内部使用缓存，性能优于 `new Boolean()`                    |
+| `compare(boolean x, boolean y)` | `int`        | 比较大小           | `true > false`。常用于 Stream 流排序                      |
 
-| 方法                                       | 返回类型  | 描述                                                         |
-| ------------------------------------------ | --------- | ------------------------------------------------------------ |
-| `parseBoolean(String s)`                   | `boolean` | 将字符串转换为 boolean（忽略大小写，"true" 返回 true，其它 false） |
-| `valueOf(boolean b)` / `valueOf(String s)` | `Boolean` | 返回 Boolean 对象                                            |
-| `booleanValue()`                           | `boolean` | 返回基本 boolean 值                                          |
-| `compare(boolean x, boolean y)`            | `int`     | 比较两个 boolean，true > false                               |
-| `logicalAnd/Or/Xor(boolean a, boolean b)`  | `boolean` | 逻辑与/或/异或（JDK 1.8 起）                                 |
-| `toString(boolean b)`                      | `String`  | 转换为字符串                                                 |
-| `hashCode(boolean value)`                  | `int`     | 返回布尔值的哈希码（true 为 1231，false 为 1237）            |
+#### 🔷 2. Character 类（刷题/文本处理高频）
 
-------
+① 字符类型判断（`isXxx` 系列）
 
-#### 🔷 2. Character 类
+- **`isDigit(char ch)`**：是否为数字 `0-9`。
+- **`isLetter(char ch)`**：是否为英文字母。
+- **`isLetterOrDigit(char ch)`**：是否为字母或数字（常用于验证账号、密码合法性）。
+- **`isLowerCase / isUpperCase(char ch)`**：是否为小/大写字母。
+- **`isWhitespace(char ch)`**：是否为空格、制表符 `\t`、换行符 `\n`。
 
-##### 📌 一、基本方法
+② 字符转换与大小写
 
-| 方法名                             | 返回类型  | 作用                              |
-| ---------------------------------- | --------- | --------------------------------- |
-| `charValue()`                      | `char`    | 返回此 Character 对象中的 char 值 |
-| `compare(char x, char y)`          | `int`     | 比较两个字符大小（按 Unicode 值） |
-| `equals(Object obj)`               | `boolean` | 比较两个 Character 对象是否相等   |
-| `toString()` / `toString(char ch)` | `String`  | 转换为字符串                      |
+- **`toLowerCase / toUpperCase(char ch)`**：转小/大写。
+- **`getNumericValue(char ch)`**：获取字符的数字值（例如 `'1'` $\rightarrow$ `1`，而直接强转 `(int)'1'` 会得到 ASCII 码 `49`）。
 
+③ Unicode 增补字符（高级平面/Emoji处理）
 
+> 📌 **大厂面试常考**：Java 的 `char` 是 16 位的，无法直接存 Emoji 等 4 字节字符（需要 2 个 `char` 拼成一个 `codePoint`）。
 
-------
+- **`codePointAt(CharSequence seq, int index)`**：获取指定位置的完整 Unicode 码点。
+- **`charCount(int codePoint)`**：判断该码点占 1 个还是 2 个 `char`（Emoji 返回 `2`）。
+- **`codePointCount(CharSequence seq, int begin, int end)`**：统计**真实字符数**，而不是 `length()` 里的 `char` 数量。
 
-##### 📌 二、字符类型判断（isXxx）
+#### 🔷 3. 整型包装类（Byte / Short / Integer / Long）
 
-| 方法                                | 返回类型  | 描述                                 |
-| ----------------------------------- | --------- | ------------------------------------ |
-| `isDigit(char ch)`                  | `boolean` | 判断是否为数字字符（0-9）            |
-| `isLetter(char ch)`                 | `boolean` | 判断是否为字母                       |
-| `isLetterOrDigit(char ch)`          | `boolean` | 判断是否为字母或数字                 |
-| `isLowerCase(char ch)`              | `boolean` | 判断是否为小写字母                   |
-| `isUpperCase(char ch)`              | `boolean` | 判断是否为大写字母                   |
-| `isWhitespace(char ch)`             | `boolean` | 判断是否为空白字符（空格、制表符等） |
-| `isSpaceChar(char ch)`              | `boolean` | 判断是否为 Unicode 空格              |
-| `isJavaIdentifierStart(char ch)`    | `boolean` | 是否可作为 Java 标识符首字符         |
-| `isJavaIdentifierPart(char ch)`     | `boolean` | 是否可作为 Java 标识符的一部分       |
-| `isUnicodeIdentifierStart(char ch)` | `boolean` | 是否可作为 Unicode 标识符首字符      |
-| `isUnicodeIdentifierPart(char ch)`  | `boolean` | 是否可作为 Unicode 标识符的一部分    |
-| `isDefined(char ch)`                | `boolean` | 是否为定义的 Unicode 字符            |
-| `isISOControl(char ch)`             | `boolean` | 是否为 ISO 控制字符                  |
-| `isMirrored(char ch)`               | `boolean` | 是否为镜像字符（如括号）             |
+这类方法在四个整型类中完全通用，以 `Integer` 为代表：
 
+① 字符串与数值转换（核心三剑客）
 
+- **`parseInt(String s)`**：字符串 $\rightarrow$ `int` 基本类型（纯数字串）。
+- **`parseInt(String s, int radix)`**：按指定进制解析（如 `Integer.parseInt("2A", 16)` $\rightarrow$ `42`）。
+- **`valueOf(String s)`**：字符串 $\rightarrow$ `Integer` 对象（高频使用，带 $-128 \sim 127$ 缓存池）。
+- **`decode(String nm)`**：智能解析。支持 `0x`（16进制）、`0`（8进制）开头的字符串。
 
-------
+② 进制转换（转为字符串）
 
-##### 📌 三、字符类型获取
+- **`toBinaryString(int i)`**：转二进制字符串。
+- **`toHexString(int i)`**：转十六进制字符串（纯小写，不带 `0x`）。
+- **`toOctalString(int i)`**：转八进制字符串。
 
-| 方法                         | 返回类型 | 描述                                                        |
-| ---------------------------- | -------- | ----------------------------------------------------------- |
-| `getType(char ch)`           | `int`    | 获取字符的 Unicode 类型，如 `Character.UPPERCASE_LETTER` 等 |
-| `getDirectionality(char ch)` | `byte`   | 获取字符的书写方向（LTR、RTL）                              |
-| `getNumericValue(char ch)`   | `int`    | 获取字符的数值（'1' → 1，'Ⅻ' → 12）                         |
-| `getName(int codePoint)`     | `String` | 获取 Unicode 名称（JDK 9+）                                 |
+③ 统计与比较（JDK 8+）
 
+- **`bitCount(int i)`**：返回二进制中 **`1` 的个数**（LeetCode 经典位运算题常用）。
+- **`compare(int x, int y)`**：比较大小，返回 `1, 0, -1`。
 
+#### 🔷 4. 浮点型包装类（Float / Double）
 
-------
+除了具备与整型相似的 `parseXxx()`、`valueOf()` 之外，浮点型有其特有的状态判断：
 
-##### 📌 四、字符转换
+- **`isNaN(double v)`**：判断是否是**非数字**（Not a Number，如 `0.0 / 0.0`）。
 
-| 方法                    | 返回类型 | 描述                         |
-| ----------------------- | -------- | ---------------------------- |
-| `toLowerCase(char ch)`  | `char`   | 转为小写字母                 |
-| `toUpperCase(char ch)`  | `char`   | 转为大写字母                 |
-| `toTitleCase(char ch)`  | `char`   | 转为标题形式（如大写首字母） |
-| `reverseBytes(char ch)` | `char`   | 字节反转                     |
+  > ⚠️ **注意**：在 Java 中，`double x = 0.0/0.0; x == Double.NaN` 永远返回 `false`，必须用 `Double.isNaN(x)` 判断。
 
+- **`isInfinite(double v)`**：判断是否为**正无穷或负无穷**（如 `1.0 / 0.0`）。
 
+- **`compare(double d1, double d2)`**：浮点数因为有精度问题，**绝不能**直接用 `==` 比较，推荐使用 `Double.compare()`。
 
-------
+#### 🔷 5. 通用转换：Number 抽象类方法
 
-##### 📌 五、Unicode 扩展（codePoint 支持）
+所有**数值型包装类**（Byte、Short、Integer、Long、Float、Double）都继承自 `Number`，因此它们都自带以下 6 个相互转换的基本类型方法：
 
-> 用于处理 Unicode 较大范围字符（辅助平面）
+Java
 
-| 方法                                           | 返回类型  | 描述                              |
-| ---------------------------------------------- | --------- | --------------------------------- |
-| `codePointAt(CharSequence seq, int index)`     | `int`     | 返回指定位置的 Unicode 码点       |
-| `codePointBefore(CharSequence seq, int index)` | `int`     | 获取 index 前的字符码点           |
-| `codePointCount(...)`                          | `int`     | 计算给定范围内的 Unicode 码点数量 |
-| `isSupplementaryCodePoint(int codePoint)`      | `boolean` | 是否为增补字符                    |
-| `toChars(int codePoint)`                       | `char[]`  | 将码点转换为字符数组              |
-| `charCount(int codePoint)`                     | `int`     | 指定码点所需的 char 数（1 或 2）  |
-| `highSurrogate(int codePoint)`                 | `char`    | 获取高位代理项（辅助平面）        |
-| `lowSurrogate(int codePoint)`                  | `char`    | 获取低位代理项                    |
+```
+Integer num = 100;
 
-###### 🔹 示例 1：`codePointAt` 和 `codePointBefore`
-
-```java
-public class UnicodeExample1 {
-    public static void main(String[] args) {
-        String text = "A𝄞Z"; // 𝄞 是 U+1D11E（音乐符号），需要两个 char 存储
-
-        System.out.println("charAt(1): " + text.charAt(1)); // 打印代理对的高位代理
-        int codePoint = Character.codePointAt(text, 1);
-        System.out.println("codePointAt(1): " + Integer.toHexString(codePoint)); // 输出 1d11e
-    }
-}
+byte b    = num.byteValue();
+short s   = num.shortValue();
+int i     = num.intValue();
+long l    = num.longValue();
+float f   = num.floatValue();
+double d  = num.doubleValue();
 ```
 
-------
+#### 💡 终极记忆口诀
 
-###### 🔹 示例 2：`charCount`：判断一个 codePoint 是一个字符还是代理对
-
-```java
-public class UnicodeExample2 {
-    public static void main(String[] args) {
-        int basicChar = 'A';         // U+0041
-        int supplementaryChar = 0x1F600; // 😀 表情，U+1F600
-
-        System.out.println("charCount for 'A': " + Character.charCount(basicChar)); // 1
-        System.out.println("charCount for 😀: " + Character.charCount(supplementaryChar)); // 2
-    }
-}
-```
-
-------
-
-###### 🔹 示例 3：`toChars(int codePoint)`：将 codePoint 转换为字符数组（代理对）
-
-```java
-public class UnicodeExample3 {
-    public static void main(String[] args) {
-        int codePoint = 0x1F602; // 😂 表情
-
-        char[] chars = Character.toChars(codePoint);
-        String emoji = new String(chars);
-        System.out.println("Emoji: " + emoji); // 输出 😂
-    }
-}
-```
-
-------
-
-###### 🔹 示例 4：`codePointCount`：统计 Unicode 字符数（非 char 数）
-
-```java
-public class UnicodeExample4 {
-    public static void main(String[] args) {
-        String text = "A𝄞B😂C"; // 包含多个代理对字符
-
-        int unicodeCharCount = text.codePointCount(0, text.length());
-        System.out.println("Unicode 字符数: " + unicodeCharCount); // 输出 5
-        System.out.println("char 长度: " + text.length()); // 输出 7
-    }
-}
-```
-
-------
-
-###### 🔹 示例 5：迭代每个 Unicode 字符（使用 codePoint）
-
-```java
-public class UnicodeExample5 {
-    public static void main(String[] args) {
-        String text = "A😂C";
-
-        for (int i = 0; i < text.length(); ) {
-            int cp = text.codePointAt(i);
-            System.out.println("字符: " + new String(Character.toChars(cp)) + "  码点: U+" + Integer.toHexString(cp));
-            i += Character.charCount(cp); // 移动一个 Unicode 字符长度
-        }
-    }
-}
-```
-
-------
-
-
-
-##### 🧪 示例代码
-
-```java
-char ch = 'A';
-
-System.out.println(Character.isLetter(ch)); // true
-System.out.println(Character.toLowerCase(ch)); // 'a'
-System.out.println(Character.getType(ch)); // 1 (UPPERCASE_LETTER)
-```
-
-------
-
-##### 📚 小贴士
-
-- `Character.getType(char)` 返回的 int 可以与 `Character.UPPERCASE_LETTER` 等常量对比。
-- 对于 Unicode 字符（如 emoji），应使用 `codePoint` 相关方法处理。
-- `isJavaIdentifierStart()` 是判断合法变量名字符的常用工具。
-
-
-
-------
-
-#### 🔷 3. Byte / Short / Integer / Long 类（整型包装类）
-
-> 这些类都具有类似的方法结构，仅类型名不同（如 int、long）
-
-| 方法                                      | 返回类型 | 描述                                    |
-| ----------------------------------------- | -------- | --------------------------------------- |
-| `parseXxx(String s)`                      | 基本类型 | 将字符串解析为对应类型，如 `parseInt()` |
-| `valueOf(String s)` / `valueOf(基本类型)` | 包装类   | 返回包装类对象                          |
-| `xxxValue()`                              | 基本类型 | 转换为 byte/short/int/long 等           |
-| `compare(x, y)`                           | `int`    | 比较大小                                |
-| `toString(x)`                             | `String` | 转换为字符串                            |
-| `toBinaryString(int i)`                   | `String` | 转为二进制                              |
-| `toHexString(int i)`                      | `String` | 转为十六进制                            |
-| `toOctalString(int i)`                    | `String` | 转为八进制                              |
-| `decode(String nm)`                       | 包装类   | 解析字符串（支持 0x、0、十进制）        |
-| `reverseBytes(int i)`                     | `int`    | 字节序反转                              |
-| `highestOneBit(int i)`                    | `int`    | 返回最高位的 1                          |
-| `lowestOneBit(int i)`                     | `int`    | 返回最低位的 1                          |
-| `bitCount(int i)`                         | `int`    | 返回 1 的个数                           |
-| `rotateLeft/Right(int i, int distance)`   | `int`    | 位左移或右移                            |
-| `signum(int i)`                           | `int`    | 返回 -1, 0, 1 表示负数、零、正数        |
-
-------
-
-#### 🔷 4. Float / Double 类（浮点型包装类）
-
-> `Float` 和 `Double` 继承 `Number`，支持浮点操作。
-
-| 方法                                                   | 返回类型    | 描述                        |
-| ------------------------------------------------------ | ----------- | --------------------------- |
-| `parseXxx(String s)`                                   | 基本类型    | 将字符串解析为 float/double |
-| `valueOf(String s)` / `valueOf(float f)`               | 包装类      | 返回 Float/Double 对象      |
-| `xxxValue()`                                           | 基本类型    | 转换为 int、long、short 等  |
-| `compare(float x, float y)`                            | `int`       | 比较两个值                  |
-| `isNaN(float v)`                                       | `boolean`   | 是否为 NaN                  |
-| `isInfinite(float v)`                                  | `boolean`   | 是否为正无穷或负无穷        |
-| `toString(float f)`                                    | `String`    | 转为字符串                  |
-| `sum(a, b)`                                            | 同类型      | 求和（JDK 1.8 起）          |
-| `max(a, b)` / `min(a, b)`                              | 同类型      | 取最大/最小                 |
-| `hashCode(float f)`                                    | `int`       | 获取哈希码                  |
-| `floatToIntBits(float f)` / `intBitsToFloat(int bits)` | `int/float` | 浮点数与位之间转换          |
-| `doubleToLongBits(double d)`                           | `long`      | 类似上面，用于 double       |
-
-------
-
-#### 🔷 5. 通用方法（来自 `Number` 抽象类）
-
-适用于所有数值包装类（不含 Boolean 和 Character）
-
-| 方法            | 返回类型 | 描述        |
-| --------------- | -------- | ----------- |
-| `byteValue()`   | `byte`   | 转为 byte   |
-| `shortValue()`  | `short`  | 转为 short  |
-| `intValue()`    | `int`    | 转为 int    |
-| `longValue()`   | `long`   | 转为 long   |
-| `floatValue()`  | `float`  | 转为 float  |
-| `doubleValue()` | `double` | 转为 double |
-
-------
-
-#### 📝 说明
-
-- `parseXxx()` 返回 **基本类型**，如 `int`
-- `valueOf()` 返回 **包装类对象**，如 `Integer`
-- `xxxValue()` 返回 **基本类型值**
-- `compare()` 用于数值排序时的比较操作
-- 所有包装类都是不可变的（immutable）
+> - **`parseXxx()`** $\rightarrow$ 返回 **基本类型**（如 `int`、`double`）
+> - **`valueOf()`** $\rightarrow$ 返回 **包装类对象**（如 `Integer`、`Double`，且自带缓存加速）
+> - **`xxxValue()`** $\rightarrow$ 包装类**互转**基本类型
+> - 所有包装类都是 **`final` 不可变类**（Immutable），线程安全。
 
 
 
@@ -1442,411 +1559,6 @@ public class EvenOddCheck {
 > 与无符号右移不同，Java 中没有“<<<”运算符，因为逻辑 (<<) 和算术左移 (<<<) 操作是相同的。
 
 
-
-
-
-# 字符串与数字转换详解
-
-> 💡 本文系统介绍了 Java 中字符串与数字的相互转换方式，涵盖：
->
-> - 有符号与无符号数转换（Java 8+）
-> - 进制转换与补码理解
-> - 科学计数法格式化与解析
-> - 任意精度运算（`BigInteger`、`BigDecimal`）
-> - 常见陷阱与面试高频考点
-
----
-
-<details>
-<summary>📑 目录（点击展开）</summary>
-
-
-1. [字符串转数字](#一字符串转数字)
-   - [有符号整数](#1-有符号整数默认)
-   - [无符号整数（Java-8）](#2-无符号整数java-8)
-   - [总结对比表](#总结对比表)
-2. [数字转字符串](#二数字转字符串)
-3. [示例对比](#三示例对比)
-4. [常用封装方法](#四转换实用方法封装)
-5. [科学计数法转换](#五java-中科学计数法数字转换)
-6. [任意精度数（BigInteger / BigDecimal）](#六扩展超大数运算)
-7. [易错点与陷阱总结](#七易错点与陷阱总结)
-8. [面试常考题与实战延伸](#八面试常考题与实战延伸)
-
-</details>
-
----
-
-## 一、字符串转数字
-
-### 1. 有符号整数（默认）
-
-Java 默认使用 **有符号整数类型**：
-
-| 类型   | 位数  | 范围         |
-| ------ | ----- | ------------ |
-| `int`  | 32 位 | -2³¹ ~ 2³¹-1 |
-| `long` | 64 位 | -2⁶³ ~ 2⁶³-1 |
-
-#### 🔹 字符串转整数
-
-```java
-int a = Integer.parseInt("123");       // 123
-int b = Integer.parseInt("-123");      // -123（负数支持）
-
-long c = Long.parseLong("1234567890123");
-long d = Long.parseLong("-987654321012345678");
-```
-
-#### 🔹 指定进制支持（支持负数）
-
-```java
-int hex = Integer.parseInt("7F", 16);     // 127
-int hexNeg = Integer.parseInt("-7F", 16); // -127
-
-int bin = Integer.parseInt("1010", 2);      // 10
-int binNeg = Integer.parseInt("-1111111", 2); // -127
-```
-
-> ✅ **负数必须以 `-` 开头**，否则抛出 `NumberFormatException`。
-
-------
-
-#### 🔸 负数的存储方式（补码）
-
-```java
-int x = -123;
-System.out.println(Integer.toBinaryString(x));
-// 输出: 11111111111111111111111110000101
-```
-
-Java 的负数使用 **补码** 表示。
-
-------
-
-### 2. 无符号整数（Java 8+）
-
-虽然 Java 没有真正的无符号类型，但从 **Java 8 起**支持解析与显示无符号数：
-
-```java
-int u32 = Integer.parseUnsignedInt("4294967295"); // 最大无符号 32 位值 = 0xFFFFFFFF
-long u32long = Integer.toUnsignedLong(u32);
-
-
-long u64 = Long.parseUnsignedLong("18446744073709551615");
-System.out.println("u32 =" + u32 + " u32long=" + u32long + " u64=" + u64);
-// 结果：u32 =-1 u32long=4294967295 u64=-1
-```
-
-#### 🔸 负数视角下的行为
-
-```java
-int signed = Integer.parseInt("-1"); // -1，补码为 0xFFFFFFFF
-System.out.println(Integer.toUnsignedLong(signed)); // 输出：4294967295
-```
-
-`-1` 在无符号视角下是 `0xFFFFFFFF`。
-
-------
-
-### 总结对比表
-
-| 项目     | 有符号整数              | 无符号整数（Java 8+）                   |
-| -------- | ----------------------- | --------------------------------------- |
-| 类型     | `int`, `long`           | `int`, `long`（解析时无符号）           |
-| 支持负数 | ✅ 是                    | ❌ 否                                    |
-| 超范围   | 抛出异常                | 抛出异常                                |
-| 表示 -1  | `-1`                    | `0xFFFFFFFF` = `4294967295`             |
-| 方法     | `parseInt`, `parseLong` | `parseUnsignedInt`, `parseUnsignedLong` |
-| 转换扩展 | long / BigInteger       | long / BigInteger                       |
-
-------
-
-### `Integer.parseInt(String s, int radix)` 要点总结
-
-- 基数必须显式指定（如 16 表示十六进制）。
-- `A-F` 大小写不敏感。
-- 不推荐带 `"0x"` 前缀。
-- 非法格式或超范围会抛出 `NumberFormatException`。
-- 当十六进制超出正数范围，如 `"FFFFFFFF"`，结果为 **补码负数**。
-
-> 如需保留正值，应使用：
->
-> **补码表示:**  需要注意的是，当十六进制字符串表示的数值超出 `int` 的正数范围，或者表示负数时（例如，`"80000000"` 和 `"FFFFFFFF"`），`Integer.parseInt()` 会将其解析为对应的**有符号 `int` 值 (补码表示)**，结果可能为负数。  如果需要将超出 `int` 范围的十六进制字符串解析为无符号数，则需要使用 `Long.parseUnsignedLong(String s, 16)` (Java 8+)。
-
-------
-
-#### 📜 源码理解（`Integer.toUnsignedLong`）
-
-```java
-public static long toUnsignedLong(int x) {
-    return ((long) x) & 0xffffffffL;// 0xffffffffL ==> 0x00000000ffffffffL
-}
-```
-
-> **作用：**
->
-> - **`(long) x`**:  将 `int` 转换为 `long`，会进行符号扩展，`long` 的高位会变成 `1`。
->
-> - **`& 0xffffffffL`**:  使用掩码 `0xffffffffL`，将 `long` 的高 32 位清零，只保留低 32 位。 这相当于**截断了符号扩展**，并将 `int` 的 32 位二进制数据视为**无符号数**来解释。
->
->   
-
-------
-
-## 二、数字转字符串
-
-### 1. 有符号数
-
-```java
-int a = -123;
-System.out.println(Integer.toString(a));       // "-123"
-System.out.println(Integer.toString(a, 16));   // 转为十六进制补码表示，结果："ffffff85"
-```
-
-### 2. 无符号数（Java 8+）
-
-```java
-int i = -1;
-System.out.println(Integer.toUnsignedString(i));       // "4294967295"
-System.out.println(Integer.toUnsignedString(i, 16));   // "ffffffff"
-
-long l = -1L;
-System.out.println(Long.toUnsignedString(l));          // "18446744073709551615"
-```
-
-------
-
-## 三、示例对比
-
-| 表达式                                   | 说明         | 输出                                 |
-| ---------------------------------------- | ------------ | ------------------------------------ |
-| `Integer.parseInt("-1")`                 | 有符号解析   | `-1`                                 |
-| `Integer.parseUnsignedInt("4294967295")` | 无符号解析   | `-1`（内部存储）                     |
-| `Integer.toUnsignedString(-1)`           | 无符号显示   | `"4294967295"`                       |
-| `Integer.toString(-1, 16)`               | 十六进制补码 | `"ffffffff"`                         |
-| `Integer.toBinaryString(-5)`             | 二进制补码   | `"11111111111111111111111111111011"` |
-
-------
-
-## 四、转换实用方法（封装）
-
-```java
-public class NumberUtils {
-    public static int strToSignedInt(String s, int radix) {
-        return Integer.parseInt(s, radix);
-    }
-
-    public static int strToUnsignedInt(String s, int radix) {
-        return Integer.parseUnsignedInt(s, radix);
-    }
-
-    public static String intToUnsignedStr(int i, int radix) {
-        return Integer.toUnsignedString(i, radix);
-    }
-}
-```
-
-异常处理：
-
-```java
-try {
-    int num = Integer.parseInt("abc");
-} catch (NumberFormatException e) {
-    System.err.println("字符串转换错误: " + e.getMessage());
-}
-```
-
-------
-
-## 五、Java 中科学计数法数字转换
-
-### ✅ 使用 `String.format()`
-
-```java
-double num = 12345.6789;
-System.out.println(String.format("%e", num));    // 1.234568e+04
-System.out.println(String.format("%.2E", num));  // 1.23E+04 
-```
-
-| 格式        | 含义            |
-| ----------- | --------------- |
-| `%e` / `%E` | 科学计数法      |
-| `%.nf`      | 保留 n 位小数   |
-| `%10.2e`    | 宽度 10，右对齐 |
-
-------
-
-### ✅ 使用 `DecimalFormat`
-
-```java
-DecimalFormat df = new DecimalFormat("0.###E0");
-System.out.println(df.format(12345.6789)); // 1.235E4
-```
-
-| 模式        | 示例      | 说明         |
-| ----------- | --------- | ------------ |
-| `0.00E0`    | 1.23E4    | 保留两位小数 |
-| `0.###E0`   | 1.235E4   | 去尾零       |
-| `0.0000E00` | 1.2346E04 | 指数两位数   |
-
-------
-
-### ✅ 使用 `BigDecimal`
-
-```java
-BigDecimal n = new BigDecimal("12345.6789");
-System.out.println(n.toEngineeringString()); // 12.3456789E3
-System.out.println(n.toPlainString());       // 12345.6789
-```
-
-| 方法                    | 说明            |
-| ----------------------- | --------------- |
-| `toEngineeringString()` | 指数为 3 的倍数 |
-| `toPlainString()`       | 普通数字        |
-
-------
-
-### ✅ 字符串转科学计数法数值
-
-```java
-double val = Double.parseDouble("1.23E4");
-System.out.println(val); // 12300.0
-```
-
-------
-
-## 六、扩展：超大数运算
-
-### 1️⃣ BigInteger（任意精度整数）
-
-> - **不可变对象**：所有运算返回新对象，不会修改原值。
-> - **支持任意精度**：内存足够时，数值可以无限大。
-> - **线程安全**：内部不可变设计。
-
-```java
-BigInteger a = new BigInteger("12345678901234567890");
-BigInteger b = BigInteger.valueOf(987654321);
-
-System.out.println(a.add(b));
-System.out.println(a.multiply(b));
-System.out.println(a.divideAndRemainder(b)[1]);
-```
-
-| 方法                                               | 说明                   |
-| -------------------------------------------------- | ---------------------- |
-| `add()` / `subtract()` / `multiply()` / `divide()` | 四则运算               |
-| `mod()`                                            | 取模                   |
-| `pow(int)`                                         | 幂运算                 |
-| `compareTo()`                                      | 比较大小               |
-| `divideAndRemainder(BigInteger val)`               | 同时获取商与余数       |
-| `gcd(BigInteger val)`                              | 最大公约数             |
-| `shiftLeft(int n)` / `shiftRight(int n)`           | 位移（相当于乘/除 2ⁿ） |
-| `isProbablePrime(int certainty)`                   | 判断是否为质数         |
-
-------
-
-> - 不能用 `+`, `-`, `*`, `/` 运算符，必须用方法。
-> - 适合大整数运算，但性能比基本类型慢很多。
-> - `mod` 不支持负数模运算，负数需先转换。
-
-### 2️⃣ BigDecimal（任意精度小数）
-
-> - 高精度浮点数表示，适用于**财务计算**。
-> - **不可变对象**，线程安全。
-> - 支持多种舍入模式。
-
-```java
-BigDecimal x = new BigDecimal("1.2345");// 推荐用字符串避免精度丢失
-BigDecimal y = new BigDecimal("3.4567");
-BigDecimal result = x.divide(y, 10, RoundingMode.HALF_UP);
-System.out.println(result);
-```
-
-| 方法                                               | 说明     |
-| -------------------------------------------------- | -------- |
-| `add()` / `subtract()` / `multiply()` / `divide()` | 四则运算 |
-| `setScale()`                                       | 设置精度 |
-| `compareTo()`                                      | 比较     |
-| `stripTrailingZeros()`                             | 去尾零   |
-
-常用舍入模式：
-
-| 模式        | 说明       |
-| ----------- | ---------- |
-| `UP`        | 向远离 0   |
-| `DOWN`      | 向 0       |
-| `HALF_UP`   | 四舍五入   |
-| `HALF_EVEN` | 银行家舍入 |
-
-------
-
-## 七、易错点与陷阱总结
-
-| 类型       | 问题                               | 原因                       |
-| ---------- | ---------------------------------- | -------------------------- |
-| 精度丢失   | `new BigDecimal(0.1)`              | 使用 double 构造会损失精度 |
-| 比较错误   | `==` 比较 BigDecimal               | 需用 `.compareTo()`        |
-| 除法异常   | `divide()` 无舍入模式              | 必须指定 RoundingMode      |
-| 无符号误判 | `parseUnsignedInt("-1")`           | 抛出异常                   |
-| 溢出误判   | `Integer.parseInt("FFFFFFFF", 16)` | 得到 -1，而非 4294967295   |
-
-------
-
-## 八、面试常考题与实战延伸
-
-### 💬 Q1：Java 如何表示无符号整数？
-
-> Java 没有真正的无符号类型，但可通过：
->
-> - `Integer.parseUnsignedInt()` 解析；
-> - `Integer.toUnsignedString()` 显示；
-> - `& 0xffffffffL` 掩码实现。
-
-------
-
-### 💬 Q2：`-1` 的二进制补码与无符号值是什么？
-
-```java
-int x = -1;
-System.out.println(Integer.toBinaryString(x));  // 11111111111111111111111111111111
-System.out.println(Integer.toUnsignedLong(x));  // 4294967295
-```
-
-------
-
-### 💬 Q3：`BigDecimal` 精度丢失的根源？
-
-> 因为浮点数 `0.1` 的二进制表示并非精确值。
->  推荐使用字符串构造：
->  `new BigDecimal("0.1")` ✅
-
-------
-
-### 💬 Q4：如何安全地处理科学计数法输入？
-
-```java
-String input = "1.23E4";
-BigDecimal num = new BigDecimal(input);
-System.out.println(num.toPlainString()); // 12300
-```
-
-------
-
-### 💬 Q5：如何将十六进制字符串 `"FFFFFFFF"` 转为无符号 long？
-
-```java
-long val = Long.parseUnsignedLong("FFFFFFFF", 16);
-System.out.println(val); // 4294967295
-```
-
-------
-
-> 🧭 **总结一句话：**
->
-> Java 的数值类型本质都是有符号的，
->  “无符号”只是**解释方式不同**，
->  关键在于正确使用 `Unsigned` 系列方法与补码思维。
 
 
 
@@ -3865,795 +3577,221 @@ public class Differences {
 
 
 
+# 📚 Java 进制转换与字符串/数字互转全能指南
 
+## 一、 16 进制与 10 进制的深层互转
 
+在 Java 中，16 进制（Hex）和 10 进制（Decimal）的转换主要分为**字面量直接定义**和**运行时动态转换**。
 
+### 1. 字面量表达（代码中直接书写）
 
+在编写代码时，可以直接使用前缀来表示不同进制的数值。Java 编译器在编译时会自动将其转换为对应的 10 进制整型放入内存。
 
-#  拓展：浮点数IEEE 754 拓展
-
- IEEE 754 标准，这是一个关于浮点数算术的标准，在计算机科学和工程领域至关重要。它定义了浮点数的表示方法、运算规则以及异常处理，确保了不同计算机系统之间浮点数计算的一致性和可移植性。
-
-以下是关于 IEEE 754 标准的详细说明：
-
-### **什么是 IEEE 754 标准？**
-
-IEEE 754 是由电气和电子工程师协会 (IEEE) 制定的国际标准，全称为 "IEEE 754-2019 - IEEE Standard for Floating-Point Arithmetic"。  它定义了：
-
-- **浮点数格式 (Floating-point formats):**  规定了如何用二进制形式表示浮点数，包括单精度 (32 位)、双精度 (64 位) 和其他精度。
-- **浮点数运算 (Floating-point operations):**  定义了加法、减法、乘法、除法、平方根等基本运算的规则，以及舍入规则。
-- **异常处理 (Exception handling):**  规定了如何处理浮点运算中可能出现的异常情况，例如除以零、溢出、无效操作等。
-
-### **为什么 IEEE 754 标准如此重要？**
-
-在 IEEE 754 标准出现之前，不同的计算机系统可能使用不同的浮点数表示方法和运算规则，导致：
-
-- **不一致的计算结果:**  同一个浮点数计算在不同的机器上可能得到不同的结果。
-- **程序不可移植:**  依赖于特定浮点数行为的程序难以在不同系统之间移植。
-- **数值计算的复杂性:**  程序员需要深入了解不同系统的浮点数实现细节，才能编写可靠的数值计算程序。
-
-IEEE 754 标准的出现解决了这些问题，它：
-
-- **实现了浮点数计算的标准化:**  使得在符合 IEEE 754 标准的系统上，浮点数计算结果具有高度的一致性。
-- **提高了程序的可移植性:**  编写符合 IEEE 754 标准的程序更容易在不同平台上运行，并得到预期的结果。
-- **简化了数值计算:**  程序员可以基于统一的标准进行浮点数编程，无需过多关注底层硬件的差异。
-
-### **IEEE 754 浮点数格式**
-
-IEEE 754 标准定义了多种浮点数格式，最常用的是：
-
-- **单精度浮点数 (Single-precision, 32-bit, `float` in Java/C):**
-  - 总共 32 位，分为三个部分：
-    - **符号位 (Sign bit, 1 bit):**  `0` 表示正数，`1` 表示负数。
-    - **指数部分 (Exponent, 8 bits):**  使用偏移量表示法 (biased exponent) 存储指数值，偏移量为 127。
-    - **尾数部分 (Fraction/Mantissa, 23 bits):**  存储规格化后的尾数 (有效数字)，小数点前有一位隐含的 `1`。
-- **双精度浮点数 (Double-precision, 64-bit, `double` in Java/C):**
-  - 总共 64 位，分为三个部分：
-    - **符号位 (Sign bit, 1 bit):**  `0` 表示正数，`1` 表示负数。
-    - **指数部分 (Exponent, 11 bits):**  使用偏移量表示法存储指数值，偏移量为 1023。
-    - **尾数部分 (Fraction/Mantissa, 52 bits):**  存储规格化后的尾数，小数点前有一位隐含的 `1`。
-
-### **IEEE 754 浮点数的表示方法 (简述)**
-
-IEEE 754 浮点数采用科学计数法的思想来表示数字，形式上类似于：
-
-```
-± 尾数 × 2^指数
-```
-
-具体来说，一个 IEEE 754 浮点数的表示过程包括：
-
-1. **符号位 (Sign):**  确定浮点数的正负号。
-2. 指数 (Exponent):
-   - 将实际指数值加上一个偏移量 (bias) 存储在指数部分。
-   - 单精度偏移量为 127，双精度偏移量为 1023。
-   - 这样做可以将指数表示为无符号整数，方便比较大小。
-3. 尾数 (Mantissa/Significand):
-   - 将浮点数规格化为 `1.xxxx... × 2^指数` 的形式 (除了 0 和非规格化数)。
-   - 由于规格化后小数点前总是 `1`，因此 IEEE 754 标准将这个 `1` 隐含地存储，只存储小数点后的部分，从而节省一位存储空间，提高精度。
-
-### **特殊值**
-
-IEEE 754 标准还定义了一些特殊值，用于表示特殊情况：
-
-- **零 (Zero):**  符号位为 `0` 或 `1`，指数部分和尾数部分都为 `0`。  区分正零和负零。
-- **无穷大 (Infinity):**  指数部分为最大值 (全 `1`)，尾数部分为 `0`。  区分正无穷大和负无穷大。
-- **NaN (Not a Number):**  指数部分为最大值 (全 `1`)，尾数部分不为 `0`。  表示无效操作的结果，例如 `0/0` 或 `sqrt(-1)`。
-- **非规格化数 (Denormalized numbers):**  用于表示非常接近于 0 的数。  指数部分为最小值 (全 `0`)，尾数部分不为 `0`。  非规格化数牺牲了精度来表示更小的数值。
-
-### **Endianness 与 IEEE 754**
-
-正如之前讨论的，Endianness (大小端) 也会影响 IEEE 754 浮点数在内存中的字节存储顺序。
-
-- **大端系统 (Big-Endian):**  浮点数的最高有效字节 (包括符号位、指数高位、尾数高位) 存储在较低的内存地址。
-- **小端系统 (Little-Endian):**  浮点数的最低有效字节存储在较低的内存地址。
-
-**Java 和 IEEE 754**
-
-Java 语言和 Java 虚拟机 (JVM) 完全遵循 IEEE 754 标准来处理 `float` 和 `double` 类型的浮点数运算。 这保证了 Java 程序在不同平台上浮点数计算结果的一致性。
-
-**总结 IEEE 754 标准的优点**
-
-- **标准化和一致性:**  统一了浮点数的表示和运算规则，避免了不同系统之间的差异。
-- **可移植性:**  基于 IEEE 754 标准编写的程序更容易在不同平台上移植。
-- **数值计算的可靠性:**  提供了对特殊值和异常情况的处理机制，提高了数值计算的可靠性。
-- **广泛应用:**  几乎所有现代计算机系统都支持 IEEE 754 标准，成为浮点数运算的行业标准。
-
-
-
-### **案例 1: 单精度浮点数 (float) 转换 -  十进制 123.456f  转换为 IEEE 754 二进制表示**
-
-为了更深入地理解 IEEE 754 标准，我们来补充一些浮点数和 IEEE 754 二进制表示之间转换的案例，包括单精度 (float) 和双精度 (double)。
-
-
-
-**步骤 1:  确定符号位 (Sign bit)**
-
-- 123.456 是正数，所以符号位为 **0**。
-
-**步骤 2:  转换为二进制形式 (整数部分和小数部分)**
-
-- **整数部分 (123):**  123 的二进制是 `1111011`
-
-- **小数部分 (0.456):**  需要将小数部分转换为二进制。 我们可以通过不断乘以 2 并取整数部分来得到二进制小数：
-
-  ```sh
-  0.456 * 2 = 0.912  -> 整数部分: 0
-  0.912 * 2 = 1.824  -> 整数部分: 1
-  0.824 * 2 = 1.648  -> 整数部分: 1
-  0.648 * 2 = 1.296  -> 整数部分: 1
-  0.296 * 2 = 0.592  -> 整数部分: 0
-  0.592 * 2 = 1.184  -> 整数部分: 1
-  0.184 * 2 = 0.368  -> 整数部分: 0
-  0.368 * 2 = 0.736  -> 整数部分: 0
-  0.736 * 2 = 1.472  -> 整数部分: 1
-  0.472 * 2 = 0.944  -> 整数部分: 0
-  ... (继续下去，直到达到所需的精度或重复)
-  ```
-
-  所以，0.456 的二进制近似为 `011101001...`
-
-- **合并整数和小数部分:**  123.456 的二进制近似为 `1111011.011101001...`
-
-**步骤 3:  规格化 (Normalization) 并确定指数 (Exponent) 和尾数 (Mantissa)**
-
-- **规格化:** 将二进制数表示为 `1.xxxx... × 2^指数` 的形式。  将小数点左移 6 位，得到 `1.111011011101001... × 2^6`
-- **尾数 (Mantissa):**  小数点后的部分 `111011011101001...`  单精度尾数部分为 23 位，我们需要截取或舍入到 23 位。 假设我们截取前 23 位： `11101101110100100000000`
-- **指数 (Exponent):**  指数是 6。  对于单精度浮点数，指数偏移量 (bias) 是 127。  所以，存储的指数值是 `6 + 127 = 133`。  133 的二进制是 `10000101`。
-
-**步骤 4:  组合符号位、指数和尾数**
-
-- **符号位:** `0`
-
-- **指数:** `10000101`
-
-- **尾数:** `11101101110100100000000`
-
-- **IEEE 754 二进制表示 (单精度):**
-
-  `0 10000101 11101101110100100000000`
-
-  转换为十六进制表示（每 4 位二进制转换为 1 位十六进制）：
-
-  `4 2 F 6 E 9 7 9`  ->  `0x42F6E979`
-
-**验证 (使用 Java 代码)**
+- **10 进制字面量**：正常书写。
+- **16 进制字面量**：以 `0x` 或 `0X` 开头。
 
 ```Java
-float floatValue = 123.456f;
-int floatBits = Float.floatToIntBits(floatValue);
-String hexString = String.format("%08X", floatBits); // 格式化为 8 位十六进制
-System.out.println("Float 123.456f 的 IEEE 754 十六进制表示: 0x" + hexString);
-// 输出: Float 123.456f 的 IEEE 754 十六进制表示: 0x42F6E979Java
+int decimal = 42;       // 10 进制
+int hex = 0x2A;         // 16 进制（大小写不敏感）
+
+System.out.println(decimal == hex); // 输出: true（内存中完全一致）
 ```
 
+### 2. 16 进制字符串 $\rightarrow$ 10 进制数值
 
-
-## Float 类型与 byte 数组互相转换的 Java 工具类
-
-你需要的是一个能将 Float 类型与 byte 数组互相转换的 Java 工具类，并且要求同时实现基于**位操作**和**ByteBuffer** 两种方式，
-
-### 完整工具类代码
-```java
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-
-/**
- * Float 与 byte 数组互转工具类
- * 提供基于位操作和 ByteBuffer 两种实现方式
- */
-public class FloatByteConverter {
-
-    // ====================== 基于 ByteBuffer 的转换方式 ======================
-    /**
-     * ByteBuffer 方式：Float 转 byte 数组（默认大端序）
-     * @param value 待转换的 Float 值
-     * @return 转换后的 byte 数组（长度固定为4）
-     */
-    public static byte[] floatToBytesByByteBuffer(float value) {
-        return floatToBytesByByteBuffer(value, ByteOrder.BIG_ENDIAN);
-    }
-
-    /**
-     * ByteBuffer 方式：Float 转 byte 数组（指定字节序）
-     * @param value 待转换的 Float 值
-     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
-     * @return 转换后的 byte 数组（长度固定为4）
-     */
-    public static byte[] floatToBytesByByteBuffer(float value, ByteOrder order) {
-        ByteBuffer buffer = ByteBuffer.allocate(4); // Float 占4个字节
-        buffer.order(order); // 设置字节序
-        buffer.putFloat(value);
-        return buffer.array();
-    }
-
-    /**
-     * ByteBuffer 方式：byte 数组转 Float（默认大端序）
-     * @param bytes 待转换的 byte 数组（长度必须为4）
-     * @return 恢复后的 Float 值
-     * @throws IllegalArgumentException 数组长度非法时抛出
-     */
-    public static float bytesToFloatByByteBuffer(byte[] bytes) {
-        return bytesToFloatByByteBuffer(bytes, ByteOrder.BIG_ENDIAN);
-    }
-
-    /**
-     * ByteBuffer 方式：byte 数组转 Float（指定字节序）
-     * @param bytes 待转换的 byte 数组（长度必须为4）
-     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
-     * @return 恢复后的 Float 值
-     * @throws IllegalArgumentException 数组长度非法时抛出
-     */
-    public static float bytesToFloatByByteBuffer(byte[] bytes, ByteOrder order) {
-        if (bytes == null || bytes.length != 4) {
-            throw new IllegalArgumentException("byte数组长度必须为4！");
-        }
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        buffer.order(order);
-        return buffer.getFloat();
-    }
-
-    // ====================== 基于位操作的转换方式 ======================
-    /**
-     * 位操作方式：Float 转 byte 数组（大端序）
-     * 原理：先将 Float 转成 int（通过 Float.floatToIntBits），再对 int 按位拆分
-     * @param value 待转换的 Float 值
-     * @return 转换后的 byte 数组（长度固定为4）
-     */
-    public static byte[] floatToBytesByBitOperation(float value) {
-        return floatToBytesByBitOperation(value, ByteOrder.BIG_ENDIAN);
-    }
-
-    /**
-     * 位操作方式：Float 转 byte 数组（指定字节序）
-     * @param value 待转换的 Float 值
-     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
-     * @return 转换后的 byte 数组（长度固定为4）
-     */
-    public static byte[] floatToBytesByBitOperation(float value, ByteOrder order) {
-        // 将 Float 转换为对应的 int 位模式（符合 IEEE 754 标准）
-        int intValue = Float.floatToIntBits(value);
-        byte[] bytes = new byte[4];
-        
-        if (order == ByteOrder.BIG_ENDIAN) {
-            // 大端序：高位在前（第0位存最高8位，第3位存最低8位）
-            bytes[0] = (byte) (intValue >> 24);
-            bytes[1] = (byte) (intValue >> 16);
-            bytes[2] = (byte) (intValue >> 8);
-            bytes[3] = (byte) intValue;
-        } else {
-            // 小端序：低位在前（第0位存最低8位，第3位存最高8位）
-            bytes[0] = (byte) intValue;
-            bytes[1] = (byte) (intValue >> 8);
-            bytes[2] = (byte) (intValue >> 16);
-            bytes[3] = (byte) (intValue >> 24);
-        }
-        return bytes;
-    }
-
-    /**
-     * 位操作方式：byte 数组转 Float（大端序）
-     * @param bytes 待转换的 byte 数组（长度必须为4）
-     * @return 恢复后的 Float 值
-     * @throws IllegalArgumentException 数组长度非法时抛出
-     */
-    public static float bytesToFloatByBitOperation(byte[] bytes) {
-        return bytesToFloatByBitOperation(bytes, ByteOrder.BIG_ENDIAN);
-    }
-
-    /**
-     * 位操作方式：byte 数组转 Float（指定字节序）
-     * @param bytes 待转换的 byte 数组（长度必须为4）
-     * @param order 字节序（BIG_ENDIAN / LITTLE_ENDIAN）
-     * @return 恢复后的 Float 值
-     * @throws IllegalArgumentException 数组长度非法时抛出
-     */
-    public static float bytesToFloatByBitOperation(byte[] bytes, ByteOrder order) {
-        if (bytes == null || bytes.length != 4) {
-            throw new IllegalArgumentException("byte数组长度必须为4！");
-        }
-        
-        int intValue = 0;
-        if (order == ByteOrder.BIG_ENDIAN) {
-            // 大端序：拼接 int（注意 & 0xFF 防止符号位扩展）
-            intValue = ((bytes[0] & 0xFF) << 24) 
-                    | ((bytes[1] & 0xFF) << 16) 
-                    | ((bytes[2] & 0xFF) << 8) 
-                    | (bytes[3] & 0xFF);
-        } else {
-            // 小端序：拼接 int
-            intValue = (bytes[0] & 0xFF) 
-                    | ((bytes[1] & 0xFF) << 8) 
-                    | ((bytes[2] & 0xFF) << 16) 
-                    | ((bytes[3] & 0xFF) << 24);
-        }
-        // 将 int 位模式转回 Float
-        return Float.intBitsToFloat(intValue);
-    }
-
-    // ====================== 测试方法 ======================
-    public static void main(String[] args) {
-        float testValue = 123.456f;
-        ByteOrder order = ByteOrder.BIG_ENDIAN; // 可切换为 LITTLE_ENDIAN 测试
-
-        // 测试 ByteBuffer 方式
-        byte[] bytes1 = floatToBytesByByteBuffer(testValue, order);
-        float restore1 = bytesToFloatByByteBuffer(bytes1, order);
-        System.out.println("=== ByteBuffer 方式 ===");
-        System.out.println("原始值：" + testValue);
-        System.out.println("转换后的byte数组：" + java.util.Arrays.toString(bytes1));
-        System.out.println("恢复后的值：" + restore1);
-
-        // 测试位操作方式
-        byte[] bytes2 = floatToBytesByBitOperation(testValue, order);
-        float restore2 = bytesToFloatByBitOperation(bytes2, order);
-        System.out.println("\n=== 位操作方式 ===");
-        System.out.println("原始值：" + testValue);
-        System.out.println("转换后的byte数组：" + java.util.Arrays.toString(bytes2));
-        System.out.println("恢复后的值：" + restore2);
-
-        // 验证两种方式的结果是否一致
-        System.out.println("\n两种方式转换的byte数组是否一致：" + java.util.Arrays.equals(bytes1, bytes2));
-    }
-}
-```
-
-### 关键代码解释
-1. **ByteBuffer 方式核心逻辑**：
-   - `ByteBuffer.allocate(4)`：分配4字节缓冲区（Float 固定占4字节）。
-   - `buffer.order(order)`：指定字节序（大端/小端），大端序是网络传输默认格式，小端序是大部分CPU的本地格式。
-   - `buffer.putFloat()`/`buffer.getFloat()`：直接完成 Float 与字节数组的互转，底层已封装位操作，简洁且不易出错。
-
-2. **位操作方式核心逻辑**：
-   - `Float.floatToIntBits(value)`：将 Float 按 IEEE 754 标准转换为对应的 int 位模式（保留符号、指数、尾数的二进制结构）。
-   - 按位拆分/拼接：通过移位（`>>`）和按位与（`& 0xFF`）操作拆分/拼接 int，`& 0xFF` 是为了将 byte 转换为无符号的8位值，避免符号位扩展导致错误。
-   - `Float.intBitsToFloat(intValue)`：将 int 位模式还原为 Float。
-
-3. **异常处理**：
-   - 校验 byte 数组长度必须为4，避免数组越界或转换错误。
-
-### 测试输出示例（大端序）
-```
-=== ByteBuffer 方式 ===
-原始值：123.456
-转换后的byte数组：[66, -4, 73, -52]
-恢复后的值：123.45600128173828
-
-=== 位操作方式 ===
-原始值：123.456
-转换后的byte数组：[66, -4, 73, -52]
-恢复后的值：123.45600128173828
-
-两种方式转换的byte数组是否一致：true
-```
-（注：Float 是单精度浮点数，存在微小精度损失，属于正常现象。）
-
-### 总结
-1. **ByteBuffer 方式**：代码简洁、可读性高、不易出错，推荐日常开发使用，底层已优化，性能足够。
-2. **位操作方式**：更贴近底层原理，适合理解 Float 二进制存储结构，或需要手动控制位操作的场景。
-3. **关键注意点**：转换和恢复时必须使用**相同的字节序**，否则会得到错误结果；byte 数组长度必须为4（Float 固定占4字节）。
-
-
-
-
-
-
-
-# Java 字符串格式化 (String.format) 可视化指南
-
-## ✅ 简介
-
-`String.format()` 是 Java 中非常强大的字符串格式化工具，允许你以类似 C 的 `printf` 风格来构建格式化的字符串。 它广泛用于日志输出、界面显示、报表生成、数据转换等场景。
-
-> 💡 **注意**：`String.format()` 本质上是 `java.util.Formatter` 的便捷封装。`System.out.printf()` 和 `String.format()` 使用完全相同的语法，前者直接打印到控制台，后者返回一个字符串。
-
-## 🧩 一、基本语法结构
-
-每个格式说明符（占位符）都遵循以下结构：
-
-```
-%[argument_index$][flags][width][.precision]conversion
-```
-
-| **组件**            | **说明**                                               |
-| ------------------- | ------------------------------------------------------ |
-| **`%`**             | 格式说明符起始符号                                     |
-| `[argument_index$]` | **(可选)** 参数索引（如 `%2$s` 表示第 2 个参数）       |
-| `[flags]`           | **(可选)** 控制对齐方式、填充、符号等                  |
-| `[width]`           | **(可选)** 最小字段宽度                                |
-| `[.precision]`      | **(可选)** 精度（浮点数的小数位或字符串的最大长度）    |
-| `conversion`        | **(必填)** 转换符，指定数据类型（如 `%d`, `%f`, `%s`） |
-
-
-
-## 🔢 二、常用转换类型 (conversion)
-
-
-
-| **转换字符** | **数据类型**               | **示例**  | **输出**              |
-| ------------ | -------------------------- | --------- | --------------------- |
-| `%d`         | 整数（十进制）             | `123`     | `123`                 |
-| `%o`         | 八进制整数                 | `123`     | `173`                 |
-| `%x` / `%X`  | 十六进制整数（小写/大写）  | `255`     | `ff` / `FF`           |
-| `%f`         | 浮点数                     | `45.67`   | `45.670000`           |
-| `%e` / `%E`  | 科学计数法                 | `45.67`   | `4.567000e+01`        |
-| `%g` / `%G`  | 自动选择 `%f` 或科学计数法 | `1234.56` | `1234.56`             |
-| `%s` / `%S`  | 字符串（原样 / 全大写）    | `"hello"` | `"hello"` / `"HELLO"` |
-| `%c` / `%C`  | 单个字符（原样 / 大写）    | `'a'`     | `'a'` / `'A'`         |
-| `%b` / `%B`  | 布尔值                     | `true`    | `true` / `TRUE`       |
-| `%n`         | 换行符（平台无关）         | N/A       | `\n` (或 `\r\n`)      |
-| `%%`         | 输出一个 `%` 符号          | N/A       | `%`                   |
-
-
-
-#### 💡 示例代码
+将运行时的 Hex 字符串转换为 10 进制数值，需要注意是否带有 `0x` 前缀：
 
 ```Java
-int i = 123;
-double d = 123.456;
-String s = "Java";
-boolean b = true;
-char c = 'Z';
+// 方法 A：不带前缀的纯 Hex 转换（最常用）
+String hexStr = "2a"; 
+int dec1 = Integer.parseInt(hexStr, 16); // 42
 
-System.out.println(String.format("整数: %d", i));          // 整数: 123
-System.out.println(String.format("八进制: %o", i));          // 八进制: 173
-System.out.println(String.format("十六进制 (小写): %x", 255)); // 十六进制 (小写): ff
-System.out.println(String.format("十六进制 (大写): %X", 255)); // 十六进制 (大写): FF
-System.out.println(String.format("浮点数: %f", d));          // 浮点数: 123.456000
-System.out.println(String.format("科学计数法: %e", d));      // 科学计数法: 1.234560e+02
-System.out.println(String.format("通用浮点数: %g", d));      // 通用浮点数: 123.456
-System.out.println(String.format("字符串: %s", s));          // 字符串: Java
-System.out.println(String.format("字符串转大写: %S", s));    // 字符串转大写: JAVA
-System.out.println(String.format("字符: %c", c));          // 字符: Z
-System.out.println(String.format("布尔值: %b", b));          // 布尔值: true
-System.out.println(String.format("布尔值转大写: %B", b));    // 布尔值转大写: TRUE
-System.out.println(String.format("百分号: %%"));          // 百分号: %
-System.out.printf("换行%n");                         // (换行)
+// 方法 B：带 0x 或 # 前缀的转换（智能解析）
+String hexWithPrefix = "0x2A";
+int dec2 = Integer.decode(hexWithPrefix); // 42
+
+// 方法 C：处理超出 Long 范围的超长 Hex
+String longHex = "7fffffffffffffff";
+BigInteger bigDec = new BigInteger(longHex, 16); // 9223372036854775807
 ```
 
-
-
-## 🔧 三、标志 (flags) 使用可视化
-
-| **标志**       | **描述**                     | **示例** | **输出**     |
-| -------------- | ---------------------------- | -------- | ------------ |
-| `-`            | 左对齐（默认右对齐）         | `%-10s`  | `Hello `     |
-| `+`            | 强制显示正负号               | `%+d`    | `+123`       |
-| `     ` (空格) | 正数前加空格（负数显示-）    | `% d`    | ` 123`       |
-| `0`            | 用零填充空白部分（用于数字） | `%010d`  | `0000000123` |
-| `,`            | 千分位分隔符                 | `%,d`    | `1,234,567`  |
-| `(`            | 负数用括号括起               | `%(d`    | `(123)`      |
-| `#`            | 添加前缀（如 `0x`, `0`）     | `%#x`    | `0x7b`       |
-
-
-
-#### 💡 示例代码
-
-```java
-int num = -12345;
-int positiveNum = 89;
-
-System.out.println(String.format("左对齐: |%-10d|", 123));   // 左对齐: |123       |
-System.out.println(String.format("强制显示符号: %+d", positiveNum)); // 强制显示符号: +89
-System.out.println(String.format("强制显示符号: %+d", num));     // 强制显示符号: -12345
-System.out.println(String.format("正数前加空格: |% d|", positiveNum)); // 正数前加空格: | 89|
-System.out.println(String.format("零填充: %010d", 123));        // 零填充: 0000000123
-System.out.println(String.format("千分位: %,d", 1234567));      // 千分位: 1,234,567
-System.out.println(String.format("负数括号: %(d", num));        // 负数括号: (12345)
-System.out.println(String.format("十六进制带前缀: %#x", 255));    // 十六进制带前缀: 0xff
-System.out.println(String.format("八进制带前缀: %#o", 64));      // 八进制带前缀: 0100
-```
-
-
-
-## 📏 四、宽度 (width) 和精度 (.precision) 可视化
-
-- **Width**：指定最小输出宽度。如果字符串或数字不够宽，会用空格（或 `0` 标志）填充。
-- **Precision**：
-  - 对于浮点数（`%f`）：指定小数点后的位数。
-  - 对于字符串（`%s`）：指定截取的最大字符数。
-
-| **格式符** | **输入**                  | **输出效果**   |
-| ---------- | ------------------------- | -------------- |
-| `%10s`     | `"Hi"`                    | `" Hi"`        |
-| `%-10s`    | `"Hi"`                    | `"Hi "`        |
-| `%010d`    | `123`                     | `"0000000123"` |
-| `%.2f`     | `3.1415`                  | `"3.14"`       |
-| `%10.2f`   | `3.1415`                  | `" 3.14"`      |
-| `%.10s`    | `"This is a long string"` | `"This is a "` |
-
-
-
-#### 💡 示例代码
+### 3. 10 进制数值 $\rightarrow$ 16 进制字符串
 
 ```Java
-double pi = Math.PI; // 3.1415926...
-String text = "This is a long string";
+int decimal = 42;
 
-System.out.println(String.format("|%10s|", "Hello"));       // |     Hello|
-System.out.println(String.format("|%-10s|", "Hi"));         // |Hi        |
-System.out.println(String.format("|%.2f|", pi));            // |3.14|
-System.out.println(String.format("|%10.2f|", pi));          // |      3.14|
-System.out.println(String.format("|%.10s|", text));         // |This is a |
+// 方法 A：最直接转换（返回小写，不带前缀）
+String hexStr = Integer.toHexString(decimal); // "2a"
+
+// 方法 B：格式化转换（支持大写、补零、前缀等）
+String formattedHex = String.format("0x%04X", decimal); // "0x002A"
 ```
 
+## 二、 字符串与数字转换（有符号 vs 无符号）
 
+Java 默认采用**有符号（Signed）补码**存储整型，但在 Java 8 之后引入了无符号（Unsigned）的解析和显示 API。
 
-## 🔄 五、参数索引重用
+### 1. 有符号解析与补码
 
-
-
-当你需要重排参数顺序，或者多次使用同一个参数时，索引非常有用。
-
-- `%1$`：使用第 1 个参数。
-- `%2$`：使用第 2 个参数。
+在有符号视角下，首位为符号位（`0` 正 `1` 负）。
 
 ```Java
-// %2$s 使用第二个参数 (Hello), %1$d 使用第一个参数 (10)
-String result = String.format("%2$s %1$d %2$s again", 10, "Hello");
-System.out.println(result); // "Hello 10 Hello again"
+int a = Integer.parseInt("123");   // 123
+int b = Integer.parseInt("-123");  // -123（支持负数前缀）
+
+// 负数的内存表现（补码形式）
+int x = -123;
+System.out.println(Integer.toBinaryString(x)); 
+// 输出: 11111111111111111111111110000101
 ```
 
+### 2. 无符号解析与转换（Java 8+）
 
-
-## 🌍 六、国际化支持 (Locale)
-
-
-
-String.format() 允许传入一个 Locale 参数，以便根据不同地区的习惯格式化数字（尤其是千分位和
-
-小数点的符号）。
+无符号解析允许我们将超出有符号正数范围的字符串（如 `"4294967295"`）直接解析进 32 位的 `int` 容器中，虽然它在内存中会呈现为 `-1` 的补码。
 
 ```Java
-import java.util.Locale;
+// 4294967295 是 0xFFFFFFFF
+int u32 = Integer.parseUnsignedInt("4294967295"); 
+System.out.println(u32); // 输出: -1 (因为内存中全为 1，有符号视角下是 -1)
 
-double number = 1234567.89;
-
-// 默认 Locale (取决于你的
-System.out.println(String.format("默认: %,.2f", number));
-
-// 美国格式: 逗号 , 作为千分位，点 . 作为小数
-System.out.println(String.format(Locale.US, "美国格式: %,.2f", number));
-// > 美国格式: 1,234,567.89
-
-// 德国格式: 点 . 作为千分位，逗号 , 作为小数
-System.out.println(String.format(Locale.GERMANY, "德国格式: %,.2f", number));
-// > 德国格式: 1.234.567,89
-
-// 法国格式 (使用空格作为千分位)
-System.out.println(String.format(Locale.FRANCE, "法国格式: %,.2f", number));
-// > 法国格式: 1 234 567,89
+// 将该内存数据还原为无符号值显示
+long u32long = Integer.toUnsignedLong(u32);
+System.out.println(u32long); // 输出: 4294967295
 ```
 
+> 💡 **源码剖析 `Integer.toUnsignedLong(int x)`**
+>
+> ```Java
+> public static long toUnsignedLong(int x) {
+>     return ((long) x) & 0xffffffffL;
+> }
+> ```
+>
+> 此方法先将 `int` 拓宽为 `long`（高位补符号位），再通过 `& 0xffffffffL` 掩码抹去高 32 位的符号扩展，从而完美还原无符号的真实数值。
 
+### 3. 有符号与无符号对照表
 
-## 🕒 七、日期与时间格式化
+| **项目**      | **有符号整型**              | **无符号整型（Java 8+ 机制）**                 |
+| ------------- | --------------------------- | ---------------------------------------------- |
+| **类型容器**  | `int` (32位), `long` (64位) | 使用相同的 `int`/`long` 容器，但解释规则不同   |
+| **支持负号**  | ✅ 支持 `-` 前缀             | ❌ 不支持（传入负号抛 `NumberFormatException`） |
+| **表示 `-1`** | `-1`                        | 在 32 位中表现为 `4294967295` (`0xFFFFFFFF`)   |
+| **解析方法**  | `parseInt(s, radix)`        | `parseUnsignedInt(s, radix)`                   |
+| **转字符串**  | `toString(i, radix)`        | `toUnsignedString(i, radix)`                   |
 
+## 三、 科学计数法格式化与解析
 
+在科学计算与高精度显示场景，科学计数法的转换非常高频。
 
-日期/时间格式化比较特殊，它们都以 `%t` (或 `%T`) 开头，后面再跟一个特定的转换符。
+### 1. 数字格式化为科学计数法
 
-| **转换符**          | **含义**                   | **示例输出**                       |
-| ------------------- | -------------------------- | ---------------------------------- |
-| **复合类型 (推荐)** |                            |                                    |
-| `%tF`               | ISO 8601 日期 (YYYY-MM-DD) | `2025-11-11`                       |
-| `%tT`               | ISO 8601 时间 (HH:MM:SS)   | `00:35:11`                         |
-| `%tc`               | 完整的日期和时间（本地化） | `周二 十一月 11 00:35:11 CST 2025` |
-| **单独组件**        |                            |                                    |
-| `%tY`               | 年（四位）                 | `2025`                             |
-| `%tm`               | 月（两位, 01-12）          | `11`                               |
-| `%td`               | 日（两位, 01-31）          | `11`                               |
-| `%tH`               | 小时（24制, 00-23）        | `00`                               |
-| `%tM`               | 分钟（00-59）              | `35`                               |
-| `%tS`               | 秒（00-60）                | `11`                               |
-| `%tL`               | 毫秒（000-999）            | `123`                              |
-| `%tp`               | 上午/下午 (本地化)         | `上午`                             |
-
-
-
-#### 💡 示例代码
-
-
-
-**重要**：在格式化日期时，强烈推荐使用**参数索引**（如 `%1$`），否则你需要为每一个 `%t` 转换符传递一个 `Date` 对象。
+通过 `String.format()` 或 `DecimalFormat` 控制输出。
 
 ```Java
-import java.util.Date;
-import java.util.Calendar;
+double num = 12345.6789;
 
-Date now = new Date(); // 或者 Calendar.getInstance()
+// 1. String.format 方式
+String f1 = String.format("%e", num);    // "1.234568e+04" (默认保留6位小数)
+String f2 = String.format("%.2E", num);  // "1.23E+04" (保留2位并大写E)
 
-// 推荐：使用 %1$ 索引复用 'now' 参数
-String.format("今天是 %1$tF %1$tT", now);
-// > "今天是 2025-11-11 00:35:11"
-
-// 组合使用
-String.format("详细拆分: %1$tY年%1$tm月%1$td日", now);
-// > "详细拆分: 2025年11月11日"
-
-// 格式化 Long 类型的时间戳
-Long timestamp = System.currentTimeMillis();
-String.format("时间戳 %1$tF %1$tT.%1$tL", timestamp);
-// > "时间戳 2025-11-11 00:35:11.123"
+// 2. DecimalFormat 方式
+DecimalFormat df = new DecimalFormat("0.###E0");
+String f3 = df.format(num);              // "1.235E4" (去尾零)
 ```
 
+### 2. 科学计数法字符串还原
 
-
-## ⚙️ 八、Formatter 类使用示例
-
-
-
-当你需要向 `StringBuilder`、文件或流写入格式化内容时，可直接使用 `Formatter`。
+Java 的 `Double.parseDouble()` 和 `BigDecimal` 构造器默认原生支持科学计数法字符串。
 
 ```Java
-import java.util.Formatter;
+// 转换为 double
+double val = Double.parseDouble("1.23E4");
+System.out.println(val); // 12300.0
 
-// 默认格式化到 StringBuilder
-try (Formatter f = new Formatter()) {
-    f.format("Name: %s, Score: %d", "Tom", 90);
-    System.out.println(f.toString()); // > "Name: Tom, Score: 90"
+// 转换为 BigDecimal 并展开为普通数字字符串
+BigDecimal bd = new BigDecimal("1.23E4");
+System.out.println(bd.toPlainString()); // "12300"
+```
+
+## 四、 任意精度运算（超大数处理）
+
+当数值超出 `Long.MAX_VALUE` 或需要进行绝对精确的财务计算时，必须引入 `BigInteger` 和 `BigDecimal`。
+
+### 1. BigInteger（任意精度整数）
+
+`BigInteger` 用于处理无上限的整数。由于它是不可变对象，所有计算都会返回一个新对象。
+
+```Java
+BigInteger a = new BigInteger("12345678901234567890");
+BigInteger b = BigInteger.valueOf(987654321);
+
+BigInteger sum = a.add(b);               // 加法
+BigInteger multiply = a.multiply(b);     // 乘法
+BigInteger[] res = a.divideAndRemainder(b); // res[0]是商，res[1]是余数
+```
+
+### 2. BigDecimal（任意精度小数）
+
+主要用于金融、计费系统，规避 `double` 带来的二进制度精度丢失。
+
+```Java
+// ⚠️ 极度重要：必须使用 String 构造器，否则依然会丢失精度！
+BigDecimal price = new BigDecimal("0.1"); 
+BigDecimal count = new BigDecimal("3");
+
+// 除法计算必须指定保留位数和舍入模式，否则遇到无限循环小数（如 1/3）会直接抛出 ArithmeticException
+BigDecimal result = price.divide(count, 4, RoundingMode.HALF_UP); // 0.0333
+```
+
+## 五、 易错点、陷阱与面试高频考点
+
+### 🚨 避坑指南
+
+1. **`new BigDecimal(double)` 精度泄露**
+   - **陷阱**：`new BigDecimal(0.1)` 实际会得到 `0.10000000000000000555111512...`。
+   - **正解**：永远使用 `new BigDecimal("0.1")` 或 `BigDecimal.valueOf(0.1)`。
+2. **`BigDecimal` 的比较问题**
+   - **陷阱**：`new BigDecimal("1.0").equals(new BigDecimal("1.00"))` 会返回 `false`，因为 `equals()` 还会比对精度（Scale）。
+   - **正解**：使用 `compareTo()`，`a.compareTo(b) == 0` 说明数值大小完全相等。
+3. **16进制大数溢出解析**
+   - **陷阱**：`Integer.parseInt("FFFFFFFF", 16)` 会直接抛出 `NumberFormatException`（因为有符号 int 最大为 `7FFFFFFF`，溢出了）。
+   - **正解**：需要解析为无符号 int：`Integer.parseUnsignedInt("FFFFFFFF", 16)`；或者使用更大的容器：`Long.parseLong("FFFFFFFF", 16)`。
+
+### 💬 面试高频考点
+
+#### Q1：Java 如何将十六进制字符串 `"FFFFFFFF"` 转换为 10 进制无符号 `long`？
+
+可以使用 Java 8 提供的无符号解析方法：
+
+```Java
+long val = Long.parseUnsignedLong("FFFFFFFF", 16);
+System.out.println(val); // 4294967295
+```
+
+#### Q2：在不使用内置方法的情况下，如何高效地将 16 进制字符串转为 10 进制整型？
+
+核心原理为**按权展开累加**，利用位移操作替代乘法以提升效率：
+
+```Java
+public static int hexToDec(String hex) {
+    int dec = 0;
+    for (int i = 0; i < hex.length(); i++) {
+        char c = hex.charAt(i);
+        int digit = Character.digit(c, 16); // 智能处理 '0'-'9', 'a'-'f', 'A'-'F'
+        if (digit == -1) throw new NumberFormatException("非法字符: " + c);
+        dec = (dec << 4) + digit; // 相当于 dec * 16 + digit
+    }
+    return dec;
 }
 ```
 
 
 
-## ⚠️ 九、易错点与注意事项
 
 
 
-| **常见问题**                 | **说明**                                                     |
-| ---------------------------- | ------------------------------------------------------------ |
-| `%d` 接收浮点数              | 抛出 `IllegalFormatConversionException` (类型不匹配)         |
-| `%f` 默认保留六位小数        | 需指定精度，如 `%.2f`                                        |
-| `%s` 可自动调用 `toString()` | 传入任何对象（包括 null），`%s` 会自动调用 `obj.toString()` (null 会输出 "null") |
-| `%n` vs `\n`                 | `String.format()` 中推荐使用 `%n` 替代 `\n`，以保证跨平台换行符一致。 |
-| 多参数顺序错误               | 当参数较多时，容易混淆。可使用索引 `%2$s` 明确指定。         |
-| `%b` 是布尔值                | **`%b` 不是二进制！** 它是用于 `boolean` 类型的。            |
 
 
-
-## 📋 十、推荐使用场景
-
-
-
-| **场景**                | **推荐方法**                                     |
-| ----------------------- | ------------------------------------------------ |
-| 简单数字转字符串        | `String.valueOf(x)` 或 `Integer.toString(x)`     |
-| 数字转字符串 + 控制格式 | `String.format("%04d", x)` (如补零)              |
-| 多种类型混合格式化      | `String.format("User %s (ID: %d)", name, id)`    |
-| 国际化数字格式          | `String.format(Locale, "%,.2f", money)`          |
-| 日志输出                | `System.out.printf(...)` 或 `Logger.printf(...)` |
-
-
-
-## 🧩 十一、实用模板片段
-
-```Java
-// 模板1: 金额格式化 (千分位 + 两位小数)
-String money = String.format("%,.2f", 1234567.89);
-// > "1,234,567.89"
-
-// 模板2: 百分比格式化 (自动乘 100 并保留 2 位小数 + '%')
-String percent = String.format("%.2f%%", 0.8567 * 100);
-// > "85.67%" (注意 '%%' 用于转义)
-
-// 模板3: 日志输出 (带时间戳)
-System.out.printf("[%1$tF %1$tT] INFO - %2$s%n", new Date(), "Operation success");
-// > "[2025-11-11 00:35:11] INFO - Operation success"
-
-// 模板4: 补零 (常用于生成ID)
-String id = String.format("%08d", 1234);
-// > "00001234"
-```
-
-
-
-## 🧮 十二、数字进制输出模板
-
-
-
-这是你最初关心的重点：二进制和十六进制的格式化。
-
-
-
-### 1️⃣ 十进制 (`%d`)
-
-标准整数格式化。
-
-```Java
-int n = 12345;
-System.out.println(String.format("默认: %d", n));    // 默认: 12345
-System.out.println(String.format("带符号: %+d", n));   // 带符号: +12345
-System.out.println(String.format("空格符号: % d", n));   // 空格符号:  12345
-System.out.println(String.format("右对齐10位: |%10d|", n)); // 右对齐10位: |     12345|
-System.out.println(String.format("千分位: %,d", 1234567)); // 千分位: 1,234,567
-```
-
-
-
-### 2️⃣ 八进制 (`%o`)
-
-```java
-int n = 123;
-System.out.println(String.format("八进制: %o", n));     // 八进制: 173
-System.out.println(String.format("带前缀: %#o", n));     // 带前缀: 0173
-```
-
-
-
-### 3️⃣ 十六进制 (`%x` / `%X`)
-
-```java
-int n = 255;
-System.out.println(String.format("小写: %x", n));        // 小写: ff
-System.out.println(String.format("大写: %X", n));        // 大写: FF
-System.out.println(String.format("带前缀(小): %#x", n)); // 带前缀(小): 0xff
-System.out.println(String.format("带前缀(大): %#X", n)); // 带前缀(大): 0XFF
-System.out.println(String.format("补零4位: %04X", n));   // 补零4位: 00FF
-```
-
-
-
-### 4️⃣ 二进制 (无直接转换符)
-
-`String.format()` **没有** 为整数提供直接的二进制转换符（`%b` 是用于布尔值的）。
-
-你必须先用 `Integer.toBinaryString(int)` 转换，然后用 `%s` (字符串) 来格式化它。
-
-```Java
-int n = 13;
-String binaryString = Integer.toBinaryString(n); // "1101"
-
-// 直接输出
-System.out.println("Binary: " + binaryString); // "Binary: 1101"
-
-// 模板: 补零到 8-bit (一个字节)
-// 1. 先转为二进制字符串
-// 2. 用 %s 格式化，指定宽度 8
-// 3. 用 replace() 把 format 自动填充的 ' ' (空格) 替换为 '0'
-String binary8bit = String.format("%8s", binaryString).replace(' ', '0');
-System.out.println("Binary 8-bit: " + binary8bit); // "Binary 8-bit: 00001101"
-
-// 模板: 补零到 16-bit
-String binary16bit = String.format("%16s", binaryString).replace(' ', '0');
-System.out.println("Binary 16-bit: " + binary16bit); // "Binary 16-bit: 0000000000001101"
-```
-
-
-
-### 5️⃣ 综合输出示例
-
-
-
-```Java
-int num = 255;
-
-System.out.println(String.format("Decimal       : %d", num));
-System.out.println(String.format("Decimal + sign: %+d", num));
-System.out.println(String.format("Octal         : %o", num));
-System.out.println(String.format("Octal #       : %#o", num));
-System.out.println(String.format("Hex (lower)   : %x", num));
-System.out.println(String.format("Hex (upper)   : %X", num));
-System.out.println(String.format("Hex #         : %#X", num));
-System.out.println("Binary        : " + Integer.toBinaryString(num));
-System.out.println("Binary 8-bit  : " + String.format("%8s", Integer.toBinaryString(num)).replace(' ', '0'));
-System.out.println("Binary 16-bit : " + String.format("%16s", Integer.toBinaryString(num)).replace(' ', '0'));
-```
-
-**输出示例：**
-
-```
-Decimal       : 255
-Decimal + sign: +255
-Octal         : 377
-Octal #       : 0377
-Hex (lower)   : ff
-Hex (upper)   : FF
-Hex #         : 0XFF
-Binary        : 11111111
-Binary 8-bit  : 11111111
-Binary 16-bit : 0000000011111111
-```
 
 
 
