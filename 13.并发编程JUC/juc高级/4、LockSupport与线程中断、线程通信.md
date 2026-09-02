@@ -11,23 +11,17 @@
 1.2、什么是中断？
 ----------
 
-+ 首先
+1.  **一个线程不应该由其他线程来强制中断或停止，而是应该由线程自己自行停止**。所以，`Thread.stop`, `Thread.suspend`, `Thread.resume` 都已经被废弃了。
 
-一个线程不应该由其他线程来强制中断或停止，而是应该由线程自己自行停止。
+2.  在 Java 中没有办法立即停止一条线程，然而停止线程却显得尤为重要，如取消一个耗时操作。
 
-所以，`Thread.stop`, `Thread.suspend`, `Thread.resume` 都已经被废弃了。
-
-+ 其次
-
-在 Java 中没有办法立即停止一条线程，然而停止线程却显得尤为重要，如取消一个耗时操作。
-
-因此，Java提供了一种用于停止线程的**协商机制**——**中断**。
+因此，**Java提供了一种用于停止线程的协商机制**——**中断**。
 
 
 
 中断只是一种协作机制，Java 没有给中断增加任何语法，中断的过程完全需要程序员自己实现。
 
-若要中断一个线程，你需要`手动调用该线程的 interrupt() 方法`， 该方法也仅仅是将线程对象的`中断标识设成 true` ；
+**若要中断一个线程，你需要`手动调用该线程的 interrupt() 方法`， 该方法也仅仅是将线程对象的`中断标识设成 true` ；**
 
 接着你需要自己写代码不断地检测当前线程的标识位，如果为 true，表示别的线程要求这条线程中断，
 
@@ -38,6 +32,34 @@
 每个线程对象中都有一个标识，用于表示线程是否被中断；该标识位为 true 表示中断，为 false 表示未中断；
 
 **通过调用线程对象的 `interrupt() 方法将该线程的标识位设为 true`；可以在别的线程中调用，也可以在自己的线程中调用。**
+
+
+
+> 在 Java 中，当阻塞方法（如 `sleep`、`wait`、`join`）捕获到中断信号并抛出 `InterruptedException` 时，会自动清除（重置）中断状态，将其变回 `false`。
+>
+> **为什么会清除中断状态？**
+>
+> - **设计原则**：Java 的设计认为，当抛出 `InterruptedException` 时，代表线程已经“处理”或“响应”了该中断请求，因此需要重置标志位，避免上层代码重复响应。
+> - **潜在风险**：如果在 `catch` 块中捕获了该异常却不做任何处理（吞掉异常），也没有恢复中断标志，会导致更高层的调用栈丢失中断信息，使线程无法正确停止。
+>
+> **正确的处理方式**
+>
+> 为了不丢失中断状态，通常有两种做法：
+>
+> 1. **继续向上抛出**：在方法签名上声明 `throws InterruptedException`，让调用者去处理。
+> 2. **恢复中断状态**：如果在当前层无法抛出异常，应该在 `catch` 块中调用 `Thread.currentThread().interrupt()` 重新设置中断标志。
+>
+> **代码示例：**
+>
+> ```java
+> try {
+>     Thread.sleep(1000);
+> } catch (InterruptedException e) {
+>     // 重新恢复中断状态
+>     Thread.currentThread().interrupt();
+>     // 恢复后续的中断响应逻辑或退出
+> }
+> ```
 
 1.3、中断的相关 API 方法
 ----------------
@@ -451,54 +473,1189 @@ public class InterruptDemo04 {
 
 
 
-1.5、总结
+1.5、总结   Java 线程中断机制
 ------
 
-  线程中断相关的方法：  
+## Java 线程中断
 
-+ `interrupt()` 方法是一个`实例方法` 
-  + 它通知目标线程中断，也就是设置目标线程的中断标志位为 true，中断标志位表示当前线程已经被中断了。 
+### 1. 中断机制
 
-+  `isInterrupted()` 方法也是一个`实例方法` 
-  + 它判断当前线程是否被中断（通过检查中断标志位）并获取中断标志  ,
-  + 调用p`rivate native boolean isInterrupted(boolean ClearInterrupted);`传入`ClearInterrupted = false`
+#### 1.1 什么是线程中断
 
-+ Thread 类的`静态方法 interrupted()` 
-  + 返回当前线程的中断状态 (boolean 类型) 且将当前线程的中断状态设为 false，此方法调用之后会清除当前线程的中断标志位的状态（将中断标志置为 false 了），返回当前值并清零置 false 
-  + 调用`private native boolean isInterrupted(boolean ClearInterrupted);`传入`ClearInterrupted = true`
+Java 中的线程中断不是“强制杀死线程”，而是一种**协作式线程停止机制**。
+
+一个线程可以向另一个线程发送中断请求：
+
+```java
+thread.interrupt();
+```
+
+但 `interrupt()` **不会直接终止线程**。
+
+它表达的是：
+
+> **请求目标线程停止当前工作。**
+
+目标线程是否响应、什么时候响应，以及如何处理，都由目标线程自己的代码决定。
+
+因此：
+
+```text
+interrupt()
+    ≠
+强制终止线程
+
+interrupt()
+    =
+发送中断请求
+```
+
+------
+
+#### 1.2 interrupt() 的本质
+
+可以把线程中断理解成一种**线程之间传递的取消信号**：
+
+```text
+线程 A
+   │
+   │ interrupt()
+   ↓
+线程 B
+   │
+   │ 收到中断请求
+   ↓
+自己决定如何处理
+   │
+   ├── 检查中断状态
+   ├── 响应 InterruptedException
+   ├── 清理资源
+   ├── 退出任务
+   └── 继续执行
+```
+
+`interrupt()` 的具体表现与目标线程当前状态有关。
+
+如果线程正在执行普通 CPU 计算：
+
+```java
+while (true) {
+    doWork();
+}
+```
+
+调用：
+
+```java
+thread.interrupt();
+```
+
+通常只是使线程的中断状态被设置。
+
+线程不会自动停止。
+
+如果线程正在执行某些可中断阻塞操作：
+
+```java
+Thread.sleep()
+Object.wait()
+Thread.join()
+```
+
+则可能立即结束阻塞，并抛出：
+
+```java
+InterruptedException
+```
+
+因此不能简单地认为：
+
+```java
+interrupt()
+```
+
+永远只是：
+
+```text
+interrupted = true
+```
+
+更准确的理解是：
+
+> **`interrupt()` 向目标线程发送中断请求，目标线程根据自身状态和代码逻辑进行响应。**
+
+------
+
+#### 1.3 中断 ≠ 强制终止
+
+例如：
+
+```java
+Thread t = new Thread(() -> {
+    while (true) {
+        // 完全不检查中断状态
+    }
+});
+
+t.start();
+
+t.interrupt();
+```
+
+即使执行：
+
+```java
+t.interrupt();
+```
+
+线程仍然可能继续运行。
+
+因为：
+
+```text
+interrupt()
+    ↓
+发送请求
+    ↓
+线程没有响应
+    ↓
+继续运行
+```
+
+因此 Java 的线程取消是：
+
+> **协作式取消，而不是强制式取消。**
+
+------
+
+### 2. 中断 API
+
+Java 线程中断最重要的三个 API：
+
+```text
+interrupt()          → 发送中断请求，负责“发请求”，线程负责“决定怎么响应”。
+isInterrupted()      → 查看指定线程的中断状态，不清除
+Thread.interrupted() → 查看当前线程的中断状态，并清除
+```
+
+------
+
+#### 2.1 interrupt()
+
+```java
+thread.interrupt();
+```
+
+作用：
+
+> **向指定线程发送中断请求。**
+
+它不会强制终止目标线程。
+
+例如：
+
+```java
+Thread t = new Thread(() -> {
+    while (!Thread.currentThread().isInterrupted()) {        /* 执行任务 */   }
+    System.out.println("线程退出");
+});
+t.start();
+
+t.interrupt();
+```
+
+执行流程：
+
+```text
+t.interrupt()
+      ↓
+向 t 发送中断请求
+      ↓
+t 的中断状态发生变化
+      ↓
+t 自己检查中断状态
+      ↓
+主动退出
+```
+
+------
+
+#### 2.2 isInterrupted()
+
+```java
+thread.isInterrupted();
+```
+
+作用：
+
+> **查看指定线程的中断状态。**
+
+特点：
+
+- 实例方法
+- 可以查看指定线程
+- **不会清除中断状态**
+
+例如：
+
+```java
+t.interrupt();
+
+System.out.println(t.isInterrupted()); // true
+System.out.println(t.isInterrupted()); // true
+System.out.println(t.isInterrupted()); // true
+```
+
+状态：
+
+```text
+interrupt()
+    ↓
+中断状态 = true
+    ↓
+isInterrupted()
+    ↓
+true
+    ↓
+中断状态仍然 = true
+```
+
+因此：
+
+```text
+isInterrupted()
+    =
+查看
++
+不清除
+```
+
+------
+
+#### 2.3 Thread.interrupted()
+
+```java
+Thread.interrupted();
+```
+
+这是一个**静态方法**。
+
+作用：
+
+> **检查当前线程的中断状态，并清除该状态。**
+
+例如：
+
+```java
+Thread.currentThread().interrupt();
+
+System.out.println(Thread.interrupted()); // true
+System.out.println(Thread.interrupted()); // false
+```
+
+执行过程：
+
+```text
+当前线程
+    ↓
+interrupt()
+    ↓
+中断状态 = true
+    ↓
+Thread.interrupted()
+    ↓
+返回 true
+    ↓
+清除中断状态
+    ↓
+中断状态 = false
+```
+
+因此：
+
+```text
+Thread.interrupted()
+    =
+检查 + 清除
+```
+
+注意：
+
+```java
+Thread.interrupted();
+```
+
+只能检查：
+
+> **当前线程**
+
+不能指定其他线程。
+
+------
+
+#### 2.4 三个 API 对比
+
+| 方法                     | 类型     | 检查对象 | 作用         | 是否清除 |
+| ------------------------ | -------- | -------- | ------------ | -------- |
+| `thread.interrupt()`     | 实例方法 | 指定线程 | 发送中断请求 | —        |
+| `thread.isInterrupted()` | 实例方法 | 指定线程 | 查看中断状态 | ❌        |
+| `Thread.interrupted()`   | 静态方法 | 当前线程 | 查看中断状态 | ✅        |
+
+##### 快速记忆
+
+```text
+interrupt()
+    → 发请求
+
+isInterrupted()
+    → 看，不清
+
+Thread.interrupted()
+    → 看，并清
+```
+
+------
+
+### 3. InterruptedException
+
+#### 3.1 什么是 InterruptedException
+
+很多阻塞操作可以响应线程中断，例如：
+
+```java
+Thread.sleep()
+Object.wait()
+Thread.join()
+```
+
+当线程处于这些可中断阻塞状态时，其他线程调用：
+
+```java
+thread.interrupt();
+```
+
+阻塞操作可能结束阻塞并抛出：
+
+```java
+InterruptedException
+```
+
+典型过程：
+
+```text
+线程
+  ↓
+进入可中断阻塞
+  ↓
+sleep()
+  ↓
+其他线程 interrupt()
+  ↓
+阻塞操作响应中断
+  ↓
+InterruptedException
+```
+
+------
+
+#### 3.2 sleep() 被中断
+
+例如：
+
+```java
+try {
+    Thread.sleep(10000);
+} catch (InterruptedException e) {
+    System.out.println("线程被中断");
+}
+```
+
+另一个线程：
+
+```java
+t.interrupt();
+```
+
+可能发生：
+
+```text
+sleep(10000)
+      ↓
+线程阻塞
+      ↓
+收到 interrupt()
+      ↓
+sleep() 响应中断
+      ↓
+抛出 InterruptedException
+```
+
+------
+
+#### 3.3 InterruptedException 与中断状态
+
+这是线程中断中非常重要的知识点。
+
+当某些可中断阻塞方法因为中断而抛出：
+
+```java
+InterruptedException
+```
+
+时，**中断状态通常会被清除**。
+
+例如：
+
+```java
+try {
+    Thread.sleep(10000);
+} catch (InterruptedException e) {
+
+    System.out.println(
+        Thread.currentThread().isInterrupted()
+    );
+}
+```
+
+通常输出：
+
+```text
+false
+```
+
+完整过程：
+
+```text
+中断状态 = true
+      ↓
+sleep()
+      ↓
+检测到中断
+      ↓
+抛出 InterruptedException
+      ↓
+中断状态被清除
+      ↓
+进入 catch
+      ↓
+中断状态 = false
+```
+
+因此要区分：
+
+```text
+InterruptedException
+    ↓
+告诉你：阻塞操作收到了中断请求
+
+中断状态
+    ↓
+线程当前保存的中断信号
+```
+
+二者有关，但不是同一个东西。
+
+------
+
+#### 3.4 为什么 catch 中经常重新 interrupt()？
+
+典型代码：
+
+```java
+try {
+    Thread.sleep(1000);
+} catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+}
+```
+
+原因：
+
+```text
+sleep()
+   ↓
+收到中断
+   ↓
+InterruptedException
+   ↓
+中断状态被清除
+   ↓
+进入 catch
+   ↓
+重新 interrupt()
+   ↓
+恢复中断状态
+```
+
+所以：
+
+```java
+Thread.currentThread().interrupt();
+```
+
+不是“重新触发一次异常”。
+
+它的作用是：
+
+> **重新设置中断状态，把中断信号保留下来。**
+
+这样上层代码仍然可以通过：
+
+```java
+Thread.currentThread().isInterrupted()
+```
+
+感知到中断。
+
+------
+
+### 4. 中断处理
+
+#### 4.1 处理中断的基本原则
+
+处理 `InterruptedException` 时，核心原则：
+
+```text
+能继续抛出
+    → 向上抛出
+
+不能继续抛出
+    → 恢复中断状态
+```
+
+也就是说：
+
+> **不要随意吞掉中断。**
+
+------
+
+#### 4.2 方式一：恢复中断状态
+
+如果当前方法不能继续向上抛出 `InterruptedException`：
+
+```java
+try {
+    Thread.sleep(1000);
+} catch (InterruptedException e) {
+
+    // 恢复中断状态
+    Thread.currentThread().interrupt();
+
+    // 清理资源
+    cleanup();
+
+    return;
+}
+```
+
+执行过程：
+
+```text
+InterruptedException
+       ↓
+恢复中断状态
+       ↓
+清理资源
+       ↓
+退出当前任务
+```
+
+这种方式特别适合：
+
+> 当前方法无法通过异常把中断继续交给调用者。
+
+------
+
+#### 4.3 方式二：向上抛出
+
+如果当前方法不负责决定任务如何取消，可以继续抛出：
+
+```java
+void task() throws InterruptedException {
+    Thread.sleep(1000);
+}
+```
+
+调用者处理：
+
+```java
+try {
+    task();
+} catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+    return;
+}
+```
+
+也可以继续向更上层抛出：
+
+```java
+catch (InterruptedException e) {
+    throw e;
+}
+```
+
+核心思想：
+
+```text
+底层方法
+    ↓
+InterruptedException
+    ↓
+上层调用者
+    ↓
+决定任务如何取消
+```
+
+------
+
+#### 4.4 为什么不能吞掉 InterruptedException？
+
+不推荐：
+
+```java
+try {
+    Thread.sleep(1000);
+} catch (InterruptedException e) {
+    // 什么都不做
+}
+```
+
+因为可能导致：
+
+```text
+其他线程
+    ↓
+interrupt()
+    ↓
+阻塞操作
+    ↓
+InterruptedException
+    ↓
+catch
+    ↓
+什么都不做
+    ↓
+中断信息丢失
+```
+
+上层代码可能因此不知道：
+
+> 当前任务已经收到取消/停止请求。
+
+所以通常应该：
+
+```java
+catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+}
+```
+
+或者：
+
+```java
+catch (InterruptedException e) {
+    throw e;
+}
+```
+
+------
+
+#### 4.5 interrupt() 与 break / return 的区别
+
+这是实际代码中非常容易混淆的一点。
+
+例如：
+
+```java
+catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+    break;
+}
+```
+
+两个语句作用不同。
+
+##### `interrupt()`
+
+```java
+Thread.currentThread().interrupt();
+```
+
+作用：
+
+> **恢复中断状态。**
+
+##### `break`
+
+```java
+break;
+```
+
+作用：
+
+> **退出当前循环。**
+
+因此：
+
+```text
+InterruptedException
+       ↓
+interrupt()
+       → 保留中断信号
+
+break
+       → 结束当前循环
+```
+
+真正让循环退出的是：
+
+```java
+break;
+```
+
+------
+
+### 5. 协作式取消
+
+#### 5.1 CPU 计算任务如何响应中断
+
+如果线程一直执行 CPU 计算：
+
+```java
+while (true) {
+    doWork();
+}
+```
+
+不会因为：
+
+```java
+thread.interrupt();
+```
+
+而自动停止。
+
+应该主动检查中断状态：
+
+```java
+while (!Thread.currentThread().isInterrupted()) {
+    doWork();
+}
+```
+
+执行过程：
+
+```text
+interrupt()
+    ↓
+中断状态 = true
+    ↓
+isInterrupted()
+    ↓
+发现中断
+    ↓
+循环条件失败
+    ↓
+任务退出
+```
+
+------
+
+#### 5.2 阻塞任务如何响应中断
+
+如果任务执行的是可中断阻塞操作：
+
+```java
+try {
+    Thread.sleep(10000);
+} catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+    return;
+}
+```
+
+执行过程：
+
+```text
+线程阻塞
+    ↓
+interrupt()
+    ↓
+阻塞操作响应
+    ↓
+InterruptedException
+    ↓
+恢复中断状态
+    ↓
+return
+    ↓
+任务退出
+```
+
+------
+
+#### 5.3 标准优雅停止模板
+
+这是非常典型的 Java 线程优雅停止方式：
+
+```java
+Thread worker = new Thread(() -> {
+
+    while (!Thread.currentThread().isInterrupted()) {
+
+        try {
+            Thread.sleep(1000);
+
+            doWork();
+
+        } catch (InterruptedException e) {
+
+            // sleep 响应中断后，中断状态通常已被清除
+            // 因此重新设置中断状态
+            Thread.currentThread().interrupt();
+
+            // 当前任务决定退出
+            break;
+        }
+    }
+
+    // 释放资源
+    cleanup();
+});
+```
+
+启动：
+
+```java
+worker.start();
+```
+
+请求停止：
+
+```java
+worker.interrupt();
+```
+
+------
+
+#### 5.4 标准执行流程
+
+##### 情况一：线程正在 CPU 计算
+
+```text
+主线程
+   │
+   │ worker.interrupt()
+   ↓
+工作线程
+   │
+   │ 中断状态 = true
+   ↓
+isInterrupted()
+   ↓
+发现中断
+   ↓
+退出循环
+   ↓
+cleanup()
+   ↓
+线程结束
+```
+
+##### 情况二：线程正在 sleep
+
+```text
+主线程
+   │
+   │ worker.interrupt()
+   ↓
+工作线程
+   │
+   │ sleep()
+   ↓
+InterruptedException
+   ↓
+中断状态被清除
+   ↓
+catch
+   ↓
+重新 interrupt()
+   ↓
+break
+   ↓
+cleanup()
+   ↓
+线程结束
+```
+
+------
+
+### 6. 面试速查
+
+#### 6.1 高频问题
+
+##### Q1：`interrupt()` 会杀死线程吗？
+
+不会。
+
+它只是：
+
+> **向目标线程发送中断请求。**
+
+------
+
+##### Q2：`isInterrupted()` 会清除中断状态吗？
+
+不会。
+
+```java
+t.isInterrupted();
+```
+
+只是：
+
+```text
+查看
++
+不清除
+```
+
+------
+
+##### Q3：`Thread.interrupted()` 会清除中断状态吗？
+
+会。
+
+```java
+Thread.interrupted();
+```
+
+是：
+
+```text
+查看当前线程
++
+清除中断状态
+```
+
+------
+
+##### Q4：`Thread.interrupted()` 检查哪个线程？
+
+检查：
+
+> **当前线程。**
+
+因为它是静态方法。
+
+------
+
+##### Q5：为什么 `InterruptedException` 后经常重新 `interrupt()`？
+
+因为某些可中断阻塞操作在抛出 `InterruptedException` 时会清除中断状态。
+
+所以：
+
+```java
+catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+}
+```
+
+可以：
+
+> **恢复中断状态，让上层继续感知中断请求。**
+
+------
+
+##### Q6：为什么不能吞掉 `InterruptedException`？
+
+因为这可能导致：
+
+```text
+中断请求
+   ↓
+InterruptedException
+   ↓
+被吞掉
+   ↓
+上层无法感知取消请求
+```
+
+从而破坏协作式取消机制。
+
+------
+
+##### Q7：线程正在死循环，调用 `interrupt()` 会停止吗？
+
+不会。
+
+例如：
+
+```java
+while (true) {
+}
+```
+
+如果完全不检查中断状态：
+
+```java
+thread.interrupt();
+```
+
+线程仍可能继续运行。
+
+应该：
+
+```java
+while (!Thread.currentThread().isInterrupted()) {
+    doWork();
+}
+```
+
+------
+
+##### Q8：`interrupt()` 和 `InterruptedException` 是什么关系？
+
+可以理解为：
+
+```text
+interrupt()
+    ↓
+发送中断请求
+    ↓
+如果目标线程正在某些可中断阻塞操作
+    ↓
+阻塞操作响应
+    ↓
+InterruptedException
+```
+
+但是：
+
+> **调用 `interrupt()` 并不意味着一定会产生 `InterruptedException`。**
+
+如果目标线程正在普通 CPU 计算，就不会因为 `interrupt()` 自动抛出这个异常。
+
+------
+
+#### 6.2 API 速查表
+
+| API                      | 作用对象 | 核心作用     | 清除状态 |
+| ------------------------ | -------- | ------------ | -------- |
+| `thread.interrupt()`     | 指定线程 | 发送中断请求 | —        |
+| `thread.isInterrupted()` | 指定线程 | 查看中断状态 | ❌        |
+| `Thread.interrupted()`   | 当前线程 | 查看中断状态 | ✅        |
+
+------
+
+#### 6.3 中断处理速查
+
+```text
+收到 InterruptedException
+          │
+          ↓
+当前方法能继续抛出吗？
+      │           │
+     能           不能
+      │           │
+      ↓           ↓
+   throw e    interrupt()
+                  ↓
+              清理资源
+                  ↓
+             return / break
+```
+
+------
+
+#### 6.4 最终心智模型
+
+```text
+                 Java 线程中断
+                       │
+                       ↓
+                interrupt()
+                       │
+                 发送中断请求
+                       │
+             ┌─────────┴─────────┐
+             ↓                   ↓
+          CPU计算             阻塞操作
+             │                   │
+             ↓                   ↓
+     检查中断状态          响应中断请求
+             │                   │
+             ↓                   ↓
+    isInterrupted()       InterruptedException
+             │                   │
+             │             状态通常被清除
+             │                   │
+             └─────────┬─────────┘
+                       ↓
+                  正确处理中断
+                       │
+              ┌────────┴────────┐
+              ↓                 ↓
+           throw           interrupt()
+              │                 │
+              ↓                 ↓
+           交给上层          恢复状态
+                                │
+                                ↓
+                         break / return
+                                │
+                                ↓
+                            cleanup()
+                                │
+                                ↓
+                            任务结束
+```
+
+------
+
+#### 6.5 一句话口诀
+
+> **`interrupt()` 发请求，`isInterrupted()` 只查看，`Thread.interrupted()` 查看并清除。**
+
+再记住：
+
+> **中断不是杀线程，而是发出“请停止”的信号；线程必须主动响应。**
+
+处理 `InterruptedException`：
+
+> **能抛就抛，不能抛就恢复；不要无声吞掉中断。**
+
+最终可以浓缩成：
+
+```text
+interrupt()
+    → 发请求
+
+isInterrupted()
+    → 看，不清
+
+Thread.interrupted()
+    → 看，并清
+
+InterruptedException
+    → 阻塞操作响应中断
+
+catch
+    → 能抛就抛
+    → 不能抛就恢复
+
+优雅停止
+    → interrupt()
+    → 检查/响应
+    → break / return
+    → cleanup()
+```
 
 
 
-> 注意 **InterruptedException 的处理方式**。当你调用 Java 对象的 wait() 方法或者线程的 sleep() 方法时，需要捕获并处理 InterruptedException 异常，在思考题里面（如下所示），本意是通过 isInterrupted() 检查线程是否被中断了，如果中断了就退出 while 循环。当**其他线程通过调用`th.interrupt()`来中断 th 线程时**，会设置 th 线程的中断标志位，从而使`th.isInterrupted()`返回 true，这样就能退出 while 循环了。
->
-> ```java
-> Thread th = Thread.currentThread();
-> while(true) {  
->     if(th.isInterrupted()) {   
->         break;  
->     }  
->     // 省略业务代码无数  
->     try {    
->         Thread.sleep(100); 
->     }catch (InterruptedException e){    
->         e.printStackTrace();  
->     }
-> }
-> ```
->
-> 这看上去一点问题没有，实际上却是几乎起不了作用。原因是这段代码在执行的时候，大部分时间都是阻塞在 sleep(100) 上，当其他线程通过调用`th.interrupt().`来中断 th 线程时，大概率地会触发 InterruptedException 异常，**在触发 InterruptedException 异常的同时，JVM 会同时把线程的中断标志位清除**，所以这个时候`th.isInterrupted()`返回的是 false。
->
-> 正确的处理方式应该是捕获异常之后重新设置中断标志位，也就是下面这样：
->
-> ```java
-> try {  
->     Thread.sleep(100);
-> }catch(InterruptedException e){  
->     // 重新设置中断标志位  
->     th.interrupt();
-> }
-> ```
->
+
 
 ## 1.6 java 解惑84【Thread.interrupted()】
 
