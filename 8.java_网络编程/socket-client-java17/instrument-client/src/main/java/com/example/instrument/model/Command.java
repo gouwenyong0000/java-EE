@@ -1,5 +1,6 @@
 package com.example.instrument.model;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
@@ -15,10 +16,10 @@ public record Command(byte[] payload) {
   }
 
   /**
-   * 从字符串创建命令，默认使用平台默认字符集编码。
+   * 从字符串创建命令，使用 UTF-8 编码（与 LineProtocol 默认字符集一致）。
    */
   public static Command of(String command) {
-    return new Command(command.getBytes());
+    return new Command(command.getBytes(StandardCharsets.UTF_8));
   }
 
   @Override

@@ -7,26 +7,94 @@ import java.nio.charset.Charset;
 import java.util.List;
 
 /**
- * 协议层接口。
+ * 协议层接口 —— 定义"怎么把业务消息↔TCP字节流"互转的契约。
  *
- * <p>负责定义如何把命令编码成字节流，以及如何从 TCP 读取到的原始字节中还原出完整的响应帧。
- * 具体实现可以是文本协议（如 CRLF）或长度字段协议（如二进制帧）。
+ * <h3>在四层架构中的位置</h3>
+ * <pre>
+ *   接口层 ClientITF         ← 契约：init/connect/sendAndRegex
+ *      │
+ *   ┌──┴─────────────────────────────────┐
+ *   │  协议层 Protocol (本接口)            │  ← "语言"：决定命令长什么样、响应怎么拆帧
+ *   │     ├── LineProtocol (CRLF 文本)     │     把业务层的 Command/Response 翻译成
+ *   │     └── LengthFieldProtocol (二进制) │     服务端能读懂的字节流
+ *   └──┬─────────────────────────────────┘
+ *      │
+ *   通信层 SocketClientITFImpl  ← "运输"：TCP 连接、信号量、重连、缓冲
+ * </pre>
+ *
+ * <h3>为什么要抽象成接口</h3>
+ * <p>不同仪器用的协议完全不同：
+ * <ul>
+ *   <li>SCPI 仪器（泰克/是德/鼎阳）：命令以 {@code \r\n} 结尾 → {@link LineProtocol}</li>
+ *   <li>自定义二进制协议（某些功率计/频谱仪）：固定头 + 长度 + CRC → {@link LengthFieldProtocol}</li>
+ *   <li>Modbus RTU / Modbus TCP：又一种帧格式</li>
+ * </ul>
+ * 把编解码抽成接口后，Engine（SocketClientITFImpl）就不用关心具体协议 —— 它只管"发编码后的字节、收原始字节"，
+ * 协议层负责把业务语义翻译成对端能读懂的帧。这就是**策略模式**的体现。
+ *
+ * <h3>协议实现必须满足的隐含约束</h3>
+ * <ol>
+ *   <li>{@code encode} 和 {@code decode} 必须是**对称**的：decode(encode(cmd)) 必须能还原出原始 cmd 对应的 Response</li>
+ *   <li>decode 内部必须维护**跨包缓存**：TCP 是流式的，一次 decode 可能拿到半帧、也可能拿到多帧粘在一起</li>
+ *   <li>decode 必须是**线程安全**的：Engine 的接收线程可能并发调用 decode（虽然本实现只有一个接收线程，但 encode 可能和 decode 并发）</li>
+ * </ol>
+ *
+ * @see LineProtocol         SCPI 风格 CRLF 文本协议
+ * @see LengthFieldProtocol  固定头 + 长度字段 + CRC8 的二进制协议
  */
 public interface Protocol {
+
   /**
-   * 将命令对象编码成可直接写入 socket 的字节数组。
-   * 这是发送请求前的核心步骤，必须与远端协议格式完全一致。
+   * 编码：把业务层的 {@link Command} → 可直接 write 到 socket 的原始字节。
+   *
+   * <p>为什么这一步在协议层而不是 Engine 层？因为不同协议的"命令格式"完全不同：
+   * <ul>
+   *   <li>LineProtocol：{@code "MEAS:VOLT?"} → {@code [MEAS:VOLT?\r\n]}</li>
+   *   <li>LengthFieldProtocol：{@code [0xAA][LEN_H][LEN_L][PAYLOAD][CRC8]}</li>
+   * </ul>
+   * Engine 只负责"把 byte[] 发出去"，不负责"byte[] 应该长什么样"。
+   *
+   * @param command 业务层的命令载荷（已经是 byte[]，可以是文本也可以是二进制）
+   * @return 完整帧的字节数组（已经包含帧头/分隔符/CRC 等协议层附加字段）
    */
   byte[] encode(Command command);
 
   /**
-   * 将接收到的字节流交给协议解码器处理。
-   * 一次读取可能产生 0 到 N 个完整帧，因此返回值是列表而不是单一响应。
+   * 解码：把一次 TCP read 拿到的原始字节 → 切出若干个完整的 {@link Response} 帧。
+   *
+   * <h4>参数为什么是 (byte[] data, int offset, int length) 而不是 (byte[] data)</h4>
+   * <p>Engine 的接收线程用的是固定大小的 readBuffer（8192 字节），一次 in.read() 可能读不满整个 buffer，
+   * 所以只有 [offset, offset+length) 区间是有效数据。直接传子数组可以省一次 copy。
+   *
+   * <h4>为什么返回 List 而不是单个 Response</h4>
+   * <p>因为**粘包**：TCP 是流式的，一次 read 可能拿到两帧甚至更多帧粘在一起。
+   * decode 需要全部切出来一次性返回。同样，**拆包**时如果 buffer 里只有半截帧，返回空 List。
+   *
+   * <h4>decode 内部必须做什么</h4>
+   * <pre>
+   *  decode(data, off, len):
+   *    ① 把 data[off..off+len) 追加到自己的跨包缓存里
+   *    ② 从缓存里切出所有完整帧 → 构造 Response 对象
+   *    ③ 把没切完的残余（半帧）留在缓存里
+   *    ④ 返回切出来的完整帧列表（可能是空 List）
+   * </pre>
+   *
+   * @param data   原始字节数组（通常是 Engine 的接收线程 readBuffer）
+   * @param offset 有效数据在 data 中的起始偏移（inclusive）
+   * @param length 有效数据长度
+   * @return 本次成功切出的完整响应帧列表（空 List = 还在等更多字节凑帧）
    */
   List<Response> decode(byte[] data, int offset, int length);
 
   /**
-   * 返回当前协议使用的字符集，便于对响应文本和命令编码统一处理。
+   * 返回本协议使用的字符集。
+   *
+   * <p>谁会用它？Engine 层的 {@code appendToBuffers} 方法 —— 它需要把原始字节同时追加到
+   * {@code textBuffer} 里，而字节→文本的解码必须和远端协议约定的字符集一致。
+   *
+   * <p>textBuffer 的用途：sendAndMatch 里正则匹配 {@code resp.text().matches(regex)}，
+   * textBuffer 里的文本就是用这个 charset 解码出来的。如果协议是纯二进制的（不需要可读文本），
+   * 也可以返回 UTF-8（纯二进制场景下 textBuffer 匹配语义不强，但 Response.text() 仍能返回 hex-like 字符串）。
    */
   Charset charset();
 }

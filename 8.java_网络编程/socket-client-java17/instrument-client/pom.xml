@@ -12,6 +12,18 @@
         <junit.version>5.10.2</junit.version>
     </properties>
     <dependencies>
+        <!-- SLF4J 日志门面 + 简单实现，生产环境可替换为 logback/log4j2 -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.13</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.13</version>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
