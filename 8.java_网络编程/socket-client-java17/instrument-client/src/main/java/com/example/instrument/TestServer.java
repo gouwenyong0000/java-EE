@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -72,8 +73,9 @@ public final class TestServer {
   // ====================================================================
 
   private static final Map<Integer, ServerSocket> REGISTRY = new LinkedHashMap<>();
-  private static final List<Thread> WORKER_THREADS = new ArrayList<>();
+  private static final List<Thread> WORKER_THREADS = new CopyOnWriteArrayList<>();
   private static final AtomicBoolean GLOBAL_RUNNING = new AtomicBoolean(true);
+  private static final java.util.concurrent.CountDownLatch SHUTDOWN_LATCH = new java.util.concurrent.CountDownLatch(1);
 
   private TestServer() {}
 
@@ -95,10 +97,7 @@ public final class TestServer {
 
     // 阻塞主线程等退出指令
     try {
-      byte[] buf = new byte[16];
-      while (GLOBAL_RUNNING.get()) {
-        Thread.sleep(500);
-      }
+      SHUTDOWN_LATCH.await();
     } catch (InterruptedException ignored) {
       Thread.currentThread().interrupt();
     } finally {
@@ -130,6 +129,7 @@ public final class TestServer {
    */
   public static void shutdownAll() {
     GLOBAL_RUNNING.set(false);
+    SHUTDOWN_LATCH.countDown();
     synchronized (REGISTRY) {
       for (ServerSocket ss : REGISTRY.values()) {
         try { ss.close(); } catch (IOException ignored) { /* NOP */ }
@@ -189,10 +189,19 @@ public final class TestServer {
           }
         }
 
+        // 防止客户端发送大量无换行符数据导致 OOM
+        if (lineBuf.size() > 1024 * 1024) {
+          System.err.println("[Line ] Line buffer overflow (>1MB), disconnecting");
+          break;
+        }
+
         if (shouldDisconnectAfterResponse) break;
       }
-    } catch (IOException | InterruptedException  e) {
+    } catch (IOException e) {
       System.err.println("[Line ] Client error: " + e.getMessage());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      System.err.println("[Line ] Client interrupted");
     } finally {
       try { client.close(); } catch (IOException ignored) { /* NOP */ }
       System.out.println("[Line ] Disconnected: " + client.getRemoteSocketAddress());
@@ -221,7 +230,11 @@ public final class TestServer {
         try {
           int delayMs = Integer.parseInt(parts[1].trim());
           Thread.sleep(Math.min(delayMs, 60_000));  // 最多等 60s 防 hang
-        } catch (NumberFormatException | InterruptedException ignored) { /* 格式不对就不加延迟 */ }
+        } catch (NumberFormatException ignored) {
+          // 格式不对就不加延迟
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
       }
       writeAll(out, "VOLT:2.567\r\n".getBytes(StandardCharsets.UTF_8));
       return true;
@@ -290,6 +303,7 @@ public final class TestServer {
     if (cmd.equalsIgnoreCase("EXIT")) {
       writeAll(out, "SHUTTING_DOWN\r\n".getBytes(StandardCharsets.UTF_8));
       GLOBAL_RUNNING.set(false);
+      SHUTDOWN_LATCH.countDown();
       return false;
     }
 
@@ -332,6 +346,12 @@ public final class TestServer {
 
         // 追加到跨帧缓存
         frameBuf.write(readBuf, 0, n);
+
+        // 防止恶意客户端发送大量无帧数据导致 OOM
+        if (frameBuf.size() > 1024 * 1024) {
+          System.err.println("[Bin  ] Frame buffer overflow (>1MB), disconnecting");
+          break;
+        }
 
         // 从缓存里切出完整二进制帧
         byte[] all = frameBuf.toByteArray();
@@ -396,25 +416,49 @@ public final class TestServer {
       respPayload = "VOLT:1.234".getBytes(StandardCharsets.UTF_8);
     } else if (cmd.equalsIgnoreCase("PING")) {
       respPayload = "PONG".getBytes(StandardCharsets.UTF_8);
+    } else if (cmd.equalsIgnoreCase("STICKY")) {
+      // 一次写入多帧粘包响应，验证客户端拆包
+      byte[] f1 = buildBinaryFrame("STICKY:F1".getBytes(StandardCharsets.UTF_8));
+      byte[] f2 = buildBinaryFrame("STICKY:F2".getBytes(StandardCharsets.UTF_8));
+      byte[] f3 = buildBinaryFrame("STICKY:F3".getBytes(StandardCharsets.UTF_8));
+      byte[] combined = new byte[f1.length + f2.length + f3.length];
+      System.arraycopy(f1, 0, combined, 0, f1.length);
+      System.arraycopy(f2, 0, combined, f1.length, f2.length);
+      System.arraycopy(f3, 0, combined, f1.length + f2.length, f3.length);
+      writeAll(out, combined);
+      return;
+    } else if (cmd.equalsIgnoreCase("BADCRC")) {
+      // 故意构造 CRC 错误的帧，验证客户端丢弃并最终超时
+      respPayload = "BADCRC_RESP".getBytes(StandardCharsets.UTF_8);
+      byte[] resp = buildBinaryFrame(respPayload);
+      resp[resp.length - 1] ^= 0xFF; // 破坏 CRC
+      writeAll(out, resp);
+      return;
+    } else if (cmd.toUpperCase().startsWith("ECHO:")) {
+      respPayload = cmd.getBytes(StandardCharsets.UTF_8);
     } else {
       respPayload = ("OK:" + cmd).getBytes(StandardCharsets.UTF_8);
     }
 
     // 构造响应帧
-    int len = respPayload.length;
-    byte[] response = new byte[1 + 2 + len + 1];
-    response[0] = BIN_STX;
-    response[1] = (byte) (len >>> 8);
-    response[2] = (byte) len;
-    System.arraycopy(respPayload, 0, response, 3, len);
-    response[response.length - 1] = xorChecksum(response, 0, response.length - 1);
-
-    writeAll(out, response);
+    writeAll(out, buildBinaryFrame(respPayload));
   }
 
   // ====================================================================
   //  工具方法
   // ====================================================================
+
+  /** 构造一个完整的二进制响应帧：AA LEN_H LEN_L PAYLOAD CRC。 */
+  private static byte[] buildBinaryFrame(byte[] payload) {
+    int len = payload.length;
+    byte[] frame = new byte[1 + 2 + len + 1];
+    frame[0] = BIN_STX;
+    frame[1] = (byte) (len >>> 8);
+    frame[2] = (byte) len;
+    System.arraycopy(payload, 0, frame, 3, len);
+    frame[frame.length - 1] = xorChecksum(frame, 0, frame.length - 1);
+    return frame;
+  }
 
   /** 创建并注册一个 ServerSocket（线程安全）。 */
   private static ServerSocket createServerSocket(int port) throws IOException {

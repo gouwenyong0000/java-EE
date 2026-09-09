@@ -14,6 +14,7 @@
 - [用法示例](#用法示例)
 - [协议说明](#协议说明)
 - [TestServer 测试场景](#testserver-测试场景)
+- [运行测试](#运行测试)
 - [FAQ](#faq)
 
 ---
@@ -67,8 +68,8 @@
 
 ```
 src/main/java/com/example/instrument/
-├── Demo.java                          # 两种使用模式示例
-├── TestServer.java                    # 多功能测试服务器
+├── Demo.java                          # 两种使用模式示例（可直接运行）
+├── TestServer.java                    # 多功能测试服务器（5025 文本 + 9000 二进制）
 ├── api/                               # 接口层（契约）
 │   ├── ClientITF.java                 #   客户端核心接口
 │   ├── DataListener.java              #   回调监听器
@@ -77,7 +78,7 @@ src/main/java/com/example/instrument/
 ├── engine/                            # 通信层（引擎）
 │   ├── SocketClientITFImpl.java       #   ★ 核心引擎：单连接管理
 │   ├── SocketConnectionManager.java   #   ★ 多连接编排：UUID 标识
-│   ├── SocketClientConfig.java        #   配置（超时、重连等）
+│   ├── SocketClientConfig.java        #   配置（超时、重连等，含参数校验）
 │   └── SocketClientException.java     #   运行时异常
 ├── protocol/                          # 协议层（语言）
 │   ├── Protocol.java                  #   协议接口
@@ -86,7 +87,16 @@ src/main/java/com/example/instrument/
 └── model/                             # 数据模型
     ├── Command.java                   #   命令载荷（UTF-8 或原始 byte[]）
     └── Response.java                  #   协议解码后的响应（text + bytes 双重支持）
+
+src/test/java/com/example/instrument/
+├── SocketClientTest.java              # 集成测试：连接/命令/异步/粘包拆包/重连/二进制/Manager
+├── ProtocolTest.java                  # 协议层单元测试：encode/decode 边界、不可变性
+└── SocketClientConfigTest.java        # 配置参数校验测试
 ```
+
+辅助文件：
+- `mock_instrument.py` —— Python 版模拟服务端（与 TestServer 行为一致，便于无 Java 环境调试）
+- `Socket自定义协议和客户端正则解码.md` —— 协议设计与正则解码的详细设计文档
 
 ---
 
@@ -103,7 +113,7 @@ src/main/java/com/example/instrument/
     ├─ write(frame) + flush
     ├─ readPermit.release()           通知接收线程"可以读了"  ──┐
     ├─ loop:                                                  │
-    │   bufferLock → makeProbe()                             │
+    │   bufferLock → check pendingFrames                     │
     │   matcher.matches()?                                   │
     │   yes → return                                         │
     │   no  → awaitNanos(dataArrived) ◄────────────────────┤
@@ -111,15 +121,14 @@ src/main/java/com/example/instrument/
     │                     ┌─────────────────────────────────┘
     │                     ▼
     │                readPermit.acquire()
-    │                in.read → appendToBuffers()
-    │                protocol.decode → dispatch
+    │                in.read → protocol.decode() → dispatchFrames()
     │                signalAll(dataArrived)  唤醒上面的 awaitNanos
     └─ writePermit.release()
 ```
 
 ### 2. 信号量协调时序（readPermit 为什么初始 0）
 
-> 如果让接收线程持续读 socket，服务端空闲时主动推送的数据会被塞进 byteBuffer，
+> 如果让接收线程持续读 socket，服务端空闲时主动推送的数据会被塞进 `pendingFrames`，
 > 导致下一条命令的正则匹配**匹配到推送数据**（还没发命令就"有响应"了）。
 >
 > `readPermit` 初始 0 —— **只有发完命令才开始读**，完美隔离命令响应和推送数据。
@@ -332,7 +341,36 @@ Protocol 实现必须满足：
 
 ### LengthFieldProtocol 端口 9000
 
-帧格式 `AA LEN_H LEN_L PAYLOAD CRC`，支持 `MEAS:VOLT?` / `PING` 等基础命令，响应也是完整二进制帧。
+帧格式 `AA LEN_H LEN_L PAYLOAD CRC`，支持以下命令：
+
+| 命令 | 作用 | 测试什么 |
+|------|------|----------|
+| `MEAS:VOLT?` | 返回 `VOLT:1.234` 二进制帧 | 基础请求-响应 |
+| `PING` | 返回 `PONG` 二进制帧 | 心跳 |
+| `ECHO:xxx` | 原样回显 payload | 透传 |
+| `STICKY` | 一次 write 粘 3 帧二进制 | **二进制粘包处理** |
+| `BADCRC` | 返回 CRC 错误的帧 | **CRC 校验失败丢弃** |
+
+---
+
+## 运行测试
+
+项目使用 JUnit 5，所有测试随源码一起提供。
+
+```bash
+cd instrument-client
+mvn test
+```
+
+测试套件覆盖：
+
+| 测试类 | 覆盖范围 |
+|--------|----------|
+| `SocketClientTest` | 集成测试：连接生命周期、命令/响应、异步推送、粘包/拆包、自动重连、二进制协议、Manager 多连接与生命周期 |
+| `ProtocolTest` | 协议层单元测试：LineProtocol 编解码/粘包/拆包、LengthFieldProtocol 帧结构/CRC/resync、Command/Response 不可变性 |
+| `SocketClientConfigTest` | 配置参数校验：host/port 边界、各 Duration 非 null/非负、maxReconnect 边界 |
+
+测试依赖内置的 `TestServer`，会自动在 5025（文本）和 9000（二进制）端口启动模拟服务端，无需额外准备。
 
 ---
 
@@ -350,7 +388,7 @@ Protocol 实现必须满足：
 | 锁 | 保护对象 | 持有者 |
 |----|----------|--------|
 | `socketLock` | Socket 创建/关闭/input/output | `ensureConnected` / `closeSocket` |
-| `bufferLock` | byteBuffer + textBuffer + dataArrived | `appendToBuffers` / `dispatchFromBuffers` / `makeProbe` |
+| `bufferLock` | `pendingFrames` 队列 + `dataArrived` 条件 | `dispatchFrames` / `clearBuffers` / `signalDataArrived` / `sendAndMatch` 匹配循环 |
 
 ### 为什么这样设计
 
@@ -394,25 +432,39 @@ Protocol 实现必须满足：
 `disconnect()` 会停掉接收线程 + 关闭 socket。如果要重用，需要先 `init()` 再 `connect()`。
 SocketConnectionManager 的做法是：断开就移除 UUID，要重连就 `createConnection` 拿新 UUID。
 
+### 每个连接同一时刻只能发一条命令
+
+`writePermit` 初始 1 且公平，保证同一连接同一时刻只有一个发送操作在等待响应。
+如果需要并发下发多条命令，请创建多个连接（用 `SocketConnectionManager` 管理）。
+
+### sendAndRegex 的正则默认启用 DOTALL
+
+`sendAndRegex` 内部使用 `Pattern.compile(regex, Pattern.DOTALL)`，即 `.` 可以匹配换行符。
+这意味着 `"VOLT:.*"` 可以匹配 `"VOLT:1.234\r\n"`。如果需要严格按行匹配，可显式使用 `sendAndMatch` 配合自定义 `Pattern`。
+
 ---
 
 ## 依赖
 
 ```xml
-<!-- pom.xml 核心依赖（已经加好） -->
+<!-- pom.xml 核心依赖 -->
 <dependencies>
   <dependency>
     <groupId>org.slf4j</groupId>
     <artifactId>slf4j-api</artifactId>
     <version>2.0.13</version>
   </dependency>
+  <!-- 测试 -->
   <dependency>
-    <groupId>org.slf4j</groupId>
-    <artifactId>slf4j-simple</artifactId>
-    <version>2.0.13</version>
+    <groupId>org.junit.jupiter</groupId>
+    <artifactId>junit-jupiter</artifactId>
+    <version>5.10.2</version>
+    <scope>test</scope>
   </dependency>
 </dependencies>
 ```
+
+> **注意**：`slf4j-api` 只是日志门面，运行时需要搭配一个绑定实现（如 `slf4j-simple`、`logback-classic`），否则日志不会输出。本项目 `pom.xml` 未内置运行时绑定，便于使用方自行选择。
 
 ---
 

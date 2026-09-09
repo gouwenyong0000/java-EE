@@ -12,6 +12,7 @@ public record Command(byte[] payload) {
   public Command {
     // 保护调用方传入数组，避免外部后续修改导致命令内容被篡改。
     Objects.requireNonNull(payload, "payload");
+    // 只克隆一次：构造时 clone，后续 payload() 直接返回同一个引用，避免双重 copy 开销
     payload = payload.clone();
   }
 
@@ -24,7 +25,7 @@ public record Command(byte[] payload) {
 
   @Override
   public byte[] payload() {
-    // 返回副本，防止外部直接修改内部字节数组。
+    // 返回不可变副本，防止外部直接修改内部字节数组。
     return payload.clone();
   }
 }

@@ -44,6 +44,9 @@ public final class LengthFieldProtocol implements Protocol {
   /** 帧起始标记（Magic Byte），帮助解码端快速定位一帧的开始位置。 */
   private static final byte STX = (byte) 0xAA;
 
+  /** payload 最大允许字节数（64KB）。防止恶意客户端声称超大 payload 导致 buffer 无限等待。 */
+  private static final int MAX_PAYLOAD_LEN = 65535;
+
   /** PAYLOAD 的字符集，用于把字节解码成 {@link Response#text()} 可读文本。 */
   private final Charset charset;
 
@@ -146,8 +149,8 @@ public final class LengthFieldProtocol implements Protocol {
    */
   @Override
   public synchronized List<Response> decode(byte[] data, int offset, int length) {
-    // 第一步：把新收到的字节追加到跨包缓存
-    for (int i = 0; i < length; i++) buffer.write(data[offset + i]);
+    // 一次性追加，避免逐字节 write 的多次内在数组扩展检查
+    buffer.write(data, offset, length);
 
     List<Response> result = new ArrayList<>();
     byte[] all = buffer.toByteArray();
@@ -163,6 +166,12 @@ public final class LengthFieldProtocol implements Protocol {
       // ③ 大端无符号 16 位读出 payload 长度
       //    & 0xFF 是因为 Java byte 是有符号的（-128~127），必须转成无符号再参与位运算
       int payloadLen = ((all[cursor + 1] & 0xFF) << 8) | (all[cursor + 2] & 0xFF);
+
+      // payloadLen 超限 → 丢弃该假帧头，继续找下一个 STX
+      if (payloadLen > MAX_PAYLOAD_LEN) {
+        cursor++;
+        continue;
+      }
 
       // ④ 算整帧长度 = STX(1) + LEN(2) + payloadLen + CRC8(1)
       int frameLen = 1 + 2 + payloadLen + 1;
@@ -196,4 +205,12 @@ public final class LengthFieldProtocol implements Protocol {
   public Charset charset() {
     return charset;
   }
+
+  /** 清空跨包缓存。sendAndMatch 发送新命令前调用，防止粘包干扰。 */
+  @Override
+  public synchronized void clearCache() {
+    buffer.reset();
+  }
+
+
 }

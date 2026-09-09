@@ -3,6 +3,7 @@ package com.example.instrument.api;
 import com.example.instrument.model.Command;
 import com.example.instrument.model.Response;
 import java.time.Duration;
+import java.util.regex.Pattern;
 
 public interface ClientITF extends AutoCloseable {
   /** 初始化客户端内部状态，通常在真正建立连接前调用。 该步骤负责启动后台接收线程等所需资源，并确保后续 API 具备可用环境。 */
@@ -39,7 +40,8 @@ public interface ClientITF extends AutoCloseable {
    * @param timeout 超时时间；为 null 时使用 config 默认值
    */
   default Response sendAndRegex(String command, String regex, Duration timeout) {
-    return sendAndMatch(Command.of(command), response -> response.text().matches(regex), timeout);
+    Pattern compiled = Pattern.compile(regex, Pattern.DOTALL);
+    return sendAndMatch(Command.of(command), response -> compiled.matcher(response.text()).matches(), timeout);
   }
 
   /** 等同于 {@code sendAndRegex(command, regex, null)}，使用 config 默认超时。 */

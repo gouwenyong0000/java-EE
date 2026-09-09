@@ -126,7 +126,7 @@ public class SocketConnectionManager implements AutoCloseable {
     ClientITF previous = connections.put(id, client);
     // ConcurrentHashMap.put 理论上 UUID 不会重复，但还是防御一下
     if (previous != null) {
-      try { client.disconnect(); } catch (RuntimeException ignored) { /* NOP */ }
+      try { previous.disconnect(); } catch (RuntimeException ignored) { /* NOP */ }
     }
     return id;
   }
@@ -149,7 +149,7 @@ public class SocketConnectionManager implements AutoCloseable {
    */
   public Response sendAndRegex(UUID id, String command, String regex, Duration timeout) {
     ClientITF client = requireConnection(id);
-    Pattern compiled = Pattern.compile(regex);
+    Pattern compiled = Pattern.compile(regex, Pattern.DOTALL);
     return client.sendAndMatch(
         Command.of(command), resp -> compiled.matcher(resp.text()).matches(), timeout);
   }
@@ -261,7 +261,7 @@ public class SocketConnectionManager implements AutoCloseable {
    */
   public void disconnectAll() {
     shutdown.set(true);
-    for (UUID id : connections.keySet()) {
+    for (UUID id : new java.util.ArrayList<>(connections.keySet())) {
       disconnect(id);
     }
   }

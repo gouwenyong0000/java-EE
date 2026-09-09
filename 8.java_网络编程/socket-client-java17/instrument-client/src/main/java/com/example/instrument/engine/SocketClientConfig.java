@@ -31,6 +31,14 @@ public record SocketClientConfig(
     // 主机和端口是连接的最基础参数，缺失或越界都必须直接拒绝。
     if (host == null || host.isBlank()) throw new IllegalArgumentException("host is blank");
     if (port < 1 || port > 65535) throw new IllegalArgumentException("invalid port");
+    if (connectTimeout == null || connectTimeout.isNegative() || connectTimeout.isZero())
+      throw new IllegalArgumentException("connectTimeout must be positive");
+    if (responseTimeout == null || responseTimeout.isNegative() || responseTimeout.isZero())
+      throw new IllegalArgumentException("responseTimeout must be positive");
+    if (socketReadTimeout == null || socketReadTimeout.isNegative())
+      throw new IllegalArgumentException("socketReadTimeout must not be negative");
+    if (reconnectInterval == null || reconnectInterval.isNegative())
+      throw new IllegalArgumentException("reconnectInterval must not be negative");
     if (maxReconnectAttempts < 0) throw new IllegalArgumentException("maxReconnectAttempts < 0");
   }
 

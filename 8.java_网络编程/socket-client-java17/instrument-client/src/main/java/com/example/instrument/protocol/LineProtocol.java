@@ -7,6 +7,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 基于终止符分隔的文本协议（典型 CRLF）。
@@ -78,7 +79,9 @@ public final class LineProtocol implements Protocol {
 
   /** 使用指定的字符编码和终止符创建协议。 */
   public LineProtocol(Charset charset, String terminator) {
-    this.charset = charset;
+    this.charset = Objects.requireNonNull(charset, "charset");
+    Objects.requireNonNull(terminator, "terminator");
+    if (terminator.isEmpty()) throw new IllegalArgumentException("terminator must not be empty");
     this.terminator = terminator.getBytes(charset);
   }
 
@@ -94,21 +97,17 @@ public final class LineProtocol implements Protocol {
    * @return target 首次出现的起始索引；没找到返回 -1
    */
   private static int indexOf(byte[] source, byte[] target, int from) {
-    outer:
     for (int i = from; i <= source.length - target.length; i++) {
+      boolean match = true;
       for (int j = 0; j < target.length; j++) {
-        if (source[i + j] != target[j]) continue outer;
+        if (source[i + j] != target[j]) {
+          match = false;
+          break;
+        }
       }
-      return i;
+      if (match) return i;
     }
     return -1;
-  }
-
-  /** 从 source 的 [from, to) 区间截出子数组（from inclusive, to exclusive）。 */
-  private static byte[] slice(byte[] source, int from, int to) {
-    byte[] result = new byte[to - from];
-    System.arraycopy(source, from, result, 0, result.length);
-    return result;
   }
 
   /**
@@ -137,8 +136,8 @@ public final class LineProtocol implements Protocol {
    */
   @Override
   public synchronized List<Response> decode(byte[] data, int offset, int length) {
-    // 第一步：把新收到的字节追加到跨包缓存
-    for (int i = 0; i < length; i++) buffer.write(data[offset + i]);
+    // 一次性追加，避免逐字节 write 的多次内在数组扩展检查
+    buffer.write(data, offset, length);
 
     byte[] all = buffer.toByteArray();
     List<Response> result = new ArrayList<>();
@@ -156,7 +155,7 @@ public final class LineProtocol implements Protocol {
 
     // 第三步：把残余（可能是空）写回 buffer，等下次 decode 继续拼接
     buffer.reset();
-    if (frameStart > 0) buffer.writeBytes(slice(all, frameStart, all.length));
+    if (frameStart < all.length) buffer.write(all, frameStart, all.length - frameStart);
 
     return result;
   }
@@ -166,4 +165,11 @@ public final class LineProtocol implements Protocol {
   public Charset charset() {
     return charset;
   }
+
+  /** 清空跨包缓存。sendAndMatch 发送新命令前调用，防止粘包干扰。 */
+  @Override
+  public synchronized void clearCache() {
+    buffer.reset();
+  }
+
 }

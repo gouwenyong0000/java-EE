@@ -89,12 +89,21 @@ public interface Protocol {
   /**
    * 返回本协议使用的字符集。
    *
-   * <p>谁会用它？Engine 层的 {@code appendToBuffers} 方法 —— 它需要把原始字节同时追加到
-   * {@code textBuffer} 里，而字节→文本的解码必须和远端协议约定的字符集一致。
-   *
-   * <p>textBuffer 的用途：sendAndMatch 里正则匹配 {@code resp.text().matches(regex)}，
-   * textBuffer 里的文本就是用这个 charset 解码出来的。如果协议是纯二进制的（不需要可读文本），
-   * 也可以返回 UTF-8（纯二进制场景下 textBuffer 匹配语义不强，但 Response.text() 仍能返回 hex-like 字符串）。
+   * <p>Engine 层构造 {@link Response} 探针时，需要用这个 charset 把原始字节解码成可读文本，
+   * 供 {@code ResponseMatcher} 做正则匹配。
    */
   Charset charset();
+
+  /**
+   * 清空协议内部的跨包缓存。
+   *
+   * <p>谁会调用？Engine 层的 {@code sendAndMatch} 在发送新命令前会调用，
+   * 确保只匹配当前命令的响应，不被之前残留的半截帧干扰。
+   *
+   * <p>为什么这是协议层的职责而不是 Engine 层？因为跨包缓存是协议层自己的实现细节，
+   * Engine 层不应该知道协议内部怎么存数据，只需要说一句"把缓存清干净"。
+   */
+  void clearCache();
+
+
 }
