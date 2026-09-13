@@ -156,11 +156,13 @@ public final class LengthFieldProtocol implements Protocol {
          * 解码数据，提取完整的响应帧。
          * 
          * 解码流程：
-         * 1. 将新数据追加到缓冲区
-         * 2. 查找 STX (0xAA) 标记
-         * 3. 如果找到 STX，尝试读取长度字段
-         * 4. 如果有足够数据，验证校验和
-         * 5. 校验和通过则提取响应，否则跳过 STX 继续同步
+         * <ol>
+         *   <li>将新数据追加到缓冲区。</li>
+         *   <li>查找 STX（0xAA）标记并丢弃前置噪声。</li>
+         *   <li>读取长度字段，确认完整帧已经到达。</li>
+         *   <li>验证校验和，提取合法响应。</li>
+         *   <li>校验失败时前移一个字节，继续重新同步。</li>
+         * </ol>
          */
         @Override 
         public synchronized List<Response> decode(byte[] data, int offset, int length) {
@@ -180,11 +182,13 @@ public final class LengthFieldProtocol implements Protocol {
                 
                 int stxIndex = indexOfStx(b);
                 if (stxIndex < 0) {
+                    // 没有 STX 时，当前缓存不可能组成完整帧，可以全部丢弃。
                     buffer.reset();
                     break;
                 }
                 
                 if (stxIndex > 0) {
+                    // 丢弃 STX 前的噪声并重新对齐；同一次 read() 中的其他帧仍会保留。
                     buffer.reset();
                     buffer.write(b, stxIndex, b.length - stxIndex);
                     b = buffer.toByteArray();
@@ -195,6 +199,7 @@ public final class LengthFieldProtocol implements Protocol {
                 
                 int payloadLen = ((b[1] & 0xff) << 8) | (b[2] & 0xff);
                 if (payloadLen > max) {
+                    // 长度字段来自远端，发现超限时只丢弃一个字节，继续尝试重同步。
                     discardOne();
                     continue;
                 }
@@ -207,6 +212,7 @@ public final class LengthFieldProtocol implements Protocol {
                 byte expected = checksum(b, 0, total - 1);
                 byte actual = b[total - 1];
                 if (expected != actual) {
+                    // 校验失败时只前移一个字节，避免跳过紧随其后的合法帧。
                     discardOne();
                     continue;
                 }
@@ -217,6 +223,7 @@ public final class LengthFieldProtocol implements Protocol {
                 
                 buffer.reset();
                 if (b.length > total) {
+                    // 一个 TCP 读取可能携带多个完整帧，保留当前帧之后的剩余字节。
                     buffer.write(b, total, b.length - total);
                 }
             }

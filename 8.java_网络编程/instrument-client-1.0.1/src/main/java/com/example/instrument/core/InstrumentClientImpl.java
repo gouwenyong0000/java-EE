@@ -20,8 +20,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * InstrumentClient 接口的主要实现类。
  * 
  * <p>架构概述：</p>
- * 该类是客户端的核心实现，整合了连接管理、协议编解码、请求处理等功能。
- * 主要组件包括：
+ * <p>该类是客户端的核心实现，整合了连接管理、协议编解码和请求处理。
+ * 主要组件如下：</p>
  * <ul>
  *   <li>TcpConnection：底层 TCP 连接</li>
  *   <li>ProtocolEncoder/ProtocolDecoder：协议编解码</li>
@@ -260,6 +260,8 @@ public final class InstrumentClientImpl implements InstrumentClient {
         requestLock.lock();
         PendingRequest pending = null;
         try {
+            // 协议没有请求 ID，同一连接只能同时等待一个响应。
+            // requestLock 覆盖“检查、注册、写入”这三个步骤，避免并发占用响应通道。
             if (requestManager.hasPending()) {
                 throw new IllegalStateException("another request is pending");
             }
@@ -269,6 +271,8 @@ public final class InstrumentClientImpl implements InstrumentClient {
                 }
                 connect();
             }
+
+            // 先注册 pending，再写入命令，避免快速响应在 write 返回前被误判为异步数据。
             pending = requestManager.register(request.matcher());
             
             try {
@@ -281,6 +285,8 @@ public final class InstrumentClientImpl implements InstrumentClient {
             }
             
             try {
+                // future 由 Receiver -> Decoder -> Dispatcher -> RequestManager 这条链路完成；
+                // 当前线程只负责在调用方指定的期限内等待结果。
                 return pending.future().get(request.timeout().toNanos(), TimeUnit.NANOSECONDS);
             } catch (TimeoutException e) {
                 requestManager.remove(pending);

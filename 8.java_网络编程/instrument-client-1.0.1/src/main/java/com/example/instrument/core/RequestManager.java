@@ -14,10 +14,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>保证同时只有一个请求在等待响应</li>
  * </ul>
  * 
- * <p>设计考虑：</p>
- * <p>使用 AtomicReference 实现单例 pending 模式，保证线程安全。
- * 同一时刻只能有一个请求在等待，这是协议设计的限制，
- * 因为响应没有请求 ID，只能按顺序匹配。</p>
+ * <p>设计考虑：使用 AtomicReference 实现单个 pending 请求的线程安全管理。
+ * 同一时刻只能有一个请求在等待，这是因为响应没有请求 ID，只能按顺序匹配。</p>
  * 
  * @see PendingRequest
  * @see ResponseMatcher
@@ -59,9 +57,11 @@ final class RequestManager {
         if (request == null) {
             return false;
         }
+        // matcher 可能拒绝当前响应。此时保留 pending，继续等待后续响应。
         if (!request.tryComplete(response)) {
             return false;
         }
+        // 使用 CAS，防止超时线程同时 remove 时误删后来注册的请求。
         pending.compareAndSet(request, null);
         return true;
     }
