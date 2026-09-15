@@ -7,6 +7,8 @@ import com.example.instrument.protocol.Protocol;
 import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 多连接管理器，统一管理多个 InstrumentClient 实例的生命周期。
@@ -31,6 +33,7 @@ public final class ConnectionManager implements AutoCloseable {
 
   /** 存储所有客户端的并发映射表，key 为 UUID，value 为 InstrumentClient 实例 */
   private final Map<UUID, InstrumentClient> clients = new ConcurrentHashMap<>();
+  private static final Logger log = LoggerFactory.getLogger(ConnectionManager.class);
 
   /**
    * 创建新的仪器客户端连接并注册到管理器中。
@@ -43,6 +46,7 @@ public final class ConnectionManager implements AutoCloseable {
   public UUID add(InetSocketAddress address, Protocol protocol, ClientConfig config) {
     UUID id = UUID.randomUUID();
     clients.put(id, new InstrumentClientImpl(address, protocol, config));
+    log.info("added client id={} address={}", id, address);
     return id;
   }
 
@@ -83,7 +87,10 @@ public final class ConnectionManager implements AutoCloseable {
    */
   public void remove(UUID id) {
     InstrumentClient c = clients.remove(id);
-    if (c != null) c.close();
+    if (c != null) {
+      log.debug("removing client id={}", id);
+      c.close();
+    }
   }
 
   /**
@@ -108,6 +115,7 @@ public final class ConnectionManager implements AutoCloseable {
    */
   @Override
   public void close() {
+    log.info("closing ConnectionManager with {} client(s)", clients.size());
     clients.values().forEach(InstrumentClient::close);
     clients.clear();
   }

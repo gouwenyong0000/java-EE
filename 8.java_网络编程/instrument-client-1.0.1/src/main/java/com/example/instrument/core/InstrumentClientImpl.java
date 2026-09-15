@@ -15,10 +15,12 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.ReentrantLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * InstrumentClient 接口的主要实现类。
- * 
+ *
  * <p>架构概述：</p>
  * <p>该类是客户端的核心实现，整合了连接管理、协议编解码和请求处理。
  * 主要组件如下：</p>
@@ -29,7 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *   <li>ResponseDispatcher：响应分发</li>
  *   <li>Receiver：数据接收线程</li>
  * </ul>
- * 
+ *
  * <p>线程模型：</p>
  * <ul>
  *   <li>主线程：发起请求、连接管理</li>
@@ -37,21 +39,23 @@ import java.util.concurrent.locks.ReentrantLock;
  *   <li>请求执行器：单线程池，执行异步请求</li>
  *   <li>重连调度器：单线程池，处理重连延迟</li>
  * </ul>
- * 
+ *
  * <p>关键设计：</p>
  * <ul>
  *   <li>双锁策略：requestLock 用于请求级同步，lifecycleLock 用于连接生命周期同步</li>
  *   <li>幂等重试：IDEMPOTENT 命令在连接断开时会自动重试</li>
  *   <li>优雅关闭：使用 volatile 标志位协调各线程退出</li>
  * </ul>
- * 
+ *
  * @see InstrumentClient
  * @see TcpConnection
  * @see RequestManager
  * @see ResponseDispatcher
  */
 public final class InstrumentClientImpl implements InstrumentClient {
-    
+
+    private static final Logger log = LoggerFactory.getLogger(InstrumentClientImpl.class);
+
     private final InetSocketAddress address;
     private final Protocol protocol;
     private final ClientConfig config;
@@ -62,16 +66,16 @@ public final class InstrumentClientImpl implements InstrumentClient {
     private final ClientMetrics metrics = new ClientMetrics();
     private final ResponseDispatcher dispatcher;
     private final ReconnectPolicy reconnectPolicy;
-    
+
     private final ReentrantLock requestLock = new ReentrantLock(true);
     private final ReentrantLock lifecycleLock = new ReentrantLock(true);
-    
+
     private final ExecutorService requestExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "instrument-request"));
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "instrument-reconnect"));
-    
+
     private final CopyOnWriteArrayList<ConnectionListener> connectionListeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean reconnectScheduled = new AtomicBoolean();
-    
+
     private volatile Receiver receiver;
     private volatile Thread receiverThread;
     private volatile boolean closed;
@@ -98,24 +102,27 @@ public final class InstrumentClientImpl implements InstrumentClient {
 
     /**
      * 连接到服务器。
-     * 
+     *
      * 如果已连接则不执行任何操作。
      * 连接成功后启动接收线程。
      */
-    @Override 
+    @Override
     public void connect() {
         lifecycleLock.lock();
         try {
             ensureNotClosed();
             reconnectSuppressed = false;
             if (connection.isConnected()) {
+                log.debug("already connected to {}", address);
                 return;
             }
+            log.info("connecting to {}", address);
             connection.connect();
             decoder.reset();
             startReceiver();
             reconnectAttempt = 0;
             notifyConnected();
+            log.info("connected to {} successfully", address);
         } finally {
             lifecycleLock.unlock();
         }
@@ -142,16 +149,17 @@ public final class InstrumentClientImpl implements InstrumentClient {
      */
     private void onReceiverFailure(Throwable cause) {
         if (closed) return;
-        
+
         lifecycleLock.lock();
         try {
             if (!connection.isConnected()) {
                 // 连接已断开
             }
+            log.warn("receiver failed on {}: {}", address, cause.toString());
+            connection.disconnect();
             requestManager.fail(new ConnectionException("connection lost: " + address, cause));
             notifyDisconnected(cause);
-            connection.disconnect();
-            
+
             if (!reconnectSuppressed) {
                 scheduleReconnect(cause);
             }
@@ -178,13 +186,15 @@ public final class InstrumentClientImpl implements InstrumentClient {
         int attempt = ++reconnectAttempt;
         if (!reconnectPolicy.canAttempt(attempt)) {
             reconnectScheduled.set(false);
+            log.error("reconnect to {} failed after {} attempts", address, attempt - 1, cause);
             notifyReconnectFailed(cause);
             return;
         }
-        
+
         Duration delay = reconnectPolicy.delay(attempt);
+        log.info("reconnecting to {} attempt={}/{} delay={}", address, attempt, reconnectPolicy.maxAttempts(), delay);
         notifyReconnecting(attempt, delay, cause);
-        
+
         scheduler.schedule(() -> {
             if (closed || reconnectSuppressed) {
                 reconnectScheduled.set(false);
@@ -202,44 +212,44 @@ public final class InstrumentClientImpl implements InstrumentClient {
     /**
      * 断开与服务器的连接。
      */
-    @Override 
+    @Override
     public void disconnect() {
         lifecycleLock.lock();
         try {
             if (closed) return;
+            log.info("disconnecting from {}...", address);
             reconnectSuppressed = true;
             reconnectScheduled.set(false);
             Receiver r = receiver;
             if (r != null) r.stop();
-            requestManager.fail(new ConnectionException("client disconnected"));
             connection.disconnect();
-            decoder.reset();
+            requestManager.fail(new ConnectionException("client disconnected"));
             notifyDisconnected(null);
         } finally {
             lifecycleLock.unlock();
         }
     }
 
-    @Override 
+    @Override
     public boolean isConnected() {
         return connection.isConnected();
     }
 
     /**
      * 同步发送请求并等待响应。
-     * 
+     *
      * 对于 IDEMPOTENT 命令，如果连接断开会自动重连重试。
      */
-    @Override 
+    @Override
     public Response request(Command command, ResponseMatcher matcher, Duration timeout, CommandIdempotency idempotency) {
         Objects.requireNonNull(command);
         Objects.requireNonNull(matcher);
         Objects.requireNonNull(timeout);
         Objects.requireNonNull(idempotency);
-        
+
         Request request = new Request(command, matcher, timeout, idempotency);
         int attempts = 0;
-        
+
         while (true) {
             try {
                 return executeOnce(request);
@@ -274,7 +284,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
 
             // 先注册 pending，再写入命令，避免快速响应在 write 返回前被误判为异步数据。
             pending = requestManager.register(request.matcher());
-            
+
             try {
                 connection.write(encoder.encode(request.command()));
                 metrics.sent(request.command().length());
@@ -283,7 +293,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
                 onReceiverFailure(e);
                 throw new ConnectionException("write failed: " + address, e);
             }
-            
+
             try {
                 // future 由 Receiver -> Decoder -> Dispatcher -> RequestManager 这条链路完成；
                 // 当前线程只负责在调用方指定的期限内等待结果。
@@ -330,12 +340,12 @@ public final class InstrumentClientImpl implements InstrumentClient {
         }
     }
 
-    @Override 
+    @Override
     public CompletableFuture<Response> requestAsync(Command command, ResponseMatcher matcher, Duration timeout, CommandIdempotency idempotency) {
         return CompletableFuture.supplyAsync(() -> request(command, matcher, timeout, idempotency), requestExecutor);
     }
 
-    @Override 
+    @Override
     public void send(Command command) {
         requestLock.lock();
         try {
@@ -357,27 +367,27 @@ public final class InstrumentClientImpl implements InstrumentClient {
         }
     }
 
-    @Override 
+    @Override
     public void addDataListener(DataListener listener) {
         dispatcher.addListener(listener);
     }
 
-    @Override 
+    @Override
     public void removeDataListener(DataListener listener) {
         dispatcher.removeListener(listener);
     }
 
-    @Override 
+    @Override
     public void addConnectionListener(ConnectionListener listener) {
         connectionListeners.add(Objects.requireNonNull(listener));
     }
 
-    @Override 
+    @Override
     public void removeConnectionListener(ConnectionListener listener) {
         connectionListeners.remove(listener);
     }
 
-    @Override 
+    @Override
     public BlockingDataListener blockingDataListener() {
         return new BlockingDataListener(dispatcher.queue());
     }
@@ -424,23 +434,25 @@ public final class InstrumentClientImpl implements InstrumentClient {
     /**
      * 关闭客户端并释放资源。
      */
-    @Override 
+    @Override
     public void close() {
         lifecycleLock.lock();
         try {
             if (closed) return;
             closed = true;
+            log.info("closing client for {}...", address);
             reconnectSuppressed = true;
             reconnectScheduled.set(false);
             Receiver r = receiver;
             if (r != null) r.stop();
-            requestManager.fail(new ConnectionException("client closed"));
             connection.close();
             decoder.reset();
+            requestManager.fail(new ConnectionException("client closed"));
         } finally {
             lifecycleLock.unlock();
         }
         requestExecutor.shutdownNow();
         scheduler.shutdownNow();
+        log.info("client for {} closed", address);
     }
 }

@@ -6,10 +6,12 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 数据接收器，负责从连接读取数据并解码。
- * 
+ *
  * <p>职责：</p>
  * <ul>
  *   <li>在独立线程中运行，持续从连接读取数据</li>
@@ -17,7 +19,7 @@ import java.util.function.Consumer;
  *   <li>将解码后的响应交给 ResponseDispatcher 分发</li>
  *   <li>处理连接断开、读取错误等情况</li>
  * </ul>
- * 
+ *
  * <p>生命周期：</p>
  * <ol>
  *   <li>创建时指定连接、解码器、分发器等组件</li>
@@ -25,13 +27,15 @@ import java.util.function.Consumer;
  *   <li>接收线程持续读取数据，直到 stop() 被调用或连接断开</li>
  *   <li>发生错误时调用 errorHandler 回调</li>
  * </ol>
- * 
+ *
  * @see Connection
  * @see ProtocolDecoder
  * @see ResponseDispatcher
  */
 final class Receiver implements Runnable {
     
+    private static final Logger log = LoggerFactory.getLogger(Receiver.class);
+
     private final Connection connection;
     private final ProtocolDecoder decoder;
     private final ResponseDispatcher dispatcher;
@@ -59,7 +63,7 @@ final class Receiver implements Runnable {
 
     /**
      * 停止接收。
-     * 
+     *
      * 设置 running = false，接收线程会在下次循环检查时退出。
      */
     void stop() {
@@ -68,13 +72,14 @@ final class Receiver implements Runnable {
 
     /**
      * 接收循环。
-     * 
+     *
      * 持续从连接读取数据，解码并分发，直到 stop() 被调用或连接断开。
      */
     @Override 
     public void run() {
         running = true;
         byte[] buffer = new byte[bufferSize];
+        log.debug("receiver started, bufferSize={}", bufferSize);
         
         try {
             while (running && connection.isConnected()) {
@@ -86,6 +91,10 @@ final class Receiver implements Runnable {
                     continue;
                 }
                 
+                if (log.isTraceEnabled()) {
+                    log.trace("received {} bytes", n);
+                }
+                
                 List<com.example.instrument.model.Response> frames = decoder.decode(buffer, 0, n);
                 for (var frame : frames) {
                     dispatcher.dispatch(frame);
@@ -93,10 +102,12 @@ final class Receiver implements Runnable {
             }
         } catch (Throwable t) {
             if (running) {
+                log.debug("receiver stopped due to error: {}", t.toString());
                 errorHandler.accept(t);
             }
         } finally {
             running = false;
+            log.debug("receiver stopped");
         }
     }
 }
