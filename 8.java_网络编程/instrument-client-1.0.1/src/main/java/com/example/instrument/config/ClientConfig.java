@@ -230,7 +230,11 @@ public final class ClientConfig {
          * @throws NullPointerException 如果 v 为空
          */
         public Builder connectTimeout(Duration v) {
-            connectTimeout = Objects.requireNonNull(v);
+            Objects.requireNonNull(v, "connectTimeout");
+            if (v.isZero() || v.isNegative()) {
+                throw new IllegalArgumentException("connectTimeout must be > 0, got: " + v);
+            }
+            connectTimeout = v;
             return this;
         }
 
@@ -242,7 +246,11 @@ public final class ClientConfig {
          * @throws NullPointerException 如果 v 为空
          */
         public Builder responseTimeout(Duration v) {
-            responseTimeout = Objects.requireNonNull(v);
+            Objects.requireNonNull(v, "responseTimeout");
+            if (v.isZero() || v.isNegative()) {
+                throw new IllegalArgumentException("responseTimeout must be > 0, got: " + v);
+            }
+            responseTimeout = v;
             return this;
         }
 
@@ -254,7 +262,9 @@ public final class ClientConfig {
          * @throws IllegalArgumentException 如果 v 为负数
          */
         public Builder socketReadTimeoutMillis(int v) {
-            if (v < 0) throw new IllegalArgumentException();
+            if (v < 0) {
+                throw new IllegalArgumentException("socketReadTimeoutMillis must be >= 0, got: " + v);
+            }
             socketReadTimeoutMillis = v;
             return this;
         }
@@ -267,7 +277,9 @@ public final class ClientConfig {
          * @throws IllegalArgumentException 如果 v <= 0
          */
         public Builder receiveBufferSize(int v) {
-            if (v <= 0) throw new IllegalArgumentException();
+            if (v <= 0) {
+                throw new IllegalArgumentException("receiveBufferSize must be > 0, got: " + v);
+            }
             receiveBufferSize = v;
             return this;
         }
@@ -280,7 +292,9 @@ public final class ClientConfig {
          * @throws IllegalArgumentException 如果 v <= 0
          */
         public Builder asyncQueueCapacity(int v) {
-            if (v <= 0) throw new IllegalArgumentException();
+            if (v <= 0) {
+                throw new IllegalArgumentException("asyncQueueCapacity must be > 0, got: " + v);
+            }
             asyncQueueCapacity = v;
             return this;
         }

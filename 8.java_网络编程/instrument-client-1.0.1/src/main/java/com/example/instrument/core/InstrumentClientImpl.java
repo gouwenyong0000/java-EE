@@ -74,6 +74,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "instrument-reconnect"));
 
     private final CopyOnWriteArrayList<ConnectionListener> connectionListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<ClientInterceptor> interceptors = new CopyOnWriteArrayList<>();
     private final AtomicBoolean reconnectScheduled = new AtomicBoolean();
 
     private volatile Receiver receiver;
@@ -242,19 +243,26 @@ public final class InstrumentClientImpl implements InstrumentClient {
      */
     @Override
     public Response request(Command command, ResponseMatcher matcher, Duration timeout, CommandIdempotency idempotency) {
-        Objects.requireNonNull(command);
-        Objects.requireNonNull(matcher);
-        Objects.requireNonNull(timeout);
-        Objects.requireNonNull(idempotency);
+        Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(matcher, "matcher");
+        Objects.requireNonNull(timeout, "timeout");
+        Objects.requireNonNull(idempotency, "idempotency");
+
+        notifyInterceptorsBeforeRequest(command, idempotency);
+        long startNanos = System.nanoTime();
 
         Request request = new Request(command, matcher, timeout, idempotency);
         int attempts = 0;
 
         while (true) {
             try {
-                return executeOnce(request);
-            } catch (ConnectionException e) {
+                Response response = executeOnce(request);
+                Duration latency = Duration.ofNanos(System.nanoTime() - startNanos);
+                notifyInterceptorsAfterResponse(command, response, latency);
+                return response;
+            } catch (Exception e) {
                 if (request.idempotency() != CommandIdempotency.IDEMPOTENT || attempts >= reconnectPolicy.maxAttempts()) {
+                    notifyInterceptorsAfterFailure(command, e);
                     throw e;
                 }
                 attempts++;
@@ -379,12 +387,30 @@ public final class InstrumentClientImpl implements InstrumentClient {
 
     @Override
     public void addConnectionListener(ConnectionListener listener) {
-        connectionListeners.add(Objects.requireNonNull(listener));
+        connectionListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
     public void removeConnectionListener(ConnectionListener listener) {
         connectionListeners.remove(listener);
+    }
+
+    /**
+     * 添加拦截器。
+     *
+     * @param interceptor 拦截器实例
+     */
+    public void addInterceptor(ClientInterceptor interceptor) {
+        interceptors.add(Objects.requireNonNull(interceptor, "interceptor"));
+    }
+
+    /**
+     * 移除拦截器。
+     *
+     * @param interceptor 拦截器实例
+     */
+    public void removeInterceptor(ClientInterceptor interceptor) {
+        interceptors.remove(interceptor);
     }
 
     @Override
@@ -404,6 +430,36 @@ public final class InstrumentClientImpl implements InstrumentClient {
     private void ensureNotClosed() {
         if (closed) {
             throw new ConnectionException("client is closed");
+        }
+    }
+
+    private void notifyInterceptorsBeforeRequest(Command command, CommandIdempotency idempotency) {
+        for (var interceptor : interceptors) {
+            try {
+                interceptor.beforeRequest(command, idempotency);
+            } catch (Throwable t) {
+                log.warn("interceptor beforeRequest error", t);
+            }
+        }
+    }
+
+    private void notifyInterceptorsAfterResponse(Command command, Response response, Duration latency) {
+        for (var interceptor : interceptors) {
+            try {
+                interceptor.afterResponse(command, response, latency);
+            } catch (Throwable t) {
+                log.warn("interceptor afterResponse error", t);
+            }
+        }
+    }
+
+    private void notifyInterceptorsAfterFailure(Command command, Throwable throwable) {
+        for (var interceptor : interceptors) {
+            try {
+                interceptor.afterFailure(command, throwable);
+            } catch (Throwable t) {
+                log.warn("interceptor afterFailure error", t);
+            }
         }
     }
 
@@ -451,8 +507,24 @@ public final class InstrumentClientImpl implements InstrumentClient {
         } finally {
             lifecycleLock.unlock();
         }
-        requestExecutor.shutdownNow();
-        scheduler.shutdownNow();
+        shutdownExecutorGracefully(requestExecutor, "request-executor");
+        shutdownExecutorGracefully(scheduler, "reconnect-scheduler");
         log.info("client for {} closed", address);
+    }
+
+    private void shutdownExecutorGracefully(ExecutorService executor, String name) {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
+                log.warn("{} did not terminate in time, forcing shutdown", name);
+                executor.shutdownNow();
+                if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
+                    log.error("{} failed to terminate", name);
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            executor.shutdownNow();
+        }
     }
 }

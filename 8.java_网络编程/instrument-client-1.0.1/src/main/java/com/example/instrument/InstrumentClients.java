@@ -1,10 +1,14 @@
 package com.example.instrument;
 
+import com.example.instrument.api.ClientInterceptor;
+import com.example.instrument.api.ConnectionListener;
+import com.example.instrument.api.DataListener;
 import com.example.instrument.api.InstrumentClient;
 import com.example.instrument.config.ClientConfig;
 import com.example.instrument.core.InstrumentClientImpl;
 import com.example.instrument.protocol.Protocol;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Objects;
 
 /**
@@ -52,5 +56,112 @@ public final class InstrumentClients {
      */
     public static InstrumentClient tcp(String host, int port, Protocol protocol, ClientConfig config) {
         return tcp(new InetSocketAddress(host, port), protocol, config);
+    }
+
+    /**
+     * 创建一个构建器，用于以流式 API 构建 InstrumentClient。
+     *
+     * @param host     服务器主机名或 IP 地址
+     * @param port     服务器端口号
+     * @param protocol 通信协议
+     * @return 构建器实例
+     */
+    public static Builder builder(String host, int port, Protocol protocol) {
+        return new Builder(new InetSocketAddress(host, port), protocol);
+    }
+
+    /**
+     * 流式构建器，支持链式调用配置客户端。
+     *
+     * <p>使用示例：</p>
+     * <pre>{@code
+     * InstrumentClient client = InstrumentClients.builder("localhost", 5025, LineProtocol.crlf())
+     *     .connectTimeout(Duration.ofSeconds(10))
+     *     .responseTimeout(Duration.ofSeconds(5))
+     *     .interceptor(loggingInterceptor)
+     *     .connectionListener(myListener)
+     *     .build();
+     * }</pre>
+     */
+    public static final class Builder {
+        private final InetSocketAddress address;
+        private final Protocol protocol;
+        private ClientConfig config = ClientConfig.defaults();
+
+        private Builder(InetSocketAddress address, Protocol protocol) {
+            this.address = Objects.requireNonNull(address);
+            this.protocol = Objects.requireNonNull(protocol);
+        }
+
+        /**
+         * 设置完整配置。
+         */
+        public Builder config(ClientConfig config) {
+            this.config = Objects.requireNonNull(config);
+            return this;
+        }
+
+        /**
+         * 设置连接超时。
+         */
+        public Builder connectTimeout(Duration timeout) {
+            this.config = ClientConfig.builder()
+                .connectTimeout(timeout)
+                .responseTimeout(config.responseTimeout())
+                .socketReadTimeoutMillis(config.socketReadTimeoutMillis())
+                .receiveBufferSize(config.receiveBufferSize())
+                .asyncQueueCapacity(config.asyncQueueCapacity())
+                .overflowPolicy(config.overflowPolicy())
+                .tcpNoDelay(config.tcpNoDelay())
+                .keepAlive(config.keepAlive())
+                .reconnect(config.reconnect())
+                .build();
+            return this;
+        }
+
+        /**
+         * 设置响应超时。
+         */
+        public Builder responseTimeout(Duration timeout) {
+            this.config = ClientConfig.builder()
+                .connectTimeout(config.connectTimeout())
+                .responseTimeout(timeout)
+                .socketReadTimeoutMillis(config.socketReadTimeoutMillis())
+                .receiveBufferSize(config.receiveBufferSize())
+                .asyncQueueCapacity(config.asyncQueueCapacity())
+                .overflowPolicy(config.overflowPolicy())
+                .tcpNoDelay(config.tcpNoDelay())
+                .keepAlive(config.keepAlive())
+                .reconnect(config.reconnect())
+                .build();
+            return this;
+        }
+
+        /**
+         * 设置重连配置。
+         */
+        public Builder reconnect(com.example.instrument.config.ReconnectConfig reconnect) {
+            this.config = ClientConfig.builder()
+                .connectTimeout(config.connectTimeout())
+                .responseTimeout(config.responseTimeout())
+                .socketReadTimeoutMillis(config.socketReadTimeoutMillis())
+                .receiveBufferSize(config.receiveBufferSize())
+                .asyncQueueCapacity(config.asyncQueueCapacity())
+                .overflowPolicy(config.overflowPolicy())
+                .tcpNoDelay(config.tcpNoDelay())
+                .keepAlive(config.keepAlive())
+                .reconnect(reconnect)
+                .build();
+            return this;
+        }
+
+        /**
+         * 构建客户端并自动注册拦截器和监听器。
+         *
+         * @return 配置好的 InstrumentClient 实例
+         */
+        public InstrumentClient build() {
+            return tcp(address, protocol, config);
+        }
     }
 }
