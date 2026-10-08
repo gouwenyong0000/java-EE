@@ -147,4 +147,47 @@ public interface ResponseMatcher {
         Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
         return r -> pattern.matcher(r.text(charset)).matches();
     }
+
+    /**
+     * 创建一个永不匹配的匹配器。
+     *
+     * @return 始终返回 false 的 ResponseMatcher 实例
+     */
+    static ResponseMatcher never() {
+        return r -> false;
+    }
+
+    /**
+     * 将当前匹配器与另一个匹配器进行逻辑"与"组合。
+     * 仅当两个匹配器都返回 true 时才匹配。
+     *
+     * @param other 另一个匹配器，不能为空
+     * @return 组合后的匹配器
+     */
+    default ResponseMatcher and(ResponseMatcher other) {
+        Objects.requireNonNull(other);
+        return r -> this.matches(r) && other.matches(r);
+    }
+
+    /**
+     * 将当前匹配器与另一个匹配器进行逻辑"或"组合。
+     * 任一匹配器返回 true 即匹配。
+     *
+     * @param other 另一个匹配器，不能为空
+     * @return 组合后的匹配器
+     */
+    default ResponseMatcher or(ResponseMatcher other) {
+        Objects.requireNonNull(other);
+        return r -> this.matches(r) || other.matches(r);
+    }
+
+    /**
+     * 取反当前匹配器。
+     * 原匹配器返回 true 时新匹配器返回 false，反之亦然。
+     *
+     * @return 取反后的匹配器
+     */
+    default ResponseMatcher negate() {
+        return r -> !this.matches(r);
+    }
 }

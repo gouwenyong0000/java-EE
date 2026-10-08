@@ -5,9 +5,12 @@ import com.example.instrument.api.InstrumentClient;
 import com.example.instrument.api.ResponseMatcher;
 import com.example.instrument.config.ClientConfig;
 import com.example.instrument.config.ReconnectConfig;
-import com.example.instrument.core.InstrumentClientImpl;
+import com.example.instrument.factory.InstrumentClients;
+import com.example.instrument.network.ConnectionState;
+import com.example.instrument.engine.InstrumentClientImpl;
 import com.example.instrument.diagnostics.ClientDiagnostics;
 import com.example.instrument.exception.ConnectionException;
+import com.example.instrument.metrics.ClientMetrics;
 import com.example.instrument.model.Command;
 import com.example.instrument.model.CommandIdempotency;
 import com.example.instrument.model.Response;
@@ -29,6 +32,19 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * 健壮性与可扩展性测试。
+ *
+ * <p>覆盖以下独特场景（不与其他测试类重复）：</p>
+ * <ul>
+ *   <li>拦截器生命周期（正常/失败/异常/多拦截器/移除）</li>
+ *   <li>MockConnection 模拟各种网络故障</li>
+ *   <li>诊断框架集成验证</li>
+ *   <li>Builder 流式 API 完整性</li>
+ *   <li>优雅关闭与幂等 close</li>
+ *   <li>指标快照可用性</li>
+ * </ul>
+ */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RobustnessExtensibilityTest {
 
@@ -47,9 +63,7 @@ class RobustnessExtensibilityTest {
 
     @AfterAll
     static void stopServer() throws Exception {
-        if (server != null) {
-            server.stop();
-        }
+        if (server != null) server.stop();
     }
 
     @BeforeEach
@@ -64,58 +78,12 @@ class RobustnessExtensibilityTest {
         }
     }
 
+    // ==================== 拦截器 ====================
+
     @Test
     @Order(1)
-    @DisplayName("Builder 参数校验 - 负数超时抛出异常")
-    void t01_builderValidation_negativeTimeout() {
-        assertThrows(IllegalArgumentException.class, () ->
-            ClientConfig.builder().connectTimeout(Duration.ofSeconds(-1)).build());
-    }
-
-    @Test
-    @Order(2)
-    @DisplayName("Builder 参数校验 - 零超时抛出异常")
-    void t02_builderValidation_zeroTimeout() {
-        assertThrows(IllegalArgumentException.class, () ->
-            ClientConfig.builder().connectTimeout(Duration.ZERO).build());
-    }
-
-    @Test
-    @Order(3)
-    @DisplayName("Builder 参数校验 - 负数缓冲区抛出异常")
-    void t03_builderValidation_negativeBuffer() {
-        assertThrows(IllegalArgumentException.class, () ->
-            ClientConfig.builder().receiveBufferSize(-1).build());
-    }
-
-    @Test
-    @Order(4)
-    @DisplayName("Builder 参数校验 - 零缓冲区抛出异常")
-    void t04_builderValidation_zeroBuffer() {
-        assertThrows(IllegalArgumentException.class, () ->
-            ClientConfig.builder().receiveBufferSize(0).build());
-    }
-
-    @Test
-    @Order(5)
-    @DisplayName("Builder 参数校验 - 负数 socket 超时抛出异常")
-    void t05_builderValidation_negativeSocketTimeout() {
-        assertThrows(IllegalArgumentException.class, () ->
-            ClientConfig.builder().socketReadTimeoutMillis(-1).build());
-    }
-
-    @Test
-    @Order(6)
-    @DisplayName("Builder 参数校验 - 零 socket 超时允许")
-    void t06_builderValidation_zeroSocketTimeout() {
-        assertDoesNotThrow(() ->
-            ClientConfig.builder().socketReadTimeoutMillis(0).build());
-    }
-
-    @Test
-    @Order(7)
     @DisplayName("拦截器 - 正常请求触发 beforeRequest 和 afterResponse")
-    void t07_interceptor_normalFlow() throws Exception {
+    void t01_interceptor_normalFlow() throws Exception {
         List<String> events = new ArrayList<>();
         AtomicReference<Duration> latencyRef = new AtomicReference<>();
 
@@ -158,9 +126,9 @@ class RobustnessExtensibilityTest {
     }
 
     @Test
-    @Order(8)
+    @Order(2)
     @DisplayName("拦截器 - 失败请求触发 afterFailure")
-    void t08_interceptor_failureFlow() {
+    void t02_interceptor_failureFlow() {
         List<String> events = new ArrayList<>();
 
         ClientInterceptor interceptor = new ClientInterceptor() {
@@ -197,9 +165,9 @@ class RobustnessExtensibilityTest {
     }
 
     @Test
-    @Order(9)
+    @Order(3)
     @DisplayName("拦截器 - 拦截器抛异常不影响主流程")
-    void t09_interceptor_exceptionDoesNotAffectFlow() throws Exception {
+    void t03_interceptor_exceptionDoesNotAffectFlow() throws Exception {
         client = InstrumentClients.builder("localhost", BASE_PORT, lineProtocol)
             .connectTimeout(Duration.ofSeconds(5))
             .responseTimeout(Duration.ofSeconds(3))
@@ -220,170 +188,9 @@ class RobustnessExtensibilityTest {
     }
 
     @Test
-    @Order(10)
-    @DisplayName("优雅关闭 - close 等待线程池终止")
-    void t10_gracefulShutdown() throws Exception {
-        client = InstrumentClients.builder("localhost", BASE_PORT, lineProtocol)
-            .connectTimeout(Duration.ofSeconds(5))
-            .responseTimeout(Duration.ofSeconds(3))
-            .reconnect(new ReconnectConfig(false, 0, Duration.ZERO, Duration.ZERO, 0))
-            .build();
-
-        client.connect();
-        client.close();
-        Thread.sleep(500);
-        client = null;
-    }
-
-    @Test
-    @Order(11)
-    @DisplayName("MockConnection - 模拟正常读写")
-    void t11_mockConnection_normalReadWrite() throws Exception {
-        MockConnection conn = new MockConnection();
-        conn.enqueueResponse(new byte[]{'O', 'K', '\r', '\n'});
-        conn.connect();
-
-        byte[] buffer = new byte[100];
-        int n = conn.read(buffer);
-        assertEquals(4, n);
-        assertEquals('O', buffer[0]);
-
-        conn.write(new byte[]{'T', 'E', 'S', 'T'});
-        assertEquals(1, conn.sentCommandCount());
-        assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, conn.pollSentCommand());
-    }
-
-    @Test
-    @Order(12)
-    @DisplayName("MockConnection - 模拟连接失败")
-    void t12_mockConnection_connectFailure() {
-        MockConnection conn = new MockConnection();
-        conn.setConnectFailure(true);
-        assertThrows(com.example.instrument.exception.ConnectionException.class, conn::connect);
-        assertFalse(conn.isConnected());
-    }
-
-    @Test
-    @Order(13)
-    @DisplayName("MockConnection - 模拟读取失败")
-    void t13_mockConnection_readFailure() throws Exception {
-        MockConnection conn = new MockConnection();
-        conn.connect();
-        conn.setReadFailure(new IOException("simulated read error"));
-        byte[] buffer = new byte[100];
-        assertThrows(IOException.class, () -> conn.read(buffer));
-    }
-
-    @Test
-    @Order(14)
-    @DisplayName("MockConnection - 模拟写入失败")
-    void t14_mockConnection_writeFailure() throws Exception {
-        MockConnection conn = new MockConnection();
-        conn.connect();
-        conn.setWriteFailure(new IOException("simulated write error"));
-        assertThrows(IOException.class, () -> conn.write(new byte[]{0x01}));
-    }
-
-    @Test
-    @Order(15)
-    @DisplayName("诊断 - 记录状态变化")
-    void t15_diagnostics_stateChanges() {
-        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
-        ClientDiagnostics diag = new ClientDiagnostics(addr);
-
-        diag.recordConnectionStateChange(com.example.instrument.connection.ConnectionState.CONNECTING);
-        diag.recordConnectionStateChange(com.example.instrument.connection.ConnectionState.CONNECTED);
-        diag.recordConnectionStateChange(com.example.instrument.connection.ConnectionState.DISCONNECTED);
-
-        ClientDiagnostics.DiagnosticReport report = diag.getReport();
-        assertEquals(com.example.instrument.connection.ConnectionState.DISCONNECTED, report.currentState());
-    }
-
-    @Test
-    @Order(16)
-    @DisplayName("诊断 - 记录请求")
-    void t16_diagnostics_requests() {
-        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
-        ClientDiagnostics diag = new ClientDiagnostics(addr);
-
-        diag.recordRequestSent("IDN", System.nanoTime());
-        diag.recordRequestCompleted("IDN", true, Duration.ofMillis(50));
-
-        ClientDiagnostics.DiagnosticReport report = diag.getReport();
-        assertEquals(1, report.totalRequests());
-        assertEquals(0, report.totalErrors());
-        assertEquals(1, report.recentRequests().size());
-        assertTrue(report.recentRequests().get(0).isCompleted());
-    }
-
-    @Test
-    @Order(17)
-    @DisplayName("诊断 - 记录错误")
-    void t17_diagnostics_errors() {
-        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
-        ClientDiagnostics diag = new ClientDiagnostics(addr);
-
-        diag.recordError("connection refused");
-        diag.recordError("timeout");
-
-        ClientDiagnostics.DiagnosticReport report = diag.getReport();
-        assertEquals(2, report.totalErrors());
-        assertEquals("timeout", report.lastError());
-    }
-
-    @Test
-    @Order(18)
-    @DisplayName("诊断 - 清除数据")
-    void t18_diagnostics_clear() {
-        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
-        ClientDiagnostics diag = new ClientDiagnostics(addr);
-
-        diag.recordRequestSent("IDN", System.nanoTime());
-        diag.recordError("test error");
-        diag.clear();
-
-        ClientDiagnostics.DiagnosticReport report = diag.getReport();
-        assertEquals(0, report.totalRequests());
-        assertEquals(0, report.totalErrors());
-        assertNull(report.lastError());
-    }
-
-    @Test
-    @Order(19)
-    @DisplayName("InstrumentClients.builder - 流式构建")
-    void t19_builderFluentApi() {
-        InstrumentClient c = InstrumentClients.builder("localhost", 5025, lineProtocol)
-            .connectTimeout(Duration.ofSeconds(10))
-            .responseTimeout(Duration.ofSeconds(5))
-            .reconnect(new ReconnectConfig(true, 5, Duration.ofSeconds(1), Duration.ofSeconds(30), 0.2))
-            .build();
-
-        assertNotNull(c);
-        assertFalse(c.isConnected());
-        c.close();
-    }
-
-    @Test
-    @Order(20)
-    @DisplayName("多次 close 不抛异常")
-    void t20_multipleClose() throws Exception {
-        client = InstrumentClients.builder("localhost", BASE_PORT, lineProtocol)
-            .connectTimeout(Duration.ofSeconds(5))
-            .responseTimeout(Duration.ofSeconds(3))
-            .reconnect(new ReconnectConfig(false, 0, Duration.ZERO, Duration.ZERO, 0))
-            .build();
-
-        client.connect();
-        client.close();
-        client.close();
-        client.close();
-        client = null;
-    }
-
-    @Test
-    @Order(21)
+    @Order(4)
     @DisplayName("拦截器 - 多个拦截器按顺序执行")
-    void t21_multipleInterceptorsOrder() throws Exception {
+    void t04_multipleInterceptorsOrder() throws Exception {
         List<String> order = new ArrayList<>();
 
         ClientInterceptor i1 = new ClientInterceptor() {
@@ -416,9 +223,9 @@ class RobustnessExtensibilityTest {
     }
 
     @Test
-    @Order(22)
+    @Order(5)
     @DisplayName("拦截器 - 移除拦截器后不再触发")
-    void t22_removeInterceptor() throws Exception {
+    void t05_removeInterceptor() throws Exception {
         AtomicInteger callCount = new AtomicInteger();
 
         ClientInterceptor interceptor = new ClientInterceptor() {
@@ -441,5 +248,230 @@ class RobustnessExtensibilityTest {
         impl.removeInterceptor(interceptor);
         client.request(Command.text("IDN"), ResponseMatcher.any(), Duration.ofSeconds(2));
         assertEquals(1, callCount.get());
+    }
+
+    // ==================== MockConnection ====================
+
+    @Test
+    @Order(6)
+    @DisplayName("MockConnection - 模拟正常读写")
+    void t06_mockConnection_normalReadWrite() throws Exception {
+        MockConnection conn = new MockConnection();
+        conn.enqueueResponse(new byte[]{'O', 'K', '\r', '\n'});
+        conn.connect();
+
+        byte[] buffer = new byte[100];
+        int n = conn.read(buffer);
+        assertEquals(4, n);
+        assertEquals('O', buffer[0]);
+
+        conn.write(new byte[]{'T', 'E', 'S', 'T'});
+        assertEquals(1, conn.sentCommandCount());
+        assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, conn.pollSentCommand());
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("MockConnection - 模拟连接失败")
+    void t07_mockConnection_connectFailure() {
+        MockConnection conn = new MockConnection();
+        conn.setConnectFailure(true);
+        assertThrows(com.example.instrument.exception.ConnectionException.class, conn::connect);
+        assertFalse(conn.isConnected());
+    }
+
+    @Test
+    @Order(8)
+    @DisplayName("MockConnection - 模拟读取失败")
+    void t08_mockConnection_readFailure() throws Exception {
+        MockConnection conn = new MockConnection();
+        conn.connect();
+        conn.setReadFailure(new IOException("simulated read error"));
+        byte[] buffer = new byte[100];
+        assertThrows(IOException.class, () -> conn.read(buffer));
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("MockConnection - 模拟写入失败")
+    void t09_mockConnection_writeFailure() throws Exception {
+        MockConnection conn = new MockConnection();
+        conn.connect();
+        conn.setWriteFailure(new IOException("simulated write error"));
+        assertThrows(IOException.class, () -> conn.write(new byte[]{0x01}));
+    }
+
+    // ==================== 诊断 ====================
+
+    @Test
+    @Order(10)
+    @DisplayName("诊断 - 记录状态变化")
+    void t10_diagnostics_stateChanges() {
+        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
+        ClientDiagnostics diag = new ClientDiagnostics(addr);
+
+        diag.recordConnectionStateChange(ConnectionState.CONNECTING);
+        diag.recordConnectionStateChange(ConnectionState.CONNECTED);
+        diag.recordConnectionStateChange(ConnectionState.DISCONNECTED);
+
+        ClientDiagnostics.DiagnosticReport report = diag.getReport();
+        assertEquals(ConnectionState.DISCONNECTED, report.currentState());
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("诊断 - 记录请求")
+    void t11_diagnostics_requests() {
+        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
+        ClientDiagnostics diag = new ClientDiagnostics(addr);
+
+        diag.recordRequestSent("IDN", System.nanoTime());
+        diag.recordRequestCompleted("IDN", true, Duration.ofMillis(50));
+
+        ClientDiagnostics.DiagnosticReport report = diag.getReport();
+        assertEquals(1, report.totalRequests());
+        assertEquals(0, report.totalErrors());
+        assertEquals(1, report.recentRequests().size());
+        assertTrue(report.recentRequests().get(0).isCompleted());
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("诊断 - 记录错误")
+    void t12_diagnostics_errors() {
+        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
+        ClientDiagnostics diag = new ClientDiagnostics(addr);
+
+        diag.recordError("connection refused");
+        diag.recordError("timeout");
+
+        ClientDiagnostics.DiagnosticReport report = diag.getReport();
+        assertEquals(2, report.totalErrors());
+        assertEquals("timeout", report.lastError());
+    }
+
+    @Test
+    @Order(13)
+    @DisplayName("诊断 - 清除数据")
+    void t13_diagnostics_clear() {
+        InetSocketAddress addr = new InetSocketAddress("localhost", 5025);
+        ClientDiagnostics diag = new ClientDiagnostics(addr);
+
+        diag.recordRequestSent("IDN", System.nanoTime());
+        diag.recordError("test error");
+        diag.clear();
+
+        ClientDiagnostics.DiagnosticReport report = diag.getReport();
+        assertEquals(0, report.totalRequests());
+        assertEquals(0, report.totalErrors());
+        assertNull(report.lastError());
+    }
+
+    @Test
+    @Order(14)
+    @DisplayName("诊断集成 - InstrumentClientImpl 返回诊断报告")
+    void t14_diagnosticsIntegration() throws Exception {
+        client = InstrumentClients.builder("localhost", BASE_PORT, lineProtocol)
+            .connectTimeout(Duration.ofSeconds(5))
+            .responseTimeout(Duration.ofSeconds(3))
+            .reconnect(new ReconnectConfig(false, 0, Duration.ZERO, Duration.ZERO, 0))
+            .build();
+
+        client.connect();
+        client.request(Command.text("IDN"), ResponseMatcher.any(), Duration.ofSeconds(2));
+
+        ClientDiagnostics.DiagnosticReport report = client.diagnostics();
+        assertNotNull(report);
+        assertNotNull(report.address());
+        assertEquals(ConnectionState.CONNECTED, report.currentState());
+        assertTrue(report.totalRequests() >= 1);
+
+        client.disconnect();
+
+        report = client.diagnostics();
+        assertEquals(ConnectionState.DISCONNECTED, report.currentState());
+
+        client.close();
+    }
+
+    // ==================== 生命周期 ====================
+
+    @Test
+    @Order(15)
+    @DisplayName("优雅关闭 - close 等待线程池终止")
+    void t15_gracefulShutdown() throws Exception {
+        client = InstrumentClients.builder("localhost", BASE_PORT, lineProtocol)
+            .connectTimeout(Duration.ofSeconds(5))
+            .responseTimeout(Duration.ofSeconds(3))
+            .reconnect(new ReconnectConfig(false, 0, Duration.ZERO, Duration.ZERO, 0))
+            .build();
+
+        client.connect();
+        client.close();
+        Thread.sleep(500);
+        client = null;
+    }
+
+    @Test
+    @Order(16)
+    @DisplayName("多次 close 不抛异常")
+    void t16_multipleClose() throws Exception {
+        client = InstrumentClients.builder("localhost", BASE_PORT, lineProtocol)
+            .connectTimeout(Duration.ofSeconds(5))
+            .responseTimeout(Duration.ofSeconds(3))
+            .reconnect(new ReconnectConfig(false, 0, Duration.ZERO, Duration.ZERO, 0))
+            .build();
+
+        client.connect();
+        client.close();
+        client.close();
+        client.close();
+        client = null;
+    }
+
+    // ==================== Builder ====================
+
+    @Test
+    @Order(17)
+    @DisplayName("Builder - 流式配置所有字段")
+    void t17_builderAllFields() {
+        InstrumentClient c = InstrumentClients.builder("localhost", 5025, lineProtocol)
+            .connectTimeout(Duration.ofSeconds(8))
+            .responseTimeout(Duration.ofSeconds(4))
+            .socketReadTimeoutMillis(3000)
+            .receiveBufferSize(16384)
+            .sendBufferSize(16384)
+            .soLingerSeconds(3)
+            .reconnect(new ReconnectConfig(true, 5, Duration.ofSeconds(1), Duration.ofSeconds(30), 0.2))
+            .overflowPolicy(ClientConfig.OverflowPolicy.BLOCK)
+            .tcpNoDelay(false)
+            .keepAlive(false)
+            .build();
+
+        assertNotNull(c);
+        c.close();
+    }
+
+    // ==================== 指标 ====================
+
+    @Test
+    @Order(18)
+    @DisplayName("指标 - metrics() 返回快照")
+    void t18_metricsSnapshot() throws Exception {
+        client = InstrumentClients.builder("localhost", BASE_PORT, lineProtocol)
+            .connectTimeout(Duration.ofSeconds(5))
+            .responseTimeout(Duration.ofSeconds(3))
+            .reconnect(new ReconnectConfig(false, 0, Duration.ZERO, Duration.ZERO, 0))
+            .build();
+
+        client.connect();
+        client.request(Command.text("IDN"), ResponseMatcher.any(), Duration.ofSeconds(2));
+
+        ClientMetrics.Snapshot snapshot = client.metrics();
+        assertNotNull(snapshot);
+        assertTrue(snapshot.sentFrames() >= 1);
+        assertTrue(snapshot.sentBytes() > 0);
+
+        client.close();
     }
 }

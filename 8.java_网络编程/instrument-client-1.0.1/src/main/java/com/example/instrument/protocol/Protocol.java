@@ -56,4 +56,13 @@ public interface Protocol {
     default Charset charset() { 
         return StandardCharsets.UTF_8; 
     }
+
+    /**
+     * 获取协议名称，用于诊断和日志。
+     *
+     * @return 协议名称，默认为简单类名
+     */
+    default String name() {
+        return getClass().getSimpleName();
+    }
 }

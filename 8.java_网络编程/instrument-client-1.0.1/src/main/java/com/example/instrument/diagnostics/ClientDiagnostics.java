@@ -1,6 +1,6 @@
 package com.example.instrument.diagnostics;
 
-import com.example.instrument.connection.ConnectionState;
+import com.example.instrument.network.ConnectionState;
 import com.example.instrument.metrics.ClientMetrics;
 
 import java.net.InetSocketAddress;

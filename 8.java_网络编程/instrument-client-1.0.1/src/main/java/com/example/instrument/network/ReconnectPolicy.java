@@ -1,4 +1,4 @@
-package com.example.instrument.connection;
+package com.example.instrument.network;
 
 import com.example.instrument.config.ReconnectConfig;
 import java.time.Duration;

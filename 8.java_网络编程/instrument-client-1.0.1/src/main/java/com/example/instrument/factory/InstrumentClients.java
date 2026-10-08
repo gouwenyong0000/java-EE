@@ -1,11 +1,11 @@
-package com.example.instrument;
+package com.example.instrument.factory;
 
 import com.example.instrument.api.ClientInterceptor;
 import com.example.instrument.api.ConnectionListener;
 import com.example.instrument.api.DataListener;
 import com.example.instrument.api.InstrumentClient;
 import com.example.instrument.config.ClientConfig;
-import com.example.instrument.core.InstrumentClientImpl;
+import com.example.instrument.engine.InstrumentClientImpl;
 import com.example.instrument.protocol.Protocol;
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -86,7 +86,7 @@ public final class InstrumentClients {
     public static final class Builder {
         private final InetSocketAddress address;
         private final Protocol protocol;
-        private ClientConfig config = ClientConfig.defaults();
+        private final ClientConfig.Builder configBuilder = ClientConfig.builder();
 
         private Builder(InetSocketAddress address, Protocol protocol) {
             this.address = Objects.requireNonNull(address);
@@ -97,7 +97,18 @@ public final class InstrumentClients {
          * 设置完整配置。
          */
         public Builder config(ClientConfig config) {
-            this.config = Objects.requireNonNull(config);
+            Objects.requireNonNull(config);
+            configBuilder.connectTimeout(config.connectTimeout())
+                .responseTimeout(config.responseTimeout())
+                .socketReadTimeoutMillis(config.socketReadTimeoutMillis())
+                .receiveBufferSize(config.receiveBufferSize())
+                .sendBufferSize(config.sendBufferSize())
+                .soLingerSeconds(config.soLingerSeconds())
+                .asyncQueueCapacity(config.asyncQueueCapacity())
+                .overflowPolicy(config.overflowPolicy())
+                .tcpNoDelay(config.tcpNoDelay())
+                .keepAlive(config.keepAlive())
+                .reconnect(config.reconnect());
             return this;
         }
 
@@ -105,17 +116,7 @@ public final class InstrumentClients {
          * 设置连接超时。
          */
         public Builder connectTimeout(Duration timeout) {
-            this.config = ClientConfig.builder()
-                .connectTimeout(timeout)
-                .responseTimeout(config.responseTimeout())
-                .socketReadTimeoutMillis(config.socketReadTimeoutMillis())
-                .receiveBufferSize(config.receiveBufferSize())
-                .asyncQueueCapacity(config.asyncQueueCapacity())
-                .overflowPolicy(config.overflowPolicy())
-                .tcpNoDelay(config.tcpNoDelay())
-                .keepAlive(config.keepAlive())
-                .reconnect(config.reconnect())
-                .build();
+            configBuilder.connectTimeout(timeout);
             return this;
         }
 
@@ -123,17 +124,39 @@ public final class InstrumentClients {
          * 设置响应超时。
          */
         public Builder responseTimeout(Duration timeout) {
-            this.config = ClientConfig.builder()
-                .connectTimeout(config.connectTimeout())
-                .responseTimeout(timeout)
-                .socketReadTimeoutMillis(config.socketReadTimeoutMillis())
-                .receiveBufferSize(config.receiveBufferSize())
-                .asyncQueueCapacity(config.asyncQueueCapacity())
-                .overflowPolicy(config.overflowPolicy())
-                .tcpNoDelay(config.tcpNoDelay())
-                .keepAlive(config.keepAlive())
-                .reconnect(config.reconnect())
-                .build();
+            configBuilder.responseTimeout(timeout);
+            return this;
+        }
+
+        /**
+         * 设置 Socket 读超时。
+         */
+        public Builder socketReadTimeoutMillis(int millis) {
+            configBuilder.socketReadTimeoutMillis(millis);
+            return this;
+        }
+
+        /**
+         * 设置接收缓冲区大小。
+         */
+        public Builder receiveBufferSize(int size) {
+            configBuilder.receiveBufferSize(size);
+            return this;
+        }
+
+        /**
+         * 设置发送缓冲区大小。
+         */
+        public Builder sendBufferSize(int size) {
+            configBuilder.sendBufferSize(size);
+            return this;
+        }
+
+        /**
+         * 设置 SO_LINGER 时间。
+         */
+        public Builder soLingerSeconds(int seconds) {
+            configBuilder.soLingerSeconds(seconds);
             return this;
         }
 
@@ -141,27 +164,41 @@ public final class InstrumentClients {
          * 设置重连配置。
          */
         public Builder reconnect(com.example.instrument.config.ReconnectConfig reconnect) {
-            this.config = ClientConfig.builder()
-                .connectTimeout(config.connectTimeout())
-                .responseTimeout(config.responseTimeout())
-                .socketReadTimeoutMillis(config.socketReadTimeoutMillis())
-                .receiveBufferSize(config.receiveBufferSize())
-                .asyncQueueCapacity(config.asyncQueueCapacity())
-                .overflowPolicy(config.overflowPolicy())
-                .tcpNoDelay(config.tcpNoDelay())
-                .keepAlive(config.keepAlive())
-                .reconnect(reconnect)
-                .build();
+            configBuilder.reconnect(reconnect);
             return this;
         }
 
         /**
-         * 构建客户端并自动注册拦截器和监听器。
+         * 设置队列溢出策略。
+         */
+        public Builder overflowPolicy(ClientConfig.OverflowPolicy policy) {
+            configBuilder.overflowPolicy(policy);
+            return this;
+        }
+
+        /**
+         * 设置 TCP NODELAY。
+         */
+        public Builder tcpNoDelay(boolean enabled) {
+            configBuilder.tcpNoDelay(enabled);
+            return this;
+        }
+
+        /**
+         * 设置 TCP KEEPALIVE。
+         */
+        public Builder keepAlive(boolean enabled) {
+            configBuilder.keepAlive(enabled);
+            return this;
+        }
+
+        /**
+         * 构建客户端。
          *
          * @return 配置好的 InstrumentClient 实例
          */
         public InstrumentClient build() {
-            return tcp(address, protocol, config);
+            return tcp(address, protocol, configBuilder.build());
         }
     }
 }

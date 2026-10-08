@@ -1,9 +1,12 @@
 package com.example.instrument.api;
 
+import com.example.instrument.diagnostics.ClientDiagnostics.DiagnosticReport;
+import com.example.instrument.metrics.ClientMetrics;
 import com.example.instrument.model.Command;
 import com.example.instrument.model.CommandIdempotency;
 import com.example.instrument.model.Response;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -165,6 +168,42 @@ public interface InstrumentClient extends AutoCloseable {
      * @see BlockingDataListener
      */
     BlockingDataListener blockingDataListener();
+
+    /**
+     * 获取客户端指标快照，用于监控和告警。
+     *
+     * @return 指标快照，如果不支持则返回 null
+     */
+    default ClientMetrics.Snapshot metrics() {
+        return null;
+    }
+
+    /**
+     * 添加拦截器，拦截请求/响应的生命周期事件。
+     *
+     * @param interceptor 拦截器实例
+     * @throws NullPointerException 如果 interceptor 为空
+     */
+    default void addInterceptor(ClientInterceptor interceptor) {
+        Objects.requireNonNull(interceptor);
+    }
+
+    /**
+     * 移除之前添加的拦截器。
+     *
+     * @param interceptor 要移除的拦截器
+     */
+    default void removeInterceptor(ClientInterceptor interceptor) {
+    }
+
+    /**
+     * 获取客户端诊断信息，用于排查问题和监控。
+     *
+     * @return 诊断报告，如果不支持则返回 null
+     */
+    default DiagnosticReport diagnostics() {
+        return null;
+    }
 
     /**
      * 关闭客户端并释放所有资源。

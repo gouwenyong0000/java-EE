@@ -44,6 +44,8 @@ public final class ClientConfig {
     private final Duration responseTimeout;
     private final int socketReadTimeoutMillis;
     private final int receiveBufferSize;
+    private final int sendBufferSize;
+    private final int soLingerSeconds;
     private final int asyncQueueCapacity;
     private final OverflowPolicy overflowPolicy;
     private final boolean tcpNoDelay;
@@ -59,7 +61,9 @@ public final class ClientConfig {
         connectTimeout = b.connectTimeout; 
         responseTimeout = b.responseTimeout; 
         socketReadTimeoutMillis = b.socketReadTimeoutMillis;
-        receiveBufferSize = b.receiveBufferSize; 
+        receiveBufferSize = b.receiveBufferSize;
+        sendBufferSize = b.sendBufferSize;
+        soLingerSeconds = b.soLingerSeconds;
         asyncQueueCapacity = b.asyncQueueCapacity; 
         overflowPolicy = b.overflowPolicy;
         tcpNoDelay = b.tcpNoDelay; 
@@ -131,6 +135,30 @@ public final class ClientConfig {
      * @return 接收缓冲区大小
      */
     public int receiveBufferSize() { return receiveBufferSize; }
+
+    /**
+     * 获取发送缓冲区大小（字节）。
+     * 
+     * 这个值会设置为 Socket 的 SO_SNDBUF 选项。
+     * 默认值 8192，适用于短报文场景。
+     *
+     * @return 发送缓冲区大小
+     */
+    public int sendBufferSize() { return sendBufferSize; }
+
+    /**
+     * 获取 SO_LINGER 时间（秒）。
+     * 
+     * SO_LINGER 控制 close() 时的行为：
+     * - -1（默认）：close() 立即返回，未发送完的数据由内核继续发送
+     * - 0：close() 立即返回，丢弃未发送数据，发送 RST
+     * - >0：close() 阻塞直到数据发送完毕或超时
+     * 
+     * 生产环境建议使用 -1（优雅关闭）或 0（快速失败）。
+     *
+     * @return SO_LINGER 时间（秒），-1 表示禁用
+     */
+    public int soLingerSeconds() { return soLingerSeconds; }
 
     /**
      * 获取异步响应队列的容量。
@@ -216,6 +244,8 @@ public final class ClientConfig {
         private Duration responseTimeout = Duration.ofSeconds(10);
         private int socketReadTimeoutMillis = 0;
         private int receiveBufferSize = 8192;
+        private int sendBufferSize = 8192;
+        private int soLingerSeconds = -1;
         private int asyncQueueCapacity = 256;
         private OverflowPolicy overflowPolicy = OverflowPolicy.DROP_OLDEST;
         private boolean tcpNoDelay = true;
@@ -281,6 +311,41 @@ public final class ClientConfig {
                 throw new IllegalArgumentException("receiveBufferSize must be > 0, got: " + v);
             }
             receiveBufferSize = v;
+            return this;
+        }
+
+        /**
+         * 设置发送缓冲区大小。
+         * 
+         * 对应 Socket 的 SO_SNDBUF 选项。
+         * 对于短报文场景，默认值 8192 即可。
+         * 对于大数据量传输，可适当增大（如 65536）。
+         *
+         * @param v 发送缓冲区大小，必须为正数
+         * @return this，用于链式调用
+         * @throws IllegalArgumentException 如果 v <= 0
+         */
+        public Builder sendBufferSize(int v) {
+            if (v <= 0) {
+                throw new IllegalArgumentException("sendBufferSize must be > 0, got: " + v);
+            }
+            sendBufferSize = v;
+            return this;
+        }
+
+        /**
+         * 设置 SO_LINGER 时间（秒）。
+         * 
+         * SO_LINGER 控制 close() 时的行为：
+         * - -1（默认）：close() 立即返回，未发送完的数据由内核继续发送
+         * - 0：close() 立即返回，丢弃未发送数据，发送 RST
+         * - >0：close() 阻塞直到数据发送完毕或超时
+         * 
+         * @param v SO_LINGER 时间（秒），-1 表示禁用
+         * @return this，用于链式调用
+         */
+        public Builder soLingerSeconds(int v) {
+            soLingerSeconds = v;
             return this;
         }
 

@@ -50,8 +50,10 @@ public final class InstrumentationServer {
     private final int port;
     private volatile ServerSocket serverSocket;
     private final AtomicBoolean running = new AtomicBoolean();
+    private final AtomicBoolean accepting = new AtomicBoolean(true);
     private final AtomicInteger connectionCount = new AtomicInteger();
     private final AtomicBoolean shouldResetOnConnect = new AtomicBoolean(false);
+    private volatile Socket currentClientSocket;
 
     public InstrumentationServer(int port) {
         this.port = port;
@@ -107,7 +109,28 @@ public final class InstrumentationServer {
         shouldResetOnConnect.set(value);
     }
 
+    /**
+     * 模拟网络闪断 - 关闭当前客户端连接。
+     */
+    public void simulateDisconnect() {
+        Socket s = currentClientSocket;
+        if (s != null && !s.isClosed()) {
+            try {
+                s.setSoLinger(true, 0);
+                s.close();
+            } catch (IOException ignored) {}
+        }
+    }
+
+    /**
+     * 恢复接受连接（与 simulateDisconnect 配合使用）。
+     */
+    public void resumeAccepting() {
+        accepting.set(true);
+    }
+
     private void handleClient(Socket socket) {
+        currentClientSocket = socket;
         try {
             socket.setSoTimeout(0);
             InputStream in = socket.getInputStream();

@@ -51,6 +51,7 @@ public final class Response {
     private final byte[] frame;
     private final byte[] body;
     private final long receivedAtNanos;
+    private volatile String cachedText;
 
     /**
      * 构造函数，创建响应（使用当前时间戳）。
@@ -120,10 +121,18 @@ public final class Response {
     /**
      * 获取响应文本（使用 UTF-8 编码）。
      *
+     * <p>性能优化：使用 volatile 缓存避免重复解码。
+     * 首次调用解码后缓存结果，后续调用直接返回缓存。</p>
+     *
      * @return 响应文本
      */
-    public String text() { 
-        return text(StandardCharsets.UTF_8); 
+    public String text() {
+        String t = cachedText;
+        if (t == null) {
+            t = new String(body, StandardCharsets.UTF_8);
+            cachedText = t;
+        }
+        return t;
     }
 
     /**

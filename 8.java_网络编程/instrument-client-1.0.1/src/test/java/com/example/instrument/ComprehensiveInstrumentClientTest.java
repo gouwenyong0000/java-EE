@@ -5,6 +5,7 @@ import com.example.instrument.config.ClientConfig;
 import com.example.instrument.config.ReconnectConfig;
 import com.example.instrument.exception.ConnectionException;
 import com.example.instrument.exception.RequestTimeoutException;
+import com.example.instrument.factory.InstrumentClients;
 import com.example.instrument.model.Command;
 import com.example.instrument.model.CommandIdempotency;
 import com.example.instrument.model.Response;

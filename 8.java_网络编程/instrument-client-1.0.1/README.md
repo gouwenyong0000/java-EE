@@ -2,35 +2,125 @@
 
 一个面向**实验室仪器、测试设备、工控设备、SCPI/TCP 自定义协议**的 Java 17 通信客户端框架。
 
-本版本不是在旧 `SocketClientITFImpl` 上继续堆功能，而是按照长期维护的目标重新划分职责：
+本框架按照长期维护目标重新划分职责，提供清晰的架构、可靠的网络通信能力和完善的测试覆盖。
 
-- TCP 连接层：只负责连接、读写、关闭、状态。
-- 接收层：持续读取 TCP 字节流，不再使用 `readPermit` 控制"什么时候读"。
-- 协议层：只负责字节流 → 帧、命令 → 帧。
-- 请求管理层：维护当前请求及响应匹配关系。
-- 分发层：区分"当前请求响应"和"异步/未匹配数据"。
-- 重连层：只负责连接恢复策略，不负责业务重试语义。
-- 幂等性：明确区分 IDEMPOTENT / NON_IDEMPOTENT / UNKNOWN，避免因为自动重发导致仪器重复执行命令。
+## 项目功能
 
-## Changelog
+- **TCP 连接管理**：连接建立/断开、状态追踪、自动重连（带指数退避 + 抖动）
+- **协议编解码**：支持行协议（CRLF/LF）和长度字段二进制协议，可扩展自定义协议
+- **请求/响应模型**：同步请求（阻塞等待）、异步请求（CompletableFuture）、无应答发送（fire-and-forget）
+- **响应匹配**：精确匹配、子串匹配、正则匹配、组合器（and/or/negate）
+- **事件监听**：连接状态监听器、数据监听器、阻塞式数据监听器
+- **拦截器链**：请求/响应生命周期钩子，支持日志、监控、故障注入
+- **命令幂等性**：明确区分 IDEMPOTENT / NON_IDEMPOTENT / UNKNOWN，避免自动重发导致重复执行
+- **异步队列**：未匹配响应独立队列，支持 DROP_OLDEST / BLOCK / DROP_NEWEST 溢出策略
+- **指标收集**：请求计数、成功/失败/超时/重试统计、延迟指标
+- **诊断框架**：连接状态快照、请求队列状态、指标汇总
 
-### 1.0.0
+## 目录结构
 
-- Rebuilt TCP instrument client around explicit layers.
-- Removed `readPermit`-based receiver gating.
-- Removed `clearBuffers()` request association mechanism.
-- Replaced `Condition` response waiting with `CompletableFuture`.
-- Added explicit connection states.
-- Added reconnect backoff with jitter.
-- Added command idempotency classification.
-- Added stateful line and length-field decoders.
-- Added async response queue overflow policies.
-- Added metrics snapshot.
-- Added unit tests for fragmentation, sticky packets, checksum resync and request matching.
+```
+instrument-client-1.0.1/
+├── src/
+│   ├── main/java/com/example/instrument/
+│   │   ├── api/                          # 公共 API 接口
+│   │   │   ├── InstrumentClient          # 核心客户端接口
+│   │   │   ├── ClientInterceptor         # 请求拦截器接口
+│   │   │   ├── ConnectionListener        # 连接状态监听器
+│   │   │   ├── DataListener              # 数据监听器
+│   │   │   ├── BlockingDataListener      # 阻塞式数据监听器
+│   │   │   └── ResponseMatcher           # 响应匹配器接口
+│   │   │
+│   │   ├── model/                        # 数据模型
+│   │   │   ├── Command                   # 命令（发送负载）
+│   │   │   ├── CommandIdempotency        # 命令幂等性枚举
+│   │   │   ├── Request                   # 请求（内部封装）
+│   │   │   └── Response                  # 响应（接收负载）
+│   │   │
+│   │   ├── protocol/                     # 协议编解码
+│   │   │   ├── Protocol                  # 协议接口（Encoder + Decoder 工厂）
+│   │   │   ├── ProtocolEncoder           # 编码器接口
+│   │   │   ├── ProtocolDecoder           # 解码器接口
+│   │   │   ├── LineProtocol              # 行协议实现（CRLF/LF 分隔）
+│   │   │   └── LengthFieldProtocol       # 长度字段二进制协议
+│   │   │
+│   │   ├── config/                       # 配置类
+│   │   │   ├── ClientConfig              # 客户端配置（Builder 模式）
+│   │   │   └── ReconnectConfig           # 重连配置（退避 + 抖动）
+│   │   │
+│   │   ├── network/                      # 网络层
+│   │   │   ├── Connection                # 连接接口
+│   │   │   ├── TcpConnection             # TCP 连接实现
+│   │   │   ├── ConnectionManager         # 多连接管理器
+│   │   │   ├── ConnectionState           # 连接状态枚举
+│   │   │   └── ReconnectPolicy           # 重连策略实现
+│   │   │
+│   │   ├── engine/                       # 核心引擎
+│   │   │   ├── InstrumentClientImpl      # 客户端核心实现
+│   │   │   ├── RequestManager            # 请求管理器（PendingRequest 生命周期）
+│   │   │   ├── PendingRequest            # 待处理请求（CompletableFuture 包装）
+│   │   │   ├── Receiver                  # 数据接收器（持续读取 TCP 流）
+│   │   │   └── ResponseDispatcher        # 响应分发器（匹配请求 vs 异步数据）
+│   │   │
+│   │   ├── factory/                      # 工厂类
+│   │   │   └── InstrumentClients         # 客户端构建工厂
+│   │   │
+│   │   ├── example/                      # 示例代码
+│   │   │   └── ClientExample             # 最小使用示例
+│   │   │
+│   │   ├── exception/                    # 异常体系
+│   │   │   ├── InstrumentException       # 基础异常
+│   │   │   ├── ConnectionException       # 连接异常
+│   │   │   ├── RequestTimeoutException   # 请求超时异常
+│   │   │   ├── RequestCancelledException # 请求取消异常
+│   │   │   ├── ProtocolException         # 协议解析异常
+│   │   │   └── ConfigurationException    # 配置异常
+│   │   │
+│   │   ├── metrics/                      # 指标收集
+│   │   │   └── ClientMetrics             # 客户端指标（线程安全计数器）
+│   │   │
+│   │   └── diagnostics/                  # 诊断工具
+│   │       └── ClientDiagnostics         # 诊断报告生成器
+│   │
+│   └── test/java/com/example/instrument/
+│       ├── api/                          # API 接口测试
+│       ├── config/                       # 配置测试
+│       ├── model/                        # 模型测试
+│       ├── protocol/                     # 协议测试
+│       ├── network/                      # 网络层测试
+│       ├── engine/                       # 引擎测试
+│       ├── metrics/                      # 指标测试
+│       ├── testing/                      # 测试工具 + 专项测试
+│       │   ├── InstrumentationServer     # 模拟仪器服务器
+│       │   ├── MockConnection            # 模拟网络连接
+│       │   ├── NetworkFluctuationTest    # 网络波动测试
+│       │   ├── RetryMechanismTest        # 重试机制测试
+│       │   ├── ProtocolBoundaryTest      # 协议边界测试（半包/粘包）
+│       │   └── ConcurrencyStressTest     # 并发压力测试
+│       ├── ComprehensiveInstrumentClientTest  # 端到端集成测试
+│       ├── InstrumentClientIntegrationTest    # API 表面测试
+│       └── RobustnessExtensibilityTest        # 健壮性 + 可扩展性测试
+│
+├── pom.xml
+└── README.md
+```
 
-## 1. 核心设计
+## 设计原则
 
-```text
+### 1. 单一职责原则（SRP）
+
+每个类只负责一个明确的职责：
+
+- **TcpConnection**：只负责 TCP Socket 的 connect/read/write/close
+- **Receiver**：只负责持续读取 TCP 字节流并交给 Decoder
+- **Protocol/Decoder/Encoder**：只负责字节流 ↔ 帧的转换
+- **RequestManager**：只维护 PendingRequest 的注册/完成/超时
+- **ResponseDispatcher**：只负责区分"当前请求响应"和"异步数据"
+- **ReconnectPolicy**：只负责连接恢复策略，不负责业务重试语义
+
+### 2. 分层架构
+
+```
                     +-----------------------------+
                     |       InstrumentClient      |
                     |  API / 生命周期 / 重试边界   |
@@ -41,7 +131,7 @@
        +------v------+      +-----v------+      +------v------+
        | Request     |      |  Response  |      | Connection  |
        | Manager     |      | Dispatcher |      | Manager     |
-       +------+------+      +-----+------+      +------+------+ 
+       +------+------+      +-----+------+      +------+------+
               |                   |                     |
        CompletableFuture          |               TcpConnection
               |                   |                     |
@@ -49,57 +139,24 @@
                                   |
                            +------v------+
                            |   Receiver  |
-                           +------+------+ 
+                           +------+------+
                                   |
                               TCP bytes
                                   |
                            +------v------+
                            |   Decoder   |
                            +-------------+
-
-Command -> Encoder -> TcpConnection -> Instrument
-Response <- Decoder <- Receiver <- TcpConnection <- Instrument
 ```
 
-## 2. 与旧版本相比的关键变化
+### 3. 不使用"清空旧响应"解决匹配问题
 
-| 旧问题 | 新设计 |
-|---|---|
-| `readPermit` 获取后进入持续读取，语义不清 | Receiver 连接后持续读取 |
-| `clearBuffers()` 清理时可能与 decoder 并发 | 不再用清空缓存建立请求关联 |
-| 每次发送前清理异步数据 | 异步数据独立进入 async queue/listener |
-| `pendingFrames` + `Condition` | `PendingRequest` + `CompletableFuture` |
-| 响应与异步推送混在一起 | Dispatcher 先匹配当前请求，否则作为 async data |
-| 写失败后无条件重发 | 根据命令幂等性决定是否允许重试 |
-| Socket 状态靠多个 socket flag 推断 | 显式 `ConnectionState` |
-| 一个类承担所有职责 | Connection / Receiver / RequestManager / Dispatcher 分离 |
-| reconnect 与 retry 混合 | reconnect 恢复连接，retry 由请求幂等性控制 |
-
-## 3. 最重要的可靠性原则
-
-### 3.1 TCP 是字节流，不是消息
-
-`read()` 一次可能得到：
-
-```text
-半个包
-一个完整包
-多个连续包
+旧方案（已废弃）：
 ```
-
-所以协议 decoder 必须是**有状态的流解析器**。
-
-### 3.2 不使用"清空旧响应"解决匹配问题
-
-旧方案：
-
-```text
 send -> clearBuffers -> read -> match
 ```
 
 新方案：
-
-```text
+```
 register PendingRequest
         ↓
 send command
@@ -110,39 +167,178 @@ Decoder emits Response
         ↓
 RequestManager.tryComplete(response)
         ↓
-matched -> CompletableFuture
-not matched -> async queue/listener
+matched -> CompletableFuture.complete()
+not matched -> async queue / DataListener
 ```
 
 这样不会因为 `clearBuffers()` 把合法异步消息误删。
 
-### 3.3 自动重发不是天然安全
+### 4. 自动重发不是天然安全
 
-例如：
+例如发送 `START` 命令后网络异常，客户端无法知道仪器到底有没有收到。
+如果直接 reconnect + resend，可能导致仪器重复执行：
 
-```text
+```
 START
+START  ← 重复执行！
 ```
 
-客户端写入后网络异常，客户端无法知道仪器到底有没有收到。
-如果直接 reconnect + resend：
+因此引入**命令幂等性分类**：
 
-```text
-START
-START
+| 幂等性 | 行为 | 适用场景 |
+|--------|------|----------|
+| `IDEMPOTENT` | 允许按策略重试 | 查询类命令（`*IDN?`, `MEAS:VOLT?`） |
+| `NON_IDEMPOTENT` | 连接异常后直接失败 | 执行类命令（`START`, `STOP`, `TRIGGER`） |
+| `UNKNOWN` | 默认不重试 | 不确定副作用的命令 |
+
+### 5. TCP 是字节流，不是消息
+
+`read()` 一次可能得到：
+- 半个包（半包）
+- 一个完整包
+- 多个连续包（粘包）
+
+所以协议 Decoder 必须是**有状态的流解析器**，不能假设每次 read 返回完整帧。
+
+### 6. 异常隔离
+
+DataListener 中抛出的异常不会中断接收线程，只记录日志。确保用户代码的 bug 不会导致整个客户端崩溃。
+
+## 常见网络编程范式
+
+### 1. BIO（Blocking I/O）— 本项目采用
+
+**模型**：每个连接独占一个线程，读写操作阻塞直到完成。
+
+```
+Thread-1 ──→ Socket.read() ──→ [阻塞等待数据] ──→ 处理响应
+Thread-2 ──→ Socket.read() ──→ [阻塞等待数据] ──→ 处理响应
 ```
 
-可能造成重复动作。
+**特点**：
+- 编程简单，逻辑直观
+- 线程数 = 连接数，连接多时线程开销大
+- 适合连接数少、长连接的场景
 
-因此：
+**本项目的应用**：
+- `TcpConnection` 使用 `Socket.getInputStream()/getOutputStream()` 进行阻塞读写
+- `Receiver` 在独立线程中循环调用 `connection.read(buffer)`，阻塞等待数据
+- 适合仪器通信场景（通常只有 1~N 个连接，N < 100）
 
-- `IDEMPOTENT`：允许按策略重试。
-- `NON_IDEMPOTENT`：连接异常后直接失败。
-- `UNKNOWN`：默认不重试。
+### 2. NIO（Non-blocking I/O / Selector 模型）
 
-对于查询类 SCPI 命令可以标记为 `IDEMPOTENT`；执行/启动/停止/触发等命令默认不要自动重发。
+**模型**：使用 `Selector` 多路复用多个 Channel 的 I/O 事件，单线程或少量线程即可管理大量连接。
 
-## 4. 快速开始
+```
+Thread-1 ──→ Selector.select() ──→ [有事件的 Channel] ──→ 处理读写
+              ↑                        ↓
+              └──────── 循环等待 ──────┘
+```
+
+**特点**：
+- 单线程可管理成千上万连接
+- 编程复杂，需要手动处理状态机
+- 适合高并发、短连接的场景（如 Web 服务器）
+
+**Java API**：`java.nio.channels.SocketChannel`、`Selector`、`SelectionKey`
+
+### 3. AIO（Asynchronous I/O / 异步 I/O）
+
+**模型**：发起 I/O 操作后立即返回，操作系统完成后通过回调通知应用。
+
+```
+Thread-1 ──→ channel.read(buffer, callback) ──→ 继续做其他事
+                                                ↓
+                              OS 完成读取后回调 callback.handleResult()
+```
+
+**特点**：
+- 真正的异步，不阻塞任何线程
+- Windows 下基于 IOCP 表现良好，Linux 下底层支持不如 epoll
+- 编程模型复杂，回调嵌套深
+
+**Java API**：`java.nio.channels.AsynchronousSocketChannel`
+
+### 4. Reactor 模式
+
+**模型**：事件驱动架构，将 I/O 多路复用和事件处理分离。
+
+```
+                    ┌─────────────┐
+                    │   Reactor   │ ←─ 监听 I/O 事件
+                    │  (Selector) │
+                    └──────┬──────┘
+                           │ 分发事件
+              ┌────────────┼────────────┐
+              ↓            ↓            ↓
+        ┌──────────┐ ┌──────────┐ ┌──────────┐
+        │ Handler  │ │ Handler  │ │ Handler  │
+        │  (读)    │ │  (写)    │ │  (连接)  │
+        └──────────┘ └──────────┘ └──────────┘
+```
+
+**变体**：
+- **单 Reactor 单线程**：简单但有性能瓶颈
+- **单 Reactor 多线程**：事件分发和业务处理分离
+- **主从 Reactor**：Netty 采用的模式，主 Reactor 处理连接，从 Reactor 处理读写
+
+**代表框架**：Netty、Mina、Redis（单线程 Reactor）
+
+### 5. Proactor 模式
+
+**模型**：异步操作完成后，结果已经就绪，直接交给处理器。
+
+```
+Thread-1 ──→ Proactor.initiateRead() ──→ OS 异步读取
+                                              ↓
+                              OS 完成后将数据放入 buffer
+                                              ↓
+                              Proactor 回调 Handler.handle(buffer)
+```
+
+**与 Reactor 的区别**：
+- Reactor：通知"可以读了"，需要应用自己读
+- Proactor：通知"已经读完了"，数据已就绪
+
+**代表实现**：Windows IOCP、Boost.Asio
+
+### 6. 半同步/半异步模式（Half-Sync/Half-Async）
+
+**模型**：异步层处理 I/O 事件，同步层通过线程池处理业务逻辑。
+
+```
+异步层（I/O 线程）──→ 收到数据 ──→ 放入队列
+                                      ↓
+同步层（工作线程池）──→ 从队列取数据 ──→ 业务处理
+```
+
+**特点**：
+- I/O 线程轻量，只做数据收发
+- 业务逻辑在独立线程池执行，不阻塞 I/O
+- ACE 框架的经典模式
+
+### 本项目为何选择 BIO？
+
+| 因素 | BIO | NIO | Netty |
+|------|-----|-----|-------|
+| 连接数 | 少（< 100） | 多（> 10000） | 多 |
+| 编程复杂度 | 低 | 高 | 中 |
+| 依赖 | 无 | JDK 内置 | 第三方库 |
+| 调试难度 | 低 | 高 | 中 |
+| 适用场景 | 仪器通信 | Web 服务器 | 通用高并发 |
+
+仪器通信场景的典型特征：
+1. **连接数少**：通常只连接 1~几台仪器
+2. **请求-响应模式**：发一条命令，等一个响应
+3. **长连接**：连接建立后长时间保持
+4. **低并发**：不需要同时处理大量请求
+5. **可维护性优先**：代码简单直观比极致性能更重要
+
+因此 BIO 是最合适的选择。如果未来需要支持大规模连接，可以平滑迁移到 Netty。
+
+## 使用原则
+
+### 快速开始
 
 ```java
 Protocol protocol = LineProtocol.crlf(StandardCharsets.UTF_8);
@@ -159,12 +355,14 @@ InstrumentClient client = InstrumentClients.tcp(
         config
 );
 
+// 监听异步数据
 client.addDataListener(response ->
         System.out.println("ASYNC: " + response.text())
 );
 
 client.connect();
 
+// 同步请求
 Response response = client.request(
         Command.text("*IDN?", StandardCharsets.UTF_8),
         ResponseMatcher.contains(""),
@@ -177,22 +375,22 @@ System.out.println(response.text());
 client.close();
 ```
 
-## 5. SCPI 示例
+### SCPI 仪器查询
 
 ```java
 Response voltage = client.request(
-        Command.text("MEAS:VOLT?", StandardCharsets.UTF_8),
+        Command.text("MEAS:VOLT:DC?", StandardCharsets.UTF_8),
         ResponseMatcher.regex("[-+]?\\d+(\\.\\d+)?"),
         Duration.ofSeconds(2),
         CommandIdempotency.IDEMPOTENT
 );
 ```
 
-## 6. 自定义二进制协议
+### 自定义二进制协议
 
-默认实现：
+默认长度字段协议格式：
 
-```text
+```
 +------+--------+----------------+----------+
 | 0xAA | LEN(2) | PAYLOAD(LEN)   | XOR(1)   |
 +------+--------+----------------+----------+
@@ -200,9 +398,9 @@ Response voltage = client.request(
 
 XOR 计算范围：`STX + LEN + PAYLOAD`。
 
-注意：如果你的真实协议使用 CRC-8/CRC-16，请实现对应的 `ProtocolEncoder/ProtocolDecoder`，不要把 XOR 称为 CRC。
+如果你的真实协议使用 CRC-8/CRC-16，请实现对应的 `ProtocolEncoder/ProtocolDecoder`，不要把 XOR 称为 CRC。
 
-## 7. 多连接
+### 多连接管理
 
 ```java
 ConnectionManager manager = new ConnectionManager();
@@ -218,967 +416,188 @@ manager.get(id).connect();
 
 每个 client 都拥有自己的 decoder，因此不同连接之间不会共享协议解析状态。
 
-## 8. 生产环境建议
-
-1. 给每种仪器单独实现业务 Adapter，不要让业务代码直接拼协议。
-2. 查询命令可以明确标记 `IDEMPOTENT`。
-3. `START/STOP/TRIGGER/RESET` 等命令默认 `NON_IDEMPOTENT`。
-4. 对二进制协议设置合理的最大帧长度。
-5. 不要在 DataListener 中执行长时间阻塞操作。
-6. 对日志中的设备数据做脱敏；默认只记录长度和状态，调试原始报文时再打开 TRACE。
-7. 为每一种仪器增加协议级集成测试。
-8. 生产环境建议增加 Micrometer/OpenTelemetry 指标，但不要让指标逻辑侵入通信核心。
-
-## 9. 测试覆盖方向
-
-建议至少覆盖：
-
-- 正常 request/response
-- 多线程单连接请求串行化
-- 异步推送与请求响应交错
-- TCP 半包
-- TCP 粘包
-- 一次收到多个 frame
-- response timeout
-- EOF / connection reset
-- reconnect
-- idempotent retry
-- non-idempotent no retry
-- listener 异常隔离
-- async queue overflow
-- 非法长度
-- checksum 错误
-- 超大 frame
-
-## 10. 项目结构
-
-```text
-src/main/java/com/example/instrument
-├── api
-├── config
-├── connection
-├── core
-├── exception
-├── metrics
-├── model
-└── protocol
-
-src/test/java/com/example/instrument
-├── core
-└── protocol
-
-docs
-├── DESIGN.md
-└── PROTOCOL_EXTENSION.md
-```
-
----
-
-## 11. 设计说明
-
-### 11.1 目标
-
-这个项目的目标不是做一个"能连接 TCP 的 Socket 工具类"，而是提供一个可以长期扩展的仪器通信基础设施。
-
-目标特征：
-
-- Java 17+
-- TCP stream safe
-- 同步 request/response
-- 异步 unsolicited message
-- 单连接 single-flight，适配绝大多数 SCPI 仪器
-- 多连接
-- 自动 reconnect
-- 明确 retry 语义
-- 文本协议 + 二进制协议
-- 协议 decoder 状态独立
-- 连接状态显式化
-- 核心代码低耦合
-
-### 11.2 核心功能
-
-#### 11.2.1 连接管理
-
-- **同步/异步请求**：支持 `request()` 同步阻塞调用和 `requestAsync()` 异步非阻塞调用
-- **无应答发送**：`send()` 方法支持只发送命令不等待响应
-- **自动重连**：可配置的指数退避重连策略，支持 jitter 避免 thundering herd
-- **幂等重试**：IDEMPOTENT 命令在连接断开时自动重连并重试，UNKNOWN/NON_IDEMPOTENT 命令直接失败
-- **连接状态监听**：通过 `ConnectionListener` 监听连接建立、断开、重连、重连失败等事件
-- **优雅关闭**：`close()` 方法协调各线程安全退出，取消所有 pending 请求
-
-#### 11.2.2 协议支持
-
-- **可扩展协议接口**：`Protocol` 接口定义编码/解码抽象
-- **内置 LineProtocol**：基于分隔符的文本协议（如 SCPI 换行符分隔）
-- **内置 LengthFieldProtocol**：基于长度字段的二进制协议（如 0xAA + 长度 + 数据 + 校验和）
-- **协议独立于连接**：协议编解码器与 TCP 连接解耦，可自由替换
-
-#### 11.2.3 响应分发
-
-- **智能匹配**：通过 `ResponseMatcher` 接口支持任意匹配逻辑（包含、精确匹配、正则、自定义 predicate）
-- **异步通道**：未匹配到 pending 请求的响应不会丢失，而是进入异步队列并触发 `DataListener`
-- **可配置溢出策略**：DROP_OLDEST、DROP_NEWEST、BLOCK、FAIL 四种策略应对队列满的情况
-- **多监听器支持**：支持添加多个 `DataListener` 和 `ConnectionListener`，所有监听器都会收到相同事件
-
-#### 11.2.4 指标收集
-
-- **发送统计**：发送帧数、发送字节数
-- **接收统计**：接收帧数、匹配成功帧数、异步帧数
-- **错误统计**：丢弃的异步帧数、监听器错误数
-- **连接统计**：重连次数、超时次数
-- **线程安全**：使用 `LongAdder` 实现高并发下的低开销统计
-
-### 11.3 分层架构
-
-```
-┌─────────────────────────────────────────────────┐
-│              Factory Layer                       │
-│         InstrumentClients                        │
-├─────────────────────────────────────────────────┤
-│              API Layer                           │
-│    InstrumentClient  Interface                   │
-│    ResponseMatcher / DataListener /              │
-│    ConnectionListener / BlockingDataListener     │
-├─────────────────────────────────────────────────┤
-│             Core Layer                           │
-│  InstrumentClientImpl / RequestManager /         │
-│  ResponseDispatcher / Receiver / PendingRequest  │
-├─────────────────────────────────────────────────┤
-│          Connection Layer                        │
-│     Connection / TcpConnection /                 │
-│     ConnectionState / ReconnectPolicy            │
-├─────────────────────────────────────────────────┤
-│           Protocol Layer                         │
-│  Protocol / ProtocolEncoder / ProtocolDecoder /  │
-│  LineProtocol / LengthFieldProtocol              │
-├─────────────────────────────────────────────────┤
-│            Config Layer                          │
-│    ClientConfig / ReconnectConfig                │
-├─────────────────────────────────────────────────┤
-│           Exception Layer                        │
-│  InstrumentException / ConnectionException /     │
-│  RequestTimeoutException / RequestCancelled      │
-│  Exception / ProtocolException /                 │
-│  ConfigurationException                          │
-├─────────────────────────────────────────────────┤
-│            Metrics Layer                         │
-│           ClientMetrics                          │
-└─────────────────────────────────────────────────┘
-```
-
-### 11.4 为什么一个连接默认只允许一个 pending request
-
-很多仪器协议没有 request-id：
-
-```text
-client -> MEAS:VOLT?
-instrument -> 1.234
-```
-
-如果同时：
-
-```text
-client -> A?
-client -> B?
-```
-
-返回：
-
-```text
-response A
-response B
-```
-
-客户端没有可靠方法知道哪个 response 属于哪个 request。
-
-因此框架默认 single-flight：
-
-```text
-Request A
-   |
-   +---- waiting ----+
-                    Response A
-                         |
-                    Request B
-```
-
-如果未来协议具有明确 correlation-id，可以新增 `CorrelationStrategy`，再升级到多 pending request。
-
-### 11.5 Receiver 为什么持续运行
-
-TCP 接收本质上是连接级事件流，而不是 request 级操作。
-
-正确模型：
-
-```text
-Connection established
-       |
-    Receiver
-       |
-   read bytes
-       |
-    decoder
-       |
-  response frames
-       |
- dispatcher
-```
-
-Receiver 不应该知道：
-
-- 当前是不是某个命令
-- regex 是什么
-- 业务是什么
-- 是否应该 clear buffer
-
-这些属于更高层。
-
-### 11.6 RequestManager
-
-RequestManager 只有一个核心职责：
-
-```text
-当前 pending request
-```
-
-它不负责 socket，不负责 reconnect，不负责 protocol decode。
-
-这使测试非常简单：给一个 Response，看它是否完成 Future。
-
-### 11.7 ResponseDispatcher
-
-分发规则：
-
-```text
-Response
-   |
-   +--> PendingRequest matcher == true --> complete future
-   |
-   +--> otherwise ----------------------> async channel
-```
-
-这里有一个重要取舍：
-
-"当前 request 没匹配上的 response"不会被静默丢弃，而会进入 async 通道。
-
-这样即使仪器发送 unsolicited event，也不会因为当前存在同步请求而丢失。
-
-### 11.8 Reconnect 与 Retry
-
-二者必须分离。
-
-Reconnect：
-
-```text
-DISCONNECTED
-    |
-    v
-RECONNECTING
-    |
-    +--> CONNECTED
-    |
-    +--> failed -> backoff
-```
-
-Retry：
-
-```text
-request failure
-     |
-     +-- timeout ------------> normally no retry
-     |
-     +-- connection error
-              |
-              +-- IDEMPOTENT -> may retry
-              +-- UNKNOWN ----> fail
-              +-- NON_IDEMPOTENT -> fail
-```
-
-### 11.9 Backoff
-
-使用指数退避：
-
-```text
-delay = min(initial * 2^(attempt-1), max)
-```
-
-并加入 jitter，避免多个客户端同时断线后形成 reconnect thundering herd。
-
-### 11.10 Decoder
-
-Decoder 是 stateful object：
+### 异步请求
 
 ```java
-List<Response> decode(byte[] bytes, int offset, int length);
-void reset();
+CompletableFuture<Response> future = client.requestAsync(
+        Command.text("*IDN?", StandardCharsets.UTF_8),
+        ResponseMatcher.any(),
+        Duration.ofSeconds(3),
+        CommandIdempotency.IDEMPOTENT
+);
+
+future.thenAccept(response -> System.out.println(response.text()));
 ```
 
-每个 InstrumentClient 创建自己的 decoder：
-
-```text
-Client A -> Decoder A
-Client B -> Decoder B
-```
-
-绝对不要在多个 TCP connection 间共享有状态 decoder。
-
-### 11.11 生命周期
-
-```text
-NEW
- |
- | connect()
- v
-CONNECTING
- |
- +--> CONNECTED
- |
- +--> DISCONNECTED
-
-CONNECTED -- network failure --> DISCONNECTED
-DISCONNECTED -- reconnect --> RECONNECTING --> CONNECTED
-
-any state -- close() --> CLOSING --> CLOSED
-```
-
-`close()` 设置 manualClose 标志，阻止后台 reconnect。
-
-### 11.12 为什么不再使用 Condition
-
-旧实现：
-
-```text
-Condition.await()
-Condition.signalAll()
-```
-
-这要求自己正确处理：
-
-- 锁
-- signal 时机
-- spurious wakeup
-- timeout
-- request 生命周期
-- connection failure
-
-`CompletableFuture` 更适合"一次请求对应一次结果"的语义。
-
-### 11.13 未来扩展
-
-可以在不改变核心 Connection/Receiver 的情况下增加：
-
-```text
-SCPI Adapter
-Modbus TCP Adapter
-Vendor Binary Adapter
-ASCII Adapter
-JSON-over-TCP Adapter
-```
-
-也可以增加：
-
-- correlation-id
-- command pipeline
-- priority queue
-- rate limiter
-- metrics SPI
-- tracing SPI
-- TLS connection
-- serial connection
-- UDP connection
-- heartbeat
-- device capability discovery
-
-## 12. 并发模型
-
-### 12.1 线程模型
-
-每个 client：
-
-```text
-Request Executor : 单线程，保证 request 顺序
-Receiver Thread  : 一个，专门读 TCP
-Reconnect Scheduler: 一个，负责延迟 reconnect
-```
-
-DataListener 默认在 receiver thread 上调用，因此 listener 必须快速返回。
-
-如果业务需要耗时处理，应在 listener 中提交自己的业务线程池。
-
-### 12.2 锁策略
-
-采用**双锁设计**，分离不同粒度的同步需求：
-
-| 锁 | 类型 | 保护范围 | 公平性 |
-|---|---|---|---|
-| `requestLock` | `ReentrantLock(true)` | 请求注册、写入、等待的原子性 | 公平锁 |
-| `lifecycleLock` | `ReentrantLock(true)` | 连接建立、断开、关闭的生命周期 | 公平锁 |
-
-**双锁分离的好处**：
-
-- 避免请求操作和连接操作互相阻塞
-- 公平锁保证线程饥饿问题
-- 锁粒度最小化，提高并发性能
-
-### 12.3 无锁并发
-
-| 组件 | 技术 | 用途 |
-|---|---|---|
-| `RequestManager` | `AtomicReference` + CAS | 单个 pending request 的线程安全管理 |
-| `ClientMetrics` | `LongAdder` | 高并发下的低开销指标统计 |
-| `connectionListeners` | `CopyOnWriteArrayList` | 线程安全的监听器列表，读多写少场景 |
-| `reconnectScheduled` | `AtomicBoolean` | 防止重复调度重连任务 |
-| `closed` / `reconnectSuppressed` | `volatile` | 跨线程可见的状态标志 |
-
-### 12.4 CompletableFuture 异步模型
-
-```text
-主线程                          Receiver 线程
-  |                                |
-  |  register(pending)             |
-  |  write(command)                |
-  |  future.get(timeout) ──阻塞──>  |
-  |                                |  read(bytes)
-  |                                |  decoder.decode()
-  |                                |  dispatcher.dispatch(response)
-  |                                |  pending.tryComplete(response)
-  |  <──── Future 完成 ────────────|
-  |  返回 response                 |
-```
-
-**优势**：
-
-- 自动处理 spurious wakeup
-- 内置超时支持
-- 异常传播清晰
-- 不需要手动管理 wait/notify
-
-### 12.5 CAS 操作保证线程安全
-
-`RequestManager` 使用 CAS 操作管理 pending request：
+### 阻塞式数据监听器
 
 ```java
-// 注册：CAS null -> request
-pending.compareAndSet(null, request)
+BlockingDataListener blocking = client.blockingDataListener();
+client.addDataListener(blocking);
 
-// 分发：CAS request -> null（防止超时线程误删新请求）
-pending.compareAndSet(request, null)
-
-// 移除：CAS request -> null
-pending.compareAndSet(request, null)
+// 阻塞直到有数据到达
+Response response = blocking.take();
+// 或带超时
+Response response = blocking.poll(Duration.ofSeconds(5));
 ```
 
-**关键设计点**：
-
-- CAS 防止超时线程和分发线程竞争
-- `getAndSet(null)` 保证 fail() 操作的原子性
-- 避免使用 synchronized 减少锁竞争
-
-## 13. 设计模式
-
-### 13.1 工厂模式（Factory Pattern）
-
-**InstrumentClients** 作为静态工厂类：
+### 拦截器
 
 ```java
-// 静态工厂方法，隐藏实现细节
-InstrumentClient client = InstrumentClients.tcp(host, port, protocol, config);
-```
+client.addInterceptor(new ClientInterceptor() {
+    @Override
+    public void beforeRequest(Command command, CommandIdempotency idempotency) {
+        System.out.println("Sending: " + command.text());
+    }
 
-**优势**：
+    @Override
+    public void afterResponse(Command command, Response response, Duration latency) {
+        System.out.println("Received: " + response.text() + " in " + latency.toMillis() + "ms");
+    }
 
-- 统一创建入口，便于扩展新的连接类型（如 TLS、Serial）
-- 参数校验集中在工厂方法中
-- 返回接口类型，降低耦合
-
-### 13.2 建造者模式（Builder Pattern）
-
-**ClientConfig.Builder** 使用链式调用构建复杂配置：
-
-```java
-ClientConfig config = ClientConfig.builder()
-    .connectTimeout(Duration.ofSeconds(10))
-    .responseTimeout(Duration.ofSeconds(30))
-    .receiveBufferSize(16384)
-    .overflowPolicy(OverflowPolicy.BLOCK)
-    .reconnect(ReconnectConfig.defaults())
-    .build();
-```
-
-**优势**：
-
-- 避免 telescoping constructor 问题
-- 配置项有默认值，只需覆盖需要的项
-- 构建时统一校验参数合法性
-
-### 13.3 策略模式（Strategy Pattern）
-
-**Protocol 接口**定义编解码策略：
-
-```java
-// 可自由切换协议实现
-Protocol lineProtocol = new LineProtocol();
-Protocol binaryProtocol = new LengthFieldProtocol();
-
-InstrumentClient client = InstrumentClients.tcp(host, port, protocol, config);
-```
-
-**OverflowPolicy 枚举**定义队列溢出策略：
-
-```java
-public enum OverflowPolicy { 
-    DROP_OLDEST,   // 丢弃最老的
-    DROP_NEWEST,   // 丢弃最新的
-    BLOCK,         // 阻塞等待
-    FAIL           // 抛出异常
-}
-```
-
-**优势**：
-
-- 开闭原则：新增协议无需修改核心代码
-- 运行时可替换策略
-- 每种策略独立测试
-
-### 13.4 观察者模式（Observer Pattern）
-
-**DataListener / ConnectionListener** 实现事件通知：
-
-```java
-// 添加多个监听器
-client.addDataListener(response -> System.out.println("Async: " + response));
-client.addConnectionListener(new ConnectionListener() {
-    void onConnected() { ... }
-    void onDisconnected(Throwable cause) { ... }
+    @Override
+    public void afterFailure(Command command, CommandIdempotency idempotency, Throwable cause) {
+        System.err.println("Failed: " + cause.getMessage());
+    }
 });
 ```
 
-**实现细节**：
+## 使用注意事项
 
-- 使用 `CopyOnWriteArrayList` 存储监听器
-- 监听器调用被 try-catch 包裹，单个监听器异常不影响其他监听器
-- 支持 `BlockingDataListener` 提供阻塞式消费接口
+### 1. 给每种仪器单独实现业务 Adapter
 
-### 13.5 责任链模式（Chain of Responsibility）
-
-**响应分发链路**：
-
-```text
-Receiver.read()
-    |
-    v
-ProtocolDecoder.decode()
-    |
-    v
-ResponseDispatcher.dispatch()
-    |
-    +--> RequestManager.dispatch() --> PendingRequest.tryComplete()
-    |
-    +--> asyncQueue.offer()
-    |
-    +--> DataListener.onData()
-```
-
-每个环节只关心自己的职责：
-
-- Receiver 只负责读字节
-- Decoder 只负责解码
-- Dispatcher 只负责分发
-- RequestManager 只管理 pending request
-
-### 13.6 模板方法模式（Template Method）
-
-**ReconnectPolicy** 封装重连判断逻辑：
+不要让业务代码直接拼协议。应该为每种仪器实现一个 Adapter 类，封装协议细节：
 
 ```java
-// 判断是否启用重连
-boolean enabled() = config.enabled() && config.maxAttempts() > 0;
+public class PowerSupplyAdapter {
+    private final InstrumentClient client;
 
-// 判断是否可以进行此次尝试
-boolean canAttempt(int attempt) = enabled() && attempt <= config.maxAttempts();
-
-// 计算延迟时间
-Duration delay(int attempt) = config.delayForAttempt(attempt);
-```
-
-**优势**：
-
-- 重连逻辑集中在一个类中
-- 配置与策略分离
-- 易于测试和替换
-
-### 13.7 函数式接口（Functional Interface）
-
-**ResponseMatcher** 采用函数式设计：
-
-```java
-// Lambda 表达式
-ResponseMatcher matcher = r -> r.text().contains("OK");
-
-// 方法引用
-ResponseMatcher matcher = ResponseMatcher.contains("OK");
-
-// 内置工厂方法
-ResponseMatcher.any()
-ResponseMatcher.equalsText("ERROR")
-ResponseMatcher.regex("^DATA:.*$")
-ResponseMatcher.predicate(r -> r.text().startsWith("INFO"))
-```
-
-**优势**：
-
-- 减少样板代码
-- 匹配逻辑可以组合
-- 支持自定义复杂匹配
-
-## 14. 设计亮点
-
-### 14.1 并发安全
-
-#### 14.1.1 Single-Flight 保证
-
-通过 `requestLock` 保证"检查、注册、写入"三步原子性：
-
-```java
-requestLock.lock();
-try {
-    if (requestManager.hasPending()) {
-        throw new IllegalStateException("another request is pending");
+    public PowerSupplyAdapter(InstrumentClient client) {
+        this.client = client;
     }
-    if (!isConnected()) {
-        connect();
+
+    public double measureVoltage() throws Exception {
+        Response response = client.request(
+                Command.text("MEAS:VOLT:DC?", StandardCharsets.UTF_8),
+                ResponseMatcher.regex("[-+]?\\d+(\\.\\d+)?"),
+                Duration.ofSeconds(2),
+                CommandIdempotency.IDEMPOTENT
+        );
+        return Double.parseDouble(response.text().trim());
     }
-    pending = requestManager.register(request.matcher());
-    connection.write(encoder.encode(request.command()));
-    return pending.future().get(timeout);
-} finally {
-    requestLock.unlock();
-}
-```
 
-**防止的问题**：
-
-- 并发请求导致响应通道被占用
-- write 返回前快速响应被误判为异步数据
-- 连接状态检查与写入之间的 TOCTOU 竞争
-
-#### 14.1.2 无锁统计
-
-`ClientMetrics` 使用 `LongAdder` 替代 `AtomicLong`：
-
-```java
-private final LongAdder sentFrames = new LongAdder();
-private final LongAdder sentBytes = new LongAdder();
-```
-
-**优势**：
-
-- 高并发下性能优于 `AtomicLong`（分段累加）
-- 适合读少写多的统计场景
-- `snapshot()` 方法提供一致的快照视图
-
-#### 14.1.3 优雅关闭
-
-```java
-public void close() {
-    lifecycleLock.lock();
-    try {
-        if (closed) return;
-        closed = true;
-        reconnectSuppressed = true;
-        reconnectScheduled.set(false);
-        Receiver r = receiver;
-        if (r != null) r.stop();
-        requestManager.fail(new ConnectionException("client closed"));
-        connection.close();
-        decoder.reset();
-    } finally {
-        lifecycleLock.unlock();
-    }
-    requestExecutor.shutdownNow();
-    scheduler.shutdownNow();
-}
-```
-
-**保证**：
-
-- `volatile closed` 标志跨线程可见
-- 先停止接收线程，再取消 pending 请求
-- 最后关闭线程池，避免资源泄漏
-
-### 14.2 错误处理
-
-#### 14.2.1 异常层次
-
-```
-InstrumentException
-├── ConnectionException      // 连接相关错误
-├── RequestTimeoutException  // 请求超时
-├── RequestCancelledException // 请求取消
-├── ProtocolException        // 协议解析错误
-└── ConfigurationException   // 配置错误
-```
-
-#### 14.2.2 监听器异常隔离
-
-```java
-for (var l : connectionListeners) {
-    try { l.onConnected(); } catch (Throwable ignored) {}
-}
-```
-
-单个监听器异常不会影响其他监听器和核心流程。
-
-#### 14.2.3 Receiver 异常传播
-
-Receiver 线程捕获异常后通过回调通知主线程：
-
-```java
-catch (Throwable t) {
-    if (running) {
-        errorHandler.accept(t);  // 触发重连逻辑
+    public void setVoltage(double volts) throws Exception {
+        client.request(
+                Command.text("SOUR:VOLT " + volts, StandardCharsets.UTF_8),
+                ResponseMatcher.equalsText("OK"),
+                Duration.ofSeconds(2),
+                CommandIdempotency.NON_IDEMPOTENT
+        );
     }
 }
 ```
 
-### 14.3 可扩展性
+### 2. 正确设置命令幂等性
 
-#### 14.3.1 协议扩展
+| 命令类型 | 幂等性 | 示例 |
+|----------|--------|------|
+| 查询类 | `IDEMPOTENT` | `*IDN?`, `MEAS:VOLT?`, `SYST:ERR?` |
+| 执行类 | `NON_IDEMPOTENT` | `*RST`, `INIT`, `TRIG`, `ABOR` |
+| 不确定 | `UNKNOWN` | 不清楚是否有副作用的命令 |
 
-新增协议只需实现 `Protocol` 接口：
+### 3. 设置合理的最大帧长度
 
-```java
-public class MyProtocol implements Protocol {
-    @Override
-    public ProtocolEncoder newEncoder() { ... }
-    
-    @Override
-    public ProtocolDecoder newDecoder() { ... }
-}
-```
-
-#### 14.3.2 连接类型扩展
-
-新增连接类型（如 TLS、Serial）只需实现 `Connection` 接口：
+对二进制协议设置合理的 `maxFrameLength`，防止恶意或异常数据导致 OOM：
 
 ```java
-public interface Connection {
-    void connect();
-    int read(byte[] buffer) throws IOException;
-    void write(byte[] data) throws IOException;
-    boolean isConnected();
-    ConnectionState state();
-    void close();
-}
+LengthFieldProtocol.defaults(StandardCharsets.UTF_8, 65536); // 64KB
 ```
 
-#### 14.3.3 匹配器扩展
+### 4. DataListener 中不要执行长时间阻塞操作
 
-`ResponseMatcher` 是函数式接口，可以任意组合：
+DataListener 在接收线程中调用，阻塞操作会导致后续数据无法接收：
 
 ```java
-// 自定义复杂匹配逻辑
-ResponseMatcher matcher = r -> 
-    r.text().contains("OK") && r.bytes().length > 10;
+// 错误示例
+client.addDataListener(response -> {
+    Thread.sleep(10000); // 阻塞接收线程！
+    processResponse(response);
+});
+
+// 正确示例
+ExecutorService executor = Executors.newCachedThreadPool();
+client.addDataListener(response -> {
+    executor.submit(() -> processResponse(response)); // 异步处理
+});
 ```
 
-### 14.4 测试友好
+### 5. 日志级别建议
 
-#### 14.4.1 组件解耦
+- 默认只记录长度和状态
+- 调试原始报文时才打开 TRACE 级别
+- 对日志中的设备数据做脱敏处理
 
-- `RequestManager` 不依赖 socket，可独立测试
-- `ResponseDispatcher` 不依赖网络，可模拟响应
-- `Receiver` 可注入 mock Connection
+### 6. 生产环境建议增加指标监控
 
-#### 14.4.2 测试覆盖
+建议集成 Micrometer/OpenTelemetry，但不要让指标逻辑侵入通信核心。
 
-- 单元测试：`RequestManagerTest`、`ResponseDispatcherTest`、`ReconnectPolicyTest`
-- 集成测试：`InstrumentClientIntegrationTest`、`ComprehensiveInstrumentClientTest`
-- 协议测试：`LineProtocolTest`、`LengthFieldProtocolTest`
+### 7. 为每种仪器增加协议级集成测试
 
-### 14.5 资源管理
+使用 `InstrumentationServer` 模拟仪器行为，验证协议解析的正确性。
 
-#### 14.5.1 AutoCloseable
+### 8. 连接超时和响应超时应该分开设置
 
-`InstrumentClient` 实现 `AutoCloseable`，支持 try-with-resources：
+- `connectTimeout`：TCP 连接建立超时
+- `responseTimeout`：发送命令后等待响应超时
 
 ```java
-try (InstrumentClient client = InstrumentClients.tcp(host, port, protocol, config)) {
-    client.connect();
-    Response response = client.request(command, matcher, timeout);
-}
+ClientConfig.builder()
+    .connectTimeout(Duration.ofSeconds(3))   // 连接超时
+    .responseTimeout(Duration.ofSeconds(10)) // 响应超时
+    .build();
 ```
 
-#### 14.5.2 线程生命周期
+### 9. close() 会中断所有 pending 请求
 
-- Receiver 线程设置为 daemon 线程，JVM 退出时自动清理
-- `shutdownNow()` 确保线程池正确关闭
-- `volatile running` 标志控制 Receiver 线程退出
+调用 `client.close()` 后，所有未完成的请求都会以 `RequestCancelledException` 失败。
 
-### 14.6 性能优化
+### 10. 不要在 close() 后继续使用 client
 
-#### 14.6.1 TCP 优化
+`close()` 是终态操作，调用后无法重新连接。需要重新创建 client 实例。
 
-- `TCP_NODELAY = true`：禁用 Nagle 算法，减少延迟
-- `SO_KEEPALIVE = true`：启用 TCP keepalive，检测连接存活
-- 可配置的 `SO_RCVBUF`：优化接收缓冲区大小
+## 测试覆盖
 
-#### 14.6.2 内存优化
+项目包含 202 个测试用例，覆盖以下场景：
 
-- Decoder 状态独立，避免共享状态导致的内存竞争
-- 固定大小缓冲区复用，减少 GC 压力
-- `ArrayBlockingQueue` 预分配异步队列内存
+| 测试类 | 测试数量 | 覆盖场景 |
+|--------|----------|----------|
+| `ComprehensiveInstrumentClientTest` | 28 | 端到端集成、粘包/半包/超时/重连 |
+| `InstrumentClientIntegrationTest` | 15 | API 表面、监听器、异步请求 |
+| `RobustnessExtensibilityTest` | 18 | 拦截器、MockConnection、诊断、指标 |
+| `NetworkFluctuationTest` | 5 | 网络闪断、延迟抖动、超时边界 |
+| `RetryMechanismTest` | 6 | 重试回调、重试上限、close 中断 |
+| `ProtocolBoundaryTest` | 10 | 半包/粘包/空响应/噪声数据/错误帧 |
+| `ConcurrencyStressTest` | 8 | 多线程并发、队列溢出、死锁检测 |
+| 其他单元测试 | 112 | 配置、模型、协议、指标 |
 
-#### 14.6.3 锁优化
+运行测试：
 
-- 公平锁避免线程饥饿
-- 双锁分离减少锁竞争
-- CAS 操作替代部分锁场景
-
-## 15. 核心类职责
-
-| 类 | 职责 | 关键设计 |
-|---|---|---|
-| `InstrumentClientImpl` | 整合所有组件，实现客户端接口 | 双锁策略、幂等重试、优雅关闭 |
-| `RequestManager` | 管理当前 pending request | AtomicReference + CAS |
-| `ResponseDispatcher` | 分发响应到请求或异步通道 | OverflowPolicy、多监听器 |
-| `Receiver` | 持续读取 TCP 数据并解码 | 独立线程、daemon 模式 |
-| `PendingRequest` | 封装 matcher 和 Future | CompletableFuture 异步模型 |
-| `TcpConnection` | 封装 Socket 操作 | 生命周期管理、线程安全 |
-| `ReconnectPolicy` | 重连策略判断 | 指数退避 + jitter |
-| `ClientMetrics` | 指标收集 | LongAdder 高并发统计 |
-| `ClientConfig` | 配置管理 | Builder 模式、默认值 |
-
-## 16. 数据流
-
-### 16.1 同步请求流程
-
-```
-用户线程                     InstrumentClientImpl              Receiver 线程
-   |                                |                              |
-   |  request(command, matcher)     |                              |
-   |------------------------------>|                              |
-   |                                |  requestLock.lock()          |
-   |                                |  check pending               |
-   |                                |  register(matcher)           |
-   |                                |  write(encoded command)      |
-   |                                |  future.get(timeout) ─阻塞─> |
-   |                                |                              |  read(bytes)
-   |                                |                              |  decode(responses)
-   |                                |                              |  dispatch(response)
-   |                                |  <── tryComplete(response) ──|
-   |  <── 返回 response ────────────|                              |
-   |                                |  requestLock.unlock()        |
+```bash
+mvn test
 ```
 
-### 16.2 异步数据流程
+## 构建要求
 
-```
-仪器                        Receiver 线程              ResponseDispatcher         DataListener
-  |                             |                            |                        |
-  |── TCP data ────────────────>|                            |                        |
-  |                             |── decode(response) ───────>|                        |
-  |                             |                            |── 无 pending request   |
-  |                             |                            |── asyncQueue.offer()   |
-  |                             |                            |── listener.onData() ──>|
-  |                             |                            |                        |── 处理异步数据
-```
+- Java 17+
+- Maven 3.6+
+- JUnit 5
 
-### 16.3 重连流程
-
-```
-Receiver 线程              InstrumentClientImpl           Reconnect Scheduler
-     |                            |                              |
-     |── read error ─────────────>|                              |
-     |                            |── fail pending requests      |
-     |                            |── disconnect()               |
-     |                            |── notifyDisconnected()       |
-     |                            |── scheduleReconnect() ──────>|
-     |                            |                              |── delay(backoff)
-     |                            |                              |── connect()
-     |                            |<─────────────────────────────|
-     |                            |── startReceiver() ──────────>|
-     |                            |── notifyConnected()          |
+```bash
+mvn clean compile
+mvn test
+mvn package
 ```
 
-## 17. 协议扩展说明
+## License
 
-### 17.1 Protocol 接口
-
-协议只关心两个方向：
-
-```text
-Command -> bytes
-bytes   -> Response
-```
-
-```java
-public interface Protocol {
-    ProtocolEncoder newEncoder();
-    ProtocolDecoder newDecoder();
-}
-```
-
-### 17.2 新增协议
-
-建议实现：
-
-```java
-public final class MyProtocol implements Protocol {
-    @Override
-    public ProtocolEncoder newEncoder() { ... }
-
-    @Override
-    public ProtocolDecoder newDecoder() { ... }
-}
-```
-
-Decoder 必须支持：
-
-- fragmentation
-- sticky packet
-- multiple frames
-- malformed frame resynchronization
-- maximum frame length
-
-### 17.3 不要在 Protocol 中做业务
-
-不要：
-
-```java
-if (command.equals("START")) { ... }
-```
-
-协议层只处理 frame。
-
-业务层负责：
-
-```text
-Why send?
-What does response mean?
-What should happen after response?
-```
-
-### 17.4 Checksum 命名
-
-如果算法是：
-
-```java
-checksum ^= value;
-```
-
-它是 XOR checksum，不应写成 CRC-8。
-
-真正 CRC-8 需要明确 polynomial、initial、refin、refout、xorout 等参数。
-
-## 18. 总结
-
-本项目通过以下设计原则构建了一个高质量、可扩展的仪器通信框架：
-
-1. **单一职责**：每个组件只关注自己的核心职责
-2. **依赖倒置**：面向接口编程，Protocol/Connection 可自由替换
-3. **开闭原则**：新增功能无需修改核心代码
-4. **并发安全**：双锁 + CAS + volatile + CompletableFuture
-5. **错误隔离**：监听器异常不影响核心流程
-6. **测试友好**：组件解耦，可独立测试
-7. **资源管理**：AutoCloseable + daemon 线程 + 优雅关闭
+MIT License

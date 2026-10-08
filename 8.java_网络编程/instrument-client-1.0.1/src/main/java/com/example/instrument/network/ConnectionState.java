@@ -1,4 +1,4 @@
-package com.example.instrument.connection;
+package com.example.instrument.network;
 
 /**
  * 连接状态枚举，定义连接的生命周期状态。

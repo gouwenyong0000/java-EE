@@ -1,7 +1,7 @@
 package com.example.instrument.testing;
 
-import com.example.instrument.connection.Connection;
-import com.example.instrument.connection.ConnectionState;
+import com.example.instrument.network.Connection;
+import com.example.instrument.network.ConnectionState;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

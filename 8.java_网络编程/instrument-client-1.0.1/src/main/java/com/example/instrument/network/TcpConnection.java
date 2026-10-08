@@ -1,4 +1,4 @@
-package com.example.instrument.connection;
+package com.example.instrument.network;
 
 import com.example.instrument.config.ClientConfig;
 import com.example.instrument.exception.ConnectionException;
@@ -279,8 +279,12 @@ public final class TcpConnection implements Connection {
                 s.setTcpNoDelay(config.tcpNoDelay());
                 s.setKeepAlive(config.keepAlive());
                 s.setReceiveBufferSize(config.receiveBufferSize());
+                s.setSendBufferSize(config.sendBufferSize());
                 s.setSoTimeout(config.socketReadTimeoutMillis());
                 s.setReuseAddress(true);
+                if (config.soLingerSeconds() >= 0) {
+                    s.setSoLinger(true, config.soLingerSeconds());
+                }
 
                 long timeoutMillis = Math.min((long) Integer.MAX_VALUE, config.connectTimeout().toMillis());
                 s.connect(address, (int) timeoutMillis);
@@ -289,9 +293,10 @@ public final class TcpConnection implements Connection {
                 output = s.getOutputStream();
                 socket = s;
                 state = ConnectionState.CONNECTED;
-                log.info("connected to {} (tcpNoDelay={}, keepAlive={}, readTimeout={}ms, rcvBuf={})",
+                log.info("connected to {} (tcpNoDelay={}, keepAlive={}, readTimeout={}ms, rcvBuf={}, sndBuf={}, soLinger={})",
                     address, config.tcpNoDelay(), config.keepAlive(),
-                    config.socketReadTimeoutMillis(), config.receiveBufferSize());
+                    config.socketReadTimeoutMillis(), config.receiveBufferSize(),
+                    config.sendBufferSize(), config.soLingerSeconds());
             } catch (IOException e) {
                 closeQuietly(s);
                 state = ConnectionState.DISCONNECTED;

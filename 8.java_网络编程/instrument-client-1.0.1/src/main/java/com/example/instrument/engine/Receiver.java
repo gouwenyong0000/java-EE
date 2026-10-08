@@ -1,6 +1,6 @@
-package com.example.instrument.core;
+package com.example.instrument.engine;
 
-import com.example.instrument.connection.Connection;
+import com.example.instrument.network.Connection;
 import com.example.instrument.protocol.ProtocolDecoder;
 import java.io.IOException;
 import java.util.List;
@@ -28,6 +28,12 @@ import org.slf4j.LoggerFactory;
  *   <li>发生错误时调用 errorHandler 回调</li>
  * </ol>
  *
+ * <p>性能优化：</p>
+ * <ul>
+ *   <li>循环中不重复调用 isConnected()，依赖 read() 的阻塞语义</li>
+ *   <li>buffer 在构造函数中预分配，避免每次创建</li>
+ * </ul>
+ *
  * @see Connection
  * @see ProtocolDecoder
  * @see ResponseDispatcher
@@ -39,7 +45,7 @@ final class Receiver implements Runnable {
     private final Connection connection;
     private final ProtocolDecoder decoder;
     private final ResponseDispatcher dispatcher;
-    private final int bufferSize;
+    private final byte[] buffer;
     private final Consumer<Throwable> errorHandler;
     private volatile boolean running;
 
@@ -57,7 +63,7 @@ final class Receiver implements Runnable {
         this.connection = Objects.requireNonNull(connection);
         this.decoder = Objects.requireNonNull(decoder);
         this.dispatcher = Objects.requireNonNull(dispatcher);
-        this.bufferSize = bufferSize;
+        this.buffer = new byte[bufferSize];
         this.errorHandler = Objects.requireNonNull(errorHandler);
     }
 
@@ -65,6 +71,7 @@ final class Receiver implements Runnable {
      * 停止接收。
      *
      * 设置 running = false，接收线程会在下次循环检查时退出。
+     * 如果线程正阻塞在 read() 上，需要调用者额外关闭连接以唤醒线程。
      */
     void stop() {
         running = false;
@@ -74,15 +81,21 @@ final class Receiver implements Runnable {
      * 接收循环。
      *
      * 持续从连接读取数据，解码并分发，直到 stop() 被调用或连接断开。
+     *
+     * <p>退出条件：</p>
+     * <ul>
+     *   <li>running 被设为 false（stop() 被调用）</li>
+     *   <li>read() 返回 -1（对端关闭连接）</li>
+     *   <li>read() 抛出 IOException（网络异常）</li>
+     * </ul>
      */
     @Override 
     public void run() {
         running = true;
-        byte[] buffer = new byte[bufferSize];
-        log.debug("receiver started, bufferSize={}", bufferSize);
+        log.debug("receiver started, bufferSize={}", buffer.length);
         
         try {
-            while (running && connection.isConnected()) {
+            while (running) {
                 int n = connection.read(buffer);
                 if (n < 0) {
                     throw new IOException("remote peer closed connection");
@@ -102,7 +115,7 @@ final class Receiver implements Runnable {
             }
         } catch (Throwable t) {
             if (running) {
-                log.debug("receiver stopped due to error: {}", t.toString());
+                log.warn("receiver stopped due to error: {}", t.getMessage());
                 errorHandler.accept(t);
             }
         } finally {

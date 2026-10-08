@@ -1,8 +1,8 @@
-package com.example.instrument.connection;
+package com.example.instrument.network;
 
 import com.example.instrument.api.InstrumentClient;
 import com.example.instrument.config.ClientConfig;
-import com.example.instrument.core.InstrumentClientImpl;
+import com.example.instrument.engine.InstrumentClientImpl;
 import com.example.instrument.protocol.Protocol;
 import java.net.InetSocketAddress;
 import java.util.*;
