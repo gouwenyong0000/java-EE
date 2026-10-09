@@ -6,10 +6,10 @@ import java.util.Objects;
 
 /**
  * 请求记录类，将命令、匹配器、超时时间和幂等性封装在一起。
- * 
+ *
  * 这是一个不可变记录类（record），用于在请求处理过程中传递上下文信息。
  * RequestManager 使用它来管理请求的生命周期。
- * 
+ *
  * <p>请求验证：</p>
  * <ul>
  *   <li>command 不能为空</li>
@@ -17,15 +17,15 @@ import java.util.Objects;
  *   <li>timeout 必须为正数</li>
  *   <li>idempotency 不能为空</li>
  * </ul>
- * 
+ *
  * @see Command
  * @see ResponseMatcher
  * @see CommandIdempotency
- * @see com.example.instrument.core.RequestManager
+ * @see com.example.instrument.engine.RequestManager
  */
 public record Request(Command command, ResponseMatcher matcher, Duration timeout,
                       CommandIdempotency idempotency) {
-    
+
     /**
      * 构造函数，验证参数有效性。
      *
