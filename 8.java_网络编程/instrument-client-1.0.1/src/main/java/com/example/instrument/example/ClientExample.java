@@ -1,12 +1,13 @@
 package com.example.instrument.example;
 
 import com.example.instrument.api.InstrumentClient;
+import com.example.instrument.api.InstrumentClients;
 import com.example.instrument.api.ResponseMatcher;
-import com.example.instrument.config.ClientConfig;
-import com.example.instrument.factory.InstrumentClients;
-import com.example.instrument.model.Command;
-import com.example.instrument.model.CommandIdempotency;
+import com.example.instrument.core.config.ClientConfig;
+import com.example.instrument.core.model.Command;
+import com.example.instrument.core.model.CommandIdempotency;
 import com.example.instrument.protocol.LineProtocol;
+
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;

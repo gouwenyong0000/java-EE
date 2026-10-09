@@ -1,13 +1,14 @@
 package com.example.instrument.api;
 
-import com.example.instrument.model.Response;
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.example.instrument.core.model.Response;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("ResponseMatcher 匹配器测试")
 class ResponseMatcherTest {

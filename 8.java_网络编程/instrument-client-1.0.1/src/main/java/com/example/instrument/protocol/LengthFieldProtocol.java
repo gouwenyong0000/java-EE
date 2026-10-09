@@ -1,7 +1,7 @@
 package com.example.instrument.protocol;
 
-import com.example.instrument.exception.ProtocolException;
-import com.example.instrument.model.Response;
+import com.example.instrument.core.model.Response;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;

@@ -1,25 +1,24 @@
 package com.example.instrument.testing;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.example.instrument.InstrumentationServer;
 import com.example.instrument.api.InstrumentClient;
+import com.example.instrument.api.InstrumentClients;
 import com.example.instrument.api.ResponseMatcher;
-import com.example.instrument.config.ClientConfig;
-import com.example.instrument.config.ReconnectConfig;
-import com.example.instrument.exception.RequestTimeoutException;
-import com.example.instrument.factory.InstrumentClients;
-import com.example.instrument.model.Command;
-import com.example.instrument.model.CommandIdempotency;
-import com.example.instrument.model.Response;
+import com.example.instrument.core.config.ClientConfig;
+import com.example.instrument.core.exception.RequestTimeoutException;
+import com.example.instrument.core.model.Command;
+import com.example.instrument.core.model.CommandIdempotency;
+import com.example.instrument.core.model.Response;
 import com.example.instrument.protocol.LineProtocol;
 import com.example.instrument.protocol.Protocol;
+import com.example.instrument.transport.reconnect.ReconnectConfig;
 
 import org.junit.jupiter.api.*;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 客户端请求响应测试。

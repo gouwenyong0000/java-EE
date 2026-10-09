@@ -1,8 +1,8 @@
 package com.example.instrument.api;
 
-import com.example.instrument.model.Command;
-import com.example.instrument.model.CommandIdempotency;
-import com.example.instrument.model.Response;
+import com.example.instrument.core.model.Command;
+import com.example.instrument.core.model.CommandIdempotency;
+import com.example.instrument.core.model.Response;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;

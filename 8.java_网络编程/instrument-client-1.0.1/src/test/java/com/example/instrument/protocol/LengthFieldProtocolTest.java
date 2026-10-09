@@ -1,14 +1,15 @@
 package com.example.instrument.protocol;
 
-import com.example.instrument.model.Command;
-import com.example.instrument.model.Response;
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.example.instrument.core.model.Command;
+import com.example.instrument.core.model.Response;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * LengthFieldProtocol 单元测试。
@@ -305,7 +306,7 @@ class LengthFieldProtocolTest {
         });
 
         // payload = 6 (超过限制)
-        assertThrows(com.example.instrument.exception.ProtocolException.class, () ->
+        assertThrows(ProtocolException.class, () ->
             p.newEncoder().encode(Command.text("TOOLONG"))
         );
     }
@@ -616,7 +617,7 @@ class LengthFieldProtocolTest {
 
         assertDoesNotThrow(() -> p.newEncoder().encode(Command.text("OK")));
 
-        assertThrows(com.example.instrument.exception.ProtocolException.class, () ->
+        assertThrows(ProtocolException.class, () ->
             p.newEncoder().encode(Command.text("TOOLONG"))
         );
     }
