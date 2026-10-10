@@ -405,13 +405,15 @@ public final class TcpConnection implements Connection {
      *   <li>{@code s != null} — Socket 对象是否存在。</li>
      *   <li>{@code s.isConnected()} — Socket 是否执行过 connect 且未 close。</li>
      *   <li>{@code !s.isClosed()} — 本地 Socket 是否已关闭。</li>
+     *   <li>{@code !s.isInputShutdown()} — Socket 输入流是否已关闭。</li>
+     *   <li>{@code !s.isOutputShutdown()} — Socket 输出流是否已关闭。</li>
      *   <li>{@code input != null && output != null} — 双工通道流引用是否存在。</li>
      * </ol>
      *
      * <h3>双工通道（Full-Duplex）</h3>
      * <p>TCP 是<b>全双工</b>协议，读写通道可独立关闭（半关闭，TCP Half-Close）。
-     * 本方法通过 {@code input != null && output != null} 确保读写流引用未被
-     * disconnect/close 清理（此时流为 null），同时保证双工通信能力完整。</p>
+     * 本方法通过 {@code !s.isInputShutdown() && !s.isOutputShutdown()} 检查确保
+     * 双工通道完整，同时通过 {@code input != null && output != null} 确保流引用未被清理。</p>
      *
      * <h3>局限性</h3>
      * <p>即使全部检查通过，连接仍可能在下一次 read/write 时发现已断开。
@@ -427,6 +429,8 @@ public final class TcpConnection implements Connection {
             && s != null
             && s.isConnected()
             && !s.isClosed()
+            && !s.isInputShutdown()
+            && !s.isOutputShutdown()
             && input != null
             && output != null;
     }
