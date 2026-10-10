@@ -387,18 +387,18 @@ public final class InstrumentClientImpl implements InstrumentClient {
         String cmdSummary = command.toString();
         diagnostics.recordRequestSent(cmdSummary, startNanos);
 
-        Request request = new Request(command, matcher, timeout, idempotency);
+        RequestContext requestContext = new RequestContext(command, matcher, timeout, idempotency);
         int attempts = 0;
 
         while (true) {
             try {
-                Response response = executeOnce(request);
+                Response response = executeOnce(requestContext);
                 Duration latency = Duration.ofNanos(System.nanoTime() - startNanos);
                 diagnostics.recordRequestCompleted(cmdSummary, true, latency);
                 notifyInterceptorsAfterResponse(command, response, latency);
                 return response;
             } catch (Exception e) {
-                if (request.idempotency() != CommandIdempotency.IDEMPOTENT || attempts >= reconnectPolicy.maxAttempts()) {
+                if (requestContext.idempotency() != CommandIdempotency.IDEMPOTENT || attempts >= reconnectPolicy.maxAttempts()) {
                     diagnostics.recordRequestCompleted(cmdSummary, false, Duration.ZERO);
                     diagnostics.recordError(e.getClass().getSimpleName() + ": " + e.getMessage());
                     notifyInterceptorsAfterFailure(command, e);
@@ -435,28 +435,28 @@ public final class InstrumentClientImpl implements InstrumentClient {
      *   <li>写入异常 → 移除 pending，触发 onReceiverFailure，抛出 ConnectionException</li>
      * </ul>
      */
-    private Response executeOnce(Request request) {
+    private Response executeOnce(RequestContext requestContext) {
         requestLock.lock();
         PendingRequest pending = null;
         try {
             // 协议没有请求 ID，同一连接只能同时等待一个响应。
             // requestLock 覆盖“检查、注册、写入”这三个步骤，避免并发占用响应通道。
             if (requestManager.hasPending()) {
-                throw new IllegalStateException("another request is pending");
+                throw new IllegalStateException("another requestContext is pending");
             }
             if (!isConnected()) {
-                if (request.idempotency() != CommandIdempotency.IDEMPOTENT) {
+                if (requestContext.idempotency() != CommandIdempotency.IDEMPOTENT) {
                     throw new ConnectionException("not connected (non-idempotent command)");
                 }
                 connect();
             }
 
             // 先注册 pending，再写入命令，避免快速响应在 write 返回前被误判为异步数据。
-            pending = requestManager.register(request.matcher());
+            pending = requestManager.register(requestContext.matcher());
 
             try {
-                connection.write(encoder.encode(request.command()));
-                metrics.sent(request.command().length());
+                connection.write(encoder.encode(requestContext.command()));
+                metrics.sent(requestContext.command().length());
             } catch (Exception e) {
                 requestManager.remove(pending);
                 onReceiverFailure(e);
@@ -466,21 +466,21 @@ public final class InstrumentClientImpl implements InstrumentClient {
             try {
                 // future 由 Receiver -> Decoder -> Dispatcher -> RequestManager 这条链路完成；
                 // 当前线程只负责在调用方指定的期限内等待结果。
-                return pending.future().get(request.timeout().toNanos(), TimeUnit.NANOSECONDS);
+                return pending.future().get(requestContext.timeout().toNanos(), TimeUnit.NANOSECONDS);
             } catch (TimeoutException e) {
                 requestManager.remove(pending);
-                throw new RequestTimeoutException("request timeout after " + request.timeout() + ": " + request.command());
+                throw new RequestTimeoutException("requestContext timeout after " + requestContext.timeout() + ": " + requestContext.command());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 requestManager.remove(pending);
-                throw new ConnectionException("request interrupted", e);
+                throw new ConnectionException("requestContext interrupted", e);
             } catch (ExecutionException e) {
                 requestManager.remove(pending);
                 Throwable c = e.getCause();
                 if (c instanceof ConnectionException ce) {
                     throw ce;
                 }
-                throw new ConnectionException("request failed", c);
+                throw new ConnectionException("requestContext failed", c);
             }
         } finally {
             requestLock.unlock();

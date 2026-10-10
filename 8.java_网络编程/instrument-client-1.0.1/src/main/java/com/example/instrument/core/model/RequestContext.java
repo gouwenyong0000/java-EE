@@ -24,8 +24,8 @@ import java.util.Objects;
  * @see CommandIdempotency
  * @see com.example.instrument.transport.RequestManager
  */
-public record Request(Command command, ResponseMatcher matcher, Duration timeout,
-                      CommandIdempotency idempotency) {
+public record RequestContext(Command command, ResponseMatcher matcher, Duration timeout,
+                             CommandIdempotency idempotency) {
 
     /**
      * 构造函数，验证参数有效性。
@@ -37,7 +37,7 @@ public record Request(Command command, ResponseMatcher matcher, Duration timeout
      * @throws NullPointerException     如果任何参数为空
      * @throws IllegalArgumentException 如果 timeout 不是正数
      */
-    public Request {
+    public RequestContext {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(matcher, "matcher");
         Objects.requireNonNull(timeout, "timeout");

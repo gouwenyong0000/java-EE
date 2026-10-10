@@ -33,7 +33,7 @@ import java.time.Duration;
  * </ul>
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class ClientRequestTest {
+class ClientRequestContextTest {
 
     private static final int BASE_PORT = 19601;
     private static InstrumentationServer server;

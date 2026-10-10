@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * RequestManager 单元测试。
  */
-class RequestManagerTest {
+class RequestContextManagerTest {
 
     @Test
     @DisplayName("匹配响应能完成等待中的请求")
