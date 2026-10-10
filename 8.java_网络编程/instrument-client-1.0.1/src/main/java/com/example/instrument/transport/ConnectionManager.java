@@ -40,7 +40,7 @@ public final class ConnectionManager implements AutoCloseable {
    * 创建新的仪器客户端连接并注册到管理器中。
    *
    * @param address  目标仪器的网络地址（IP + 端口）
-   * @param protocol 通信协议（如 LineProtocol、LengthFieldProtocol）
+   * @param protocol 通信协议（如 FixedDelimiterProtocol、LengthFieldProtocol）
    * @param config   客户端配置（超时、缓冲区、重连策略等）
    * @return 新创建连接的唯一标识符 UUID，用于后续查询和管理
    */

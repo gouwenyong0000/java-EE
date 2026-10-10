@@ -9,7 +9,7 @@ import com.example.instrument.core.model.Command;
  * 编码后的字节数组可以直接通过网络发送。
  *
  * @see Protocol
- * @see LineProtocol
+ * @see FixedDelimiterProtocol
  * @see LengthFieldProtocol
  */
 @FunctionalInterface

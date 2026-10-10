@@ -56,7 +56,7 @@
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              core 层（配置、模型、异常、指标、诊断）            │
-│  ClientConfig  Command  Response  CommandIdempotency         │
+│  ClientConfig  CommandFrame  Response  CommandIdempotency         │
 │  ClientMetrics  ClientDiagnostics  InstrumentException       │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -97,7 +97,7 @@ com.example.instrument
 │   ├── config/
 │   │   └── ClientConfig        # 客户端配置（Builder 模式）
 │   ├── model/
-│   │   ├── Command             # 命令（不可变、字节存储）
+│   │   ├── CommandFrame             # 命令（不可变、字节存储）
 │   │   ├── Response            # 响应（不可变、帧/体双存储）
 │   │   └── CommandIdempotency  # 幂等性枚举（IDEMPOTENT/NON_IDEMPOTENT/UNKNOWN）
 │   ├── exception/
@@ -129,7 +129,7 @@ InstrumentClient client = InstrumentClients.tcp(
 try {
     client.connect();
     var response = client.request(
-            Command.text("*IDN?", StandardCharsets.UTF_8),
+            CommandFrame.text("*IDN?", StandardCharsets.UTF_8),
             ResponseMatcher.any(),
             Duration.ofSeconds(3),
             CommandIdempotency.IDEMPOTENT);
@@ -170,7 +170,7 @@ ClientConfig config = ClientConfig.builder()
 
 ```java
 CompletableFuture<Response> future = client.requestAsync(
-    Command.text("MEAS:VOLT?", StandardCharsets.UTF_8),
+    CommandFrame.text("MEAS:VOLT?", StandardCharsets.UTF_8),
     ResponseMatcher.contains("VOLT"),
     Duration.ofSeconds(5),
     CommandIdempotency.IDEMPOTENT);
@@ -182,7 +182,7 @@ future.thenAccept(r -> System.out.println(r.text(StandardCharsets.UTF_8)))
 ### 无应答发送
 
 ```java
-client.send(Command.text("*RST", StandardCharsets.UTF_8));
+client.send(CommandFrame.text("*RST", StandardCharsets.UTF_8));
 ```
 
 ### 连接状态监听
@@ -220,13 +220,13 @@ Response data = listener.poll(Duration.ofSeconds(10));
 
 ```java
 client.addInterceptor(new ClientInterceptor() {
-    @Override public void beforeRequest(Command cmd, CommandIdempotency idempotency) {
+    @Override public void beforeRequest(CommandFrame cmd, CommandIdempotency idempotency) {
         log.info(">>> {}", cmd.text());
     }
-    @Override public void afterResponse(Command cmd, Response resp, Duration latency) {
+    @Override public void afterResponse(CommandFrame cmd, Response resp, Duration latency) {
         log.info("<<< {} ({}ms)", resp.text(), latency.toMillis());
     }
-    @Override public void afterFailure(Command cmd, Throwable t) {
+    @Override public void afterFailure(CommandFrame cmd, Throwable t) {
         log.error("!!! {} failed: {}", cmd.text(), t.getMessage());
     }
 });
@@ -249,7 +249,7 @@ System.out.println(report);
 
 ### 行协议（LineProtocol）
 
-通过 `LineProtocol` 配置 LF 或 CRLF 行结束符及字符集，适用于 SCPI 等文本命令/响应设备。解码器内部使用 `ByteArrayOutputStream` 缓存不完整数据，正确处理半包和粘包。
+通过 `FixedDelimiterProtocol` 配置 LF 或 CRLF 行结束符及字符集，适用于 SCPI 等文本命令/响应设备。解码器内部使用 `ByteArrayOutputStream` 缓存不完整数据，正确处理半包和粘包。
 
 ```java
 Protocol protocol = LineProtocol.crlf(StandardCharsets.UTF_8);           // CRLF 分隔
@@ -389,7 +389,7 @@ register(matcher) ──► [pending 等待] ──► dispatch(response) ──
 
 | 类别 | 测试类 | 重点用例 |
 |------|--------|----------|
-| 协议解析 | `LineProtocolTest` / `LengthFieldProtocolTest` | 半包、粘包、连续多帧、非法长度、缓冲区扩容 |
+| 协议解析 | `FixedDelimiterProtocolTest` / `LengthFieldProtocolTest` | 半包、粘包、连续多帧、非法长度、缓冲区扩容 |
 | 请求响应 | `ClientRequestTest` / `RequestManagerTest` / `ResponseDispatcherTest` | 正常响应、超时、迟到响应、未知响应、并发请求 |
 | 连接生命周期 | `ClientLifecycleTest` / `ClientRetryTest` | 连接、关闭、重连策略、网络故障 |
 | 并发与异步 | `ClientConcurrencyTest` / `ClientAsyncDataTest` | 并发请求、异步数据接收、发送与关闭竞争 |

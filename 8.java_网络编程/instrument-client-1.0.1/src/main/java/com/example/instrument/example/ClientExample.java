@@ -6,7 +6,7 @@ import com.example.instrument.api.ResponseMatcher;
 import com.example.instrument.core.config.ClientConfig;
 import com.example.instrument.core.model.Command;
 import com.example.instrument.core.model.CommandIdempotency;
-import com.example.instrument.protocol.LineProtocol;
+import com.example.instrument.protocol.FixedDelimiterProtocol;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +19,7 @@ public final class ClientExample {
         ClientConfig config = ClientConfig.defaults();
         InstrumentClient client = InstrumentClients.tcp(
                 new InetSocketAddress("127.0.0.1", 5025),
-                LineProtocol.crlf(StandardCharsets.UTF_8), config);
+                FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8), config);
         try {
             client.connect();
             var response = client.request(

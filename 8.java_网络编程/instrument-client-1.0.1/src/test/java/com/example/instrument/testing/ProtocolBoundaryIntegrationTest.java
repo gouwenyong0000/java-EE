@@ -11,7 +11,7 @@ import com.example.instrument.core.exception.ConnectionException;
 import com.example.instrument.core.model.Command;
 import com.example.instrument.core.model.CommandIdempotency;
 import com.example.instrument.core.model.Response;
-import com.example.instrument.protocol.LineProtocol;
+import com.example.instrument.protocol.FixedDelimiterProtocol;
 import com.example.instrument.protocol.Protocol;
 import com.example.instrument.transport.reconnect.ReconnectConfig;
 
@@ -57,7 +57,7 @@ class ProtocolBoundaryIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        protocol = LineProtocol.crlf(StandardCharsets.UTF_8);
+        protocol = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
     }
 
     @AfterEach
@@ -69,7 +69,7 @@ class ProtocolBoundaryIntegrationTest {
 
     @Test
     @Order(1)
-    @DisplayName("粘包 —— 一缓冲区内多帧被 LineProtocol 正确拆解")
+    @DisplayName("粘包 —— 一缓冲区内多帧被 FixedDelimiterProtocol 正确拆解")
     void t01_stickyPackets() throws Exception {
         client = InstrumentClients.tcp("localhost", BASE_PORT, protocol,
             ClientConfig.builder()
@@ -163,7 +163,7 @@ class ProtocolBoundaryIntegrationTest {
     @Order(4)
     @DisplayName("超大帧 —— 超过 maxFrameLength 触发 ConnectionException")
     void t04_oversizedFrame() {
-        Protocol smallLimit = LineProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(64);
+        Protocol smallLimit = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(64);
         client = InstrumentClients.tcp("localhost", BASE_PORT, smallLimit,
             ClientConfig.builder()
                 .connectTimeout(Duration.ofSeconds(5))

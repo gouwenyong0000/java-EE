@@ -72,7 +72,7 @@ public final class InstrumentClients {
      *
      * <p>使用示例：</p>
      * <pre>{@code
-     * InstrumentClient client = InstrumentClients.builder("localhost", 5025, LineProtocol.crlf())
+     * InstrumentClient client = InstrumentClients.builder("localhost", 5025, FixedDelimiterProtocol.crlf())
      *     .connectTimeout(Duration.ofSeconds(10))
      *     .responseTimeout(Duration.ofSeconds(5))
      *     .interceptor(loggingInterceptor)

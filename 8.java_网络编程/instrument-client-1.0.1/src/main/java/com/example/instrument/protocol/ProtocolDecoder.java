@@ -20,7 +20,7 @@ import java.util.List;
  *
  * @see Protocol
  * @see Response
- * @see LineProtocol
+ * @see FixedDelimiterProtocol
  * @see LengthFieldProtocol
  */
 public interface ProtocolDecoder {

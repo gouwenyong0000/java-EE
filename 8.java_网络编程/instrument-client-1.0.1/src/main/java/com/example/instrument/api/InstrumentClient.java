@@ -104,7 +104,7 @@ public interface InstrumentClient extends AutoCloseable {
      * @throws NullPointerException 如果任何参数为空
      */
     CompletableFuture<Response> requestAsync(Command command, ResponseMatcher matcher, Duration timeout,
-                                              CommandIdempotency idempotency);
+                                             CommandIdempotency idempotency);
 
     /**
      * 发送命令但不等待响应。

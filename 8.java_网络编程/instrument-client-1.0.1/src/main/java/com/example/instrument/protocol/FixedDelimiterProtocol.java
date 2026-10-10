@@ -33,20 +33,20 @@ import java.util.Objects;
  * <p>使用示例：</p>
  * <pre>{@code
  * // 创建使用 CRLF 分隔的协议
- * Protocol protocol = LineProtocol.crlf(StandardCharsets.UTF_8);
+ * Protocol protocol = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
  *
  * // 创建使用 LF 分隔的协议
- * Protocol protocol2 = LineProtocol.lf(StandardCharsets.UTF_8);
+ * Protocol protocol2 = FixedDelimiterProtocol.lf(StandardCharsets.UTF_8);
  *
  * // 创建自定义最大帧长度的协议
- * Protocol protocol3 = LineProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(4096);
+ * Protocol protocol3 = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(4096);
  * }</pre>
  *
  * @see Protocol
  * @see ProtocolEncoder
  * @see ProtocolDecoder
  */
-public final class LineProtocol implements Protocol {
+public final class FixedDelimiterProtocol implements Protocol {
 
     private final byte[] delimiter;
     private final Charset charset;
@@ -59,7 +59,7 @@ public final class LineProtocol implements Protocol {
      * @param charset         字符编码
      * @param maxFrameLength  最大帧长度
      */
-    private LineProtocol(byte[] delimiter, Charset charset, int maxFrameLength) {
+    private FixedDelimiterProtocol(byte[] delimiter, Charset charset, int maxFrameLength) {
         this.delimiter = delimiter.clone();
         this.charset = Objects.requireNonNull(charset);
         this.maxFrameLength = maxFrameLength;
@@ -76,30 +76,30 @@ public final class LineProtocol implements Protocol {
      * 创建使用 CRLF (\r\n) 作为分隔符的协议。
      *
      * @param charset 字符编码
-     * @return 新的 LineProtocol 实例
+     * @return 新的 FixedDelimiterProtocol 实例
      */
-    public static LineProtocol crlf(Charset charset) {
-        return new LineProtocol(new byte[]{'\r', '\n'}, charset, 1024 * 1024);
+    public static FixedDelimiterProtocol crlf(Charset charset) {
+        return new FixedDelimiterProtocol(new byte[]{'\r', '\n'}, charset, 1024 * 1024);
     }
 
     /**
      * 创建使用 LF (\n) 作为分隔符的协议。
      *
      * @param charset 字符编码
-     * @return 新的 LineProtocol 实例
+     * @return 新的 FixedDelimiterProtocol 实例
      */
-    public static LineProtocol lf(Charset charset) {
-        return new LineProtocol(new byte[]{'\n'}, charset, 1024 * 1024);
+    public static FixedDelimiterProtocol lf(Charset charset) {
+        return new FixedDelimiterProtocol(new byte[]{'\n'}, charset, 1024 * 1024);
     }
 
     /**
      * 创建一个带有自定义最大帧长度的协议副本。
      *
      * @param max 新的最大帧长度
-     * @return 新的 LineProtocol 实例
+     * @return 新的 FixedDelimiterProtocol 实例
      */
-    public LineProtocol withMaxFrameLength(int max) {
-        return new LineProtocol(delimiter, charset, max);
+    public FixedDelimiterProtocol withMaxFrameLength(int max) {
+        return new FixedDelimiterProtocol(delimiter, charset, max);
     }
 
     /**

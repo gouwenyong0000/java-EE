@@ -12,16 +12,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * LineProtocol 单元测试。
+ * FixedDelimiterProtocol 单元测试。
  *
  * <p>使用指定分隔符（CRLF 或 LF）作为帧边界的文本协议。</p>
  */
-class LineProtocolTest {
+class FixedDelimiterProtocolTest {
 
     @Test
     @DisplayName("CRLF 协议编码在命令末尾附加 \\r\\n")
     void crlfEncoding() {
-        LineProtocol p = LineProtocol.crlf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
         byte[] result = p.newEncoder().encode(Command.text("TEST"));
 
         assertArrayEquals("TEST\r\n".getBytes(StandardCharsets.UTF_8), result);
@@ -30,7 +30,7 @@ class LineProtocolTest {
     @Test
     @DisplayName("LF 协议编码在命令末尾附加 \\n")
     void lfEncoding() {
-        LineProtocol p = LineProtocol.lf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.lf(StandardCharsets.UTF_8);
         byte[] result = p.newEncoder().encode(Command.text("TEST"));
 
         assertArrayEquals("TEST\n".getBytes(StandardCharsets.UTF_8), result);
@@ -39,7 +39,7 @@ class LineProtocolTest {
     @Test
     @DisplayName("CRLF 协议解码正确剥离末尾 \\r\\n 分隔符 —— body 不含分隔符")
     void crlfDecoding() {
-        LineProtocol p = LineProtocol.crlf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
         ProtocolDecoder d = p.newDecoder();
 
         byte[] frame = "HELLO\r\n".getBytes(StandardCharsets.UTF_8);
@@ -54,7 +54,7 @@ class LineProtocolTest {
     @Test
     @DisplayName("不完整帧暂存缓冲区等分隔符到达 —— 分片拼接正确还原")
     void incompleteFrameBuffered() {
-        LineProtocol p = LineProtocol.crlf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
         ProtocolDecoder d = p.newDecoder();
 
         byte[] partial = "HEL".getBytes(StandardCharsets.UTF_8);
@@ -70,7 +70,7 @@ class LineProtocolTest {
     @Test
     @DisplayName("粘包 —— 一缓冲区内两帧被正确拆分")
     void stickyPacketDecoding() {
-        LineProtocol p = LineProtocol.crlf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
         ProtocolDecoder d = p.newDecoder();
 
         byte[] frame = "A\r\nB\r\n".getBytes(StandardCharsets.UTF_8);
@@ -84,7 +84,7 @@ class LineProtocolTest {
     @Test
     @DisplayName("拆包 —— 一帧分多次到达仍能正确还原，且后续帧也不丢失")
     void fragmentedPacketDecoding() {
-        LineProtocol p = LineProtocol.crlf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
         ProtocolDecoder d = p.newDecoder();
 
         byte[] chunk1 = "PING".getBytes(StandardCharsets.UTF_8);
@@ -101,7 +101,7 @@ class LineProtocolTest {
     @Test
     @DisplayName("自定义 maxFrameLength —— 超过限制抛 ProtocolException")
     void maxFrameLengthExceeded() {
-        LineProtocol p = LineProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(8);
         ProtocolDecoder d = p.newDecoder();
 
         byte[] data = "THIS_IS_A_VERY_LONG_LINE\r\n".getBytes(StandardCharsets.UTF_8);
@@ -111,8 +111,8 @@ class LineProtocolTest {
     @Test
     @DisplayName("withMaxFrameLength 返回新实例 —— 原实例不受影响")
     void withMaxFrameLengthCreatesCopy() {
-        LineProtocol original = LineProtocol.crlf(StandardCharsets.UTF_8);
-        LineProtocol modified = original.withMaxFrameLength(100);
+        FixedDelimiterProtocol original = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol modified = original.withMaxFrameLength(100);
 
         assertNotNull(modified);
         assertNotSame(original, modified);
@@ -122,14 +122,14 @@ class LineProtocolTest {
     @Test
     @DisplayName("charset 返回构造时传入的字符集")
     void charsetReturnsConfiguredValue() {
-        LineProtocol p = LineProtocol.lf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.lf(StandardCharsets.UTF_8);
         assertEquals(StandardCharsets.UTF_8, p.charset());
     }
 
     @Test
     @DisplayName("空行帧 —— 仅分隔符也能解码出空 body 响应")
     void emptyLineDecoding() {
-        LineProtocol p = LineProtocol.crlf(StandardCharsets.UTF_8);
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
         ProtocolDecoder d = p.newDecoder();
 
         byte[] data = "\r\n".getBytes(StandardCharsets.UTF_8);

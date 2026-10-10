@@ -11,7 +11,7 @@ import com.example.instrument.core.config.ClientConfig;
 import com.example.instrument.core.exception.ConnectionException;
 import com.example.instrument.core.model.Command;
 import com.example.instrument.core.model.CommandIdempotency;
-import com.example.instrument.protocol.LineProtocol;
+import com.example.instrument.protocol.FixedDelimiterProtocol;
 import com.example.instrument.protocol.Protocol;
 import com.example.instrument.transport.reconnect.ReconnectConfig;
 
@@ -57,7 +57,7 @@ class ClientLifecycleTest {
 
     @BeforeEach
     void setUp() {
-        protocol = LineProtocol.crlf(StandardCharsets.UTF_8);
+        protocol = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);
     }
 
     @AfterEach
