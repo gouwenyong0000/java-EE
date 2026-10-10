@@ -6,25 +6,28 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * 客户端配置类，定义了 InstrumentClient 的所有可配置参数。
+ * 客户端配置类，定义 InstrumentClient 的所有可配置参数。
  *
- * 该类使用 Builder 模式创建，支持链式调用来设置不同的配置项。
- * 提供了合理的默认值，可以通过 {@link Builder} 自定义配置。
+ * <h2>设计模式</h2>
+ * <p>该类使用 <b>Builder 模式</b>创建，支持链式调用设置配置项。
+ * 通过 {@link #builder()} 获取 Builder 实例，配置完成后调用 {@link Builder#build()} 构建实例。</p>
  *
- * <p>配置项包括：</p>
- * <ul>
- *   <li>连接超时时间 (connectTimeout)</li>
- *   <li>默认响应超时时间 (responseTimeout)</li>
- *   <li>Socket 读超时时间 (socketReadTimeoutMillis)</li>
- *   <li>接收缓冲区大小 (receiveBufferSize)</li>
- *   <li>异步队列容量 (asyncQueueCapacity)</li>
- *   <li>队列溢出策略 (overflowPolicy)</li>
- *   <li>TCP NODELAY 选项 (tcpNoDelay)</li>
- *   <li>TCP KEEPALIVE 选项 (keepAlive)</li>
- *   <li>重连配置 (reconnect)</li>
- * </ul>
+ * <h2>配置项总览</h2>
+ * <table>
+ *   <tr><th>分类</th><th>配置项</th><th>说明</th></tr>
+ *   <tr><td rowspan="2">超时</td><td>{@link #connectTimeout}</td><td>TCP 连接建立超时</td></tr>
+ *   <tr><td>{@link #responseTimeout}</td><td>默认请求响应超时</td></tr>
+ *   <tr><td rowspan="3">Socket</td><td>{@link #socketReadTimeoutMillis}</td><td>Socket SO_TIMEOUT</td></tr>
+ *   <tr><td>{@link #receiveBufferSize}</td><td>接收缓冲区大小 (SO_RCVBUF)</td></tr>
+ *   <tr><td>{@link #sendBufferSize}</td><td>发送缓冲区大小 (SO_SNDBUF)</td></tr>
+ *   <tr><td rowspan="2">异步队列</td><td>{@link #asyncQueueCapacity}</td><td>无法匹配的响应队列容量</td></tr>
+ *   <tr><td>{@link #overflowPolicy}</td><td>队列溢出时的处理策略</td></tr>
+ *   <tr><td rowspan="2">TCP 选项</td><td>{@link #tcpNoDelay}</td><td>禁用 Nagle 算法，降低延迟</td></tr>
+ *   <tr><td>{@link #keepAlive}</td><td>启用 TCP keepalive 检测存活</td></tr>
+ *   <tr><td>重连</td><td>{@link #reconnect}</td><td>自动重连策略配置</td></tr>
+ * </table>
  *
- * <p>使用示例：</p>
+ * <h2>使用示例</h2>
  * <pre>{@code
  * ClientConfig config = ClientConfig.builder()
  *     .connectTimeout(Duration.ofSeconds(10))
@@ -53,11 +56,6 @@ public final class ClientConfig {
     private final boolean keepAlive;
     private final ReconnectConfig reconnect;
 
-    /**
-     * 私有构造函数，通过 Builder 创建配置实例。
-     *
-     * @param b 包含配置参数的 Builder 实例
-     */
     private ClientConfig(Builder b) {
         connectTimeout = b.connectTimeout;
         responseTimeout = b.responseTimeout;
@@ -72,173 +70,65 @@ public final class ClientConfig {
         reconnect = b.reconnect;
     }
 
-    /**
-     * 创建一个新的 Builder 实例。
-     *
-     * @return 新的 Builder 实例
-     */
     public static Builder builder() {
         return new Builder();
     }
 
-    /**
-     * 获取默认配置的 ClientConfig 实例。
-     *
-     * 默认配置：
-     * - connectTimeout: 5 秒
-     * - responseTimeout: 10 秒
-     * - socketReadTimeoutMillis: 0（无限）
-     * - receiveBufferSize: 8192 字节
-     * - asyncQueueCapacity: 256
-     * - overflowPolicy: DROP_OLDEST
-     * - tcpNoDelay: true
-     * - keepAlive: true
-     * - reconnect: 默认重连配置
-     *
-     * @return 默认配置的 ClientConfig 实例
-     */
     public static ClientConfig defaults() {
         return builder().build();
     }
 
-    /**
-     * 获取连接超时时间。
-     *
-     * 连接超时时间指建立 TCP 连接所需的最大时间。
-     *
-     * @return 连接超时时间
-     */
-    public Duration connectTimeout() { return connectTimeout; }
+    public Duration connectTimeout() {
+        return connectTimeout;
+    }
 
-    /**
-     * 获取默认响应超时时间。
-     *
-     * 这是 request() 方法的默认超时时间。
-     *
-     * @return 响应超时时间
-     */
-    public Duration responseTimeout() { return responseTimeout; }
+    public Duration responseTimeout() {
+        return responseTimeout;
+    }
 
-    /**
-     * 获取 Socket 读超时时间（毫秒）。
-     *
-     * 设置 Socket 的 SO_TIMEOUT，如果为 0 表示无限超时。
-     *
-     * @return Socket 读超时时间（毫秒）
-     */
-    public int socketReadTimeoutMillis() { return socketReadTimeoutMillis; }
+    public int socketReadTimeoutMillis() {
+        return socketReadTimeoutMillis;
+    }
 
-    /**
-     * 获取接收缓冲区大小（字节）。
-     *
-     * 这个值会设置为 Socket 的 SO_RCVBUF 选项。
-     *
-     * @return 接收缓冲区大小
-     */
-    public int receiveBufferSize() { return receiveBufferSize; }
+    public int receiveBufferSize() {
+        return receiveBufferSize;
+    }
 
-    /**
-     * 获取发送缓冲区大小（字节）。
-     *
-     * 这个值会设置为 Socket 的 SO_SNDBUF 选项。
-     * 默认值 8192，适用于短报文场景。
-     *
-     * @return 发送缓冲区大小
-     */
-    public int sendBufferSize() { return sendBufferSize; }
+    public int sendBufferSize() {
+        return sendBufferSize;
+    }
 
-    /**
-     * 获取 SO_LINGER 时间（秒）。
-     *
-     * SO_LINGER 控制 close() 时的行为：
-     * - -1（默认）：close() 立即返回，未发送完的数据由内核继续发送
-     * - 0：close() 立即返回，丢弃未发送数据，发送 RST
-     * - >0：close() 阻塞直到数据发送完毕或超时
-     *
-     * 生产环境建议使用 -1（优雅关闭）或 0（快速失败）。
-     *
-     * @return SO_LINGER 时间（秒），-1 表示禁用
-     */
-    public int soLingerSeconds() { return soLingerSeconds; }
+    public int soLingerSeconds() {
+        return soLingerSeconds;
+    }
 
-    /**
-     * 获取异步响应队列的容量。
-     *
-     * 当收到无法匹配的响应时，会先放入异步队列。如果队列已满，
-     * 则根据 overflowPolicy 决定如何处理。
-     *
-     * @return 异步队列容量
-     */
-    public int asyncQueueCapacity() { return asyncQueueCapacity; }
+    public int asyncQueueCapacity() {
+        return asyncQueueCapacity;
+    }
 
-    /**
-     * 获取队列溢出策略。
-     *
-     * 当异步队列已满时的处理策略。
-     *
-     * @return 溢出策略
-     * @see OverflowPolicy
-     */
-    public OverflowPolicy overflowPolicy() { return overflowPolicy; }
+    public OverflowPolicy overflowPolicy() {
+        return overflowPolicy;
+    }
 
-    /**
-     * 获取 TCP NODELAY 选项状态。
-     *
-     * 如果为 true，则禁用 Nagle 算法，减少延迟但可能增加网络流量。
-     *
-     * @return TCP NODELAY 选项状态
-     */
-    public boolean tcpNoDelay() { return tcpNoDelay; }
+    public boolean tcpNoDelay() {
+        return tcpNoDelay;
+    }
 
-    /**
-     * 获取 TCP KEEPALIVE 选项状态。
-     *
-     * 如果为 true，则启用 TCP keepalive，检测连接是否仍然存活。
-     *
-     * @return TCP KEEPALIVE 选项状态
-     */
-    public boolean keepAlive() { return keepAlive; }
+    public boolean keepAlive() {
+        return keepAlive;
+    }
 
-    /**
-     * 获取重连配置。
-     *
-     * @return 重连配置
-     * @see ReconnectConfig
-     */
-    public ReconnectConfig reconnect() { return reconnect; }
+    public ReconnectConfig reconnect() {
+        return reconnect;
+    }
 
-    /**
-     * 队列溢出策略枚举。
-     *
-     * 定义当异步响应队列已满时的处理策略。
-     */
     public enum OverflowPolicy {
-        /**
-         * 丢弃队列中最老的响应，添加新响应。
-         */
         DROP_OLDEST,
-
-        /**
-         * 丢弃新收到的响应，保留队列中的旧响应。
-         */
         DROP_NEWEST,
-
-        /**
-         * 阻塞直到队列有空间可以添加新响应。
-         */
         BLOCK,
-
-        /**
-         * 直接抛出异常。
-         */
         FAIL
     }
 
-    /**
-     * ClientConfig 的 Builder 类，使用链式调用构建配置。
-     *
-     * 所有配置项都有默认值，可以在构建时选择性覆盖。
-     */
     public static final class Builder {
 
         private Duration connectTimeout = Duration.ofSeconds(5);
@@ -253,13 +143,6 @@ public final class ClientConfig {
         private boolean keepAlive = true;
         private ReconnectConfig reconnect = ReconnectConfig.defaults();
 
-        /**
-         * 设置连接超时时间。
-         *
-         * @param v 连接超时时间，不能为空，必须为正数
-         * @return this，用于链式调用
-         * @throws NullPointerException 如果 v 为空
-         */
         public Builder connectTimeout(Duration v) {
             Objects.requireNonNull(v, "connectTimeout");
             if (v.isZero() || v.isNegative()) {
@@ -269,13 +152,6 @@ public final class ClientConfig {
             return this;
         }
 
-        /**
-         * 设置默认响应超时时间。
-         *
-         * @param v 响应超时时间，不能为空，必须为正数
-         * @return this，用于链式调用
-         * @throws NullPointerException 如果 v 为空
-         */
         public Builder responseTimeout(Duration v) {
             Objects.requireNonNull(v, "responseTimeout");
             if (v.isZero() || v.isNegative()) {
@@ -285,13 +161,6 @@ public final class ClientConfig {
             return this;
         }
 
-        /**
-         * 设置 Socket 读超时时间（毫秒）。
-         *
-         * @param v Socket 读超时时间，不能为负数
-         * @return this，用于链式调用
-         * @throws IllegalArgumentException 如果 v 为负数
-         */
         public Builder socketReadTimeoutMillis(int v) {
             if (v < 0) {
                 throw new IllegalArgumentException("socketReadTimeoutMillis must be >= 0, got: " + v);
@@ -300,13 +169,6 @@ public final class ClientConfig {
             return this;
         }
 
-        /**
-         * 设置接收缓冲区大小。
-         *
-         * @param v 接收缓冲区大小，必须为正数
-         * @return this，用于链式调用
-         * @throws IllegalArgumentException 如果 v <= 0
-         */
         public Builder receiveBufferSize(int v) {
             if (v <= 0) {
                 throw new IllegalArgumentException("receiveBufferSize must be > 0, got: " + v);
@@ -315,17 +177,6 @@ public final class ClientConfig {
             return this;
         }
 
-        /**
-         * 设置发送缓冲区大小。
-         *
-         * 对应 Socket 的 SO_SNDBUF 选项。
-         * 对于短报文场景，默认值 8192 即可。
-         * 对于大数据量传输，可适当增大（如 65536）。
-         *
-         * @param v 发送缓冲区大小，必须为正数
-         * @return this，用于链式调用
-         * @throws IllegalArgumentException 如果 v <= 0
-         */
         public Builder sendBufferSize(int v) {
             if (v <= 0) {
                 throw new IllegalArgumentException("sendBufferSize must be > 0, got: " + v);
@@ -334,29 +185,11 @@ public final class ClientConfig {
             return this;
         }
 
-        /**
-         * 设置 SO_LINGER 时间（秒）。
-         *
-         * SO_LINGER 控制 close() 时的行为：
-         * - -1（默认）：close() 立即返回，未发送完的数据由内核继续发送
-         * - 0：close() 立即返回，丢弃未发送数据，发送 RST
-         * - >0：close() 阻塞直到数据发送完毕或超时
-         *
-         * @param v SO_LINGER 时间（秒），-1 表示禁用
-         * @return this，用于链式调用
-         */
         public Builder soLingerSeconds(int v) {
             soLingerSeconds = v;
             return this;
         }
 
-        /**
-         * 设置异步队列容量。
-         *
-         * @param v 异步队列容量，必须为正数
-         * @return this，用于链式调用
-         * @throws IllegalArgumentException 如果 v <= 0
-         */
         public Builder asyncQueueCapacity(int v) {
             if (v <= 0) {
                 throw new IllegalArgumentException("asyncQueueCapacity must be > 0, got: " + v);
@@ -365,57 +198,26 @@ public final class ClientConfig {
             return this;
         }
 
-        /**
-         * 设置队列溢出策略。
-         *
-         * @param v 溢出策略，不能为空
-         * @return this，用于链式调用
-         * @throws NullPointerException 如果 v 为空
-         */
         public Builder overflowPolicy(OverflowPolicy v) {
             overflowPolicy = Objects.requireNonNull(v);
             return this;
         }
 
-        /**
-         * 设置 TCP NODELAY 选项。
-         *
-         * @param v 是否启用 TCP NODELAY
-         * @return this，用于链式调用
-         */
         public Builder tcpNoDelay(boolean v) {
             tcpNoDelay = v;
             return this;
         }
 
-        /**
-         * 设置 TCP KEEPALIVE 选项。
-         *
-         * @param v 是否启用 TCP KEEPALIVE
-         * @return this，用于链式调用
-         */
         public Builder keepAlive(boolean v) {
             keepAlive = v;
             return this;
         }
 
-        /**
-         * 设置重连配置。
-         *
-         * @param v 重连配置，不能为空
-         * @return this，用于链式调用
-         * @throws NullPointerException 如果 v 为空
-         */
         public Builder reconnect(ReconnectConfig v) {
             reconnect = Objects.requireNonNull(v);
             return this;
         }
 
-        /**
-         * 根据当前配置构建 ClientConfig 实例。
-         *
-         * @return 配置好的 ClientConfig 实例
-         */
         public ClientConfig build() {
             return new ClientConfig(this);
         }
