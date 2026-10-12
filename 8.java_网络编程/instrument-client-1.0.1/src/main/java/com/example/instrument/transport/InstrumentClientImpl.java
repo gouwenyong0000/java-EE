@@ -347,7 +347,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
             if (r != null) r.stop();
             connection.disconnect();
             requestManager.fail(new ConnectionException("client disconnected"));
-            diagnostics.recordConnectionStateChange(ConnectionState.DISCONNECTED);
+            diagnostics.recordConnectionStateChange(ConnectionState.DIS_CONNECTED);
             notifyDisconnected(null);
         } finally {
             lifecycleLock.unlock();

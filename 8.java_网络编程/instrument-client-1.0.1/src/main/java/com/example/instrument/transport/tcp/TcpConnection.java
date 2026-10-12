@@ -302,7 +302,7 @@ public final class TcpConnection implements Connection {
                     config.sendBufferSize(), config.soLingerSeconds());
             } catch (IOException e) {
                 closeQuietly(s);
-                state = ConnectionState.DISCONNECTED;
+                state = ConnectionState.DIS_CONNECTED;
                 log.warn("connect to {} failed: {}", address, e.getMessage());
                 throw new ConnectionException("connect failed: " + address, e);
             }
@@ -504,7 +504,7 @@ public final class TcpConnection implements Connection {
             socket = null;
             input = null;
             output = null;
-            state = ConnectionState.DISCONNECTED;
+            state = ConnectionState.DIS_CONNECTED;
             log.debug("disconnected from {}", address);
         } finally {
             lifecycleLock.unlock();
