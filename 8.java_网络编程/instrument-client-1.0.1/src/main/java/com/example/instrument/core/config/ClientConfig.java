@@ -51,6 +51,7 @@ public final class ClientConfig {
     private final int sendBufferSize;
     private final int soLingerSeconds;
     private final int asyncQueueCapacity;
+    private final int asyncRequestQueueCapacity;
     private final OverflowPolicy overflowPolicy;
     private final boolean tcpNoDelay;
     private final boolean keepAlive;
@@ -64,6 +65,7 @@ public final class ClientConfig {
         sendBufferSize = b.sendBufferSize;
         soLingerSeconds = b.soLingerSeconds;
         asyncQueueCapacity = b.asyncQueueCapacity;
+        asyncRequestQueueCapacity = b.asyncRequestQueueCapacity;
         overflowPolicy = b.overflowPolicy;
         tcpNoDelay = b.tcpNoDelay;
         keepAlive = b.keepAlive;
@@ -96,6 +98,10 @@ public final class ClientConfig {
 
     public int sendBufferSize() {
         return sendBufferSize;
+    }
+
+    public int asyncRequestQueueCapacity() {
+        return asyncRequestQueueCapacity;
     }
 
     public int soLingerSeconds() {
@@ -138,6 +144,7 @@ public final class ClientConfig {
         private int sendBufferSize = 8192;
         private int soLingerSeconds = -1;
         private int asyncQueueCapacity = 256;
+        private int asyncRequestQueueCapacity = 128;
         private OverflowPolicy overflowPolicy = OverflowPolicy.DROP_OLDEST;
         private boolean tcpNoDelay = true;
         private boolean keepAlive = true;
@@ -186,6 +193,9 @@ public final class ClientConfig {
         }
 
         public Builder soLingerSeconds(int v) {
+            if (v < -1 || v > 65535) {
+                throw new IllegalArgumentException("soLingerSeconds must be -1 (disabled) or between 0 and 65535");
+            }
             soLingerSeconds = v;
             return this;
         }
@@ -195,6 +205,14 @@ public final class ClientConfig {
                 throw new IllegalArgumentException("asyncQueueCapacity must be > 0, got: " + v);
             }
             asyncQueueCapacity = v;
+            return this;
+        }
+
+        public Builder asyncRequestQueueCapacity(int v) {
+            if (v <= 0) {
+                throw new IllegalArgumentException("asyncRequestQueueCapacity must be > 0, got: " + v);
+            }
+            asyncRequestQueueCapacity = v;
             return this;
         }
 

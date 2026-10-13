@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -98,7 +99,14 @@ final class Receiver implements Runnable {
 
         try {
             while (running) {
-                int n = connection.read(buffer);
+                final int n;
+                try {
+                    n = connection.read(buffer);
+                } catch (SocketTimeoutException timeout) {
+                    // SO_TIMEOUT 是周期性唤醒，不代表连接已经断开。
+                    // 允许 stop() 在有限时间内生效，同时避免把空闲连接误判为故障。
+                    continue;
+                }
                 if (n < 0) {
                     throw new IOException("remote peer closed connection");
                 }
@@ -115,7 +123,7 @@ final class Receiver implements Runnable {
                     dispatcher.dispatch(frame);
                 }
             }
-        } catch (Throwable t) {
+        } catch (Exception t) {
             if (running) {
                 log.warn("receiver stopped due to error: {}", t.getMessage());
                 errorHandler.accept(t);

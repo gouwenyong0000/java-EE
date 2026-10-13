@@ -126,4 +126,21 @@ class ClientConfigTest {
         assertThrows(IllegalArgumentException.class, () ->
             ClientConfig.builder().asyncQueueCapacity(-1));
     }
+
+    @Test
+    void rejectsInvalidSoLingerValues() {
+        assertThrows(IllegalArgumentException.class,
+            () -> ClientConfig.builder().soLingerSeconds(-2));
+        assertThrows(IllegalArgumentException.class,
+            () -> ClientConfig.builder().soLingerSeconds(65536));
+    }
+
+    @Test
+    void configuresBoundedAsyncRequestQueue() {
+        ClientConfig config = ClientConfig.builder().asyncRequestQueueCapacity(7).build();
+        assertEquals(7, config.asyncRequestQueueCapacity());
+        assertThrows(IllegalArgumentException.class,
+            () -> ClientConfig.builder().asyncRequestQueueCapacity(0));
+    }
+
 }

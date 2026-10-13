@@ -289,19 +289,25 @@ public final class TcpConnection implements Connection {
                     s.setSoLinger(true, config.soLingerSeconds());
                 }
 
-                long timeoutMillis = Math.min((long) Integer.MAX_VALUE, config.connectTimeout().toMillis());
+                long timeoutMillis = Math.max(1L, Math.min((long) Integer.MAX_VALUE, config.connectTimeout().toMillis()));
                 s.connect(address, (int) timeoutMillis);
 
-                input = s.getInputStream();
-                output = s.getOutputStream();
+                // 先在局部变量中完成初始化，再一次性发布连接状态，避免失败时留下半初始化字段。
+                InputStream newInput = s.getInputStream();
+                OutputStream newOutput = s.getOutputStream();
+                input = newInput;
+                output = newOutput;
                 socket = s;
                 state = ConnectionState.CONNECTED;
                 log.info("connected to {} (tcpNoDelay={}, keepAlive={}, readTimeout={}ms, rcvBuf={}, sndBuf={}, soLinger={})",
                     address, config.tcpNoDelay(), config.keepAlive(),
                     config.socketReadTimeoutMillis(), config.receiveBufferSize(),
                     config.sendBufferSize(), config.soLingerSeconds());
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
                 closeQuietly(s);
+                input = null;
+                output = null;
+                socket = null;
                 state = ConnectionState.DIS_CONNECTED;
                 log.warn("connect to {} failed: {}", address, e.getMessage());
                 throw new ConnectionException("connect failed: " + address, e);
@@ -383,6 +389,7 @@ public final class TcpConnection implements Connection {
      */
     @Override
     public void write(byte[] data) throws IOException {
+        Objects.requireNonNull(data, "data");
         OutputStream out = output;
         if (out == null || !isConnected()) {
             throw new IOException("not connected");

@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.example</groupId>
     <artifactId>instrument-client</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
     <name>instrument-client</name>
     <description>Maintainable Java 17 TCP instrument communication client framework</description>
     <properties>

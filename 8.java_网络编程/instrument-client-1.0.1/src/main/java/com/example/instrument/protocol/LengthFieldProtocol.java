@@ -191,6 +191,11 @@ public final class LengthFieldProtocol implements Protocol {
          */
         @Override
         public synchronized List<Response> decode(byte[] data, int offset, int length) {
+            Objects.requireNonNull(data, "data");
+            if (offset < 0 || length < 0 || offset > data.length - length) {
+                throw new IndexOutOfBoundsException(
+                    "invalid slice: offset=" + offset + ", length=" + length + ", capacity=" + data.length);
+            }
             if (length == 0) {
                 return List.of();
             }

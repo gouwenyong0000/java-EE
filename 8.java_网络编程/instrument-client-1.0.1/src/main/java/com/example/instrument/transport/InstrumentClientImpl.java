@@ -90,8 +90,12 @@ public final class InstrumentClientImpl implements InstrumentClient {
      * - scheduler：单线程调度器，用于执行重连延迟任务，
      *   确保重连尝试按退避策略有序进行。
      */
-    private final ExecutorService requestExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "instrument-request"));
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "instrument-reconnect"));
+    private final ExecutorService requestExecutor;
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "instrument-reconnect");
+        t.setDaemon(true);
+        return t;
+    });
 
     private final CopyOnWriteArrayList<ConnectionListener> connectionListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<ClientInterceptor> interceptors = new CopyOnWriteArrayList<>();
@@ -133,6 +137,19 @@ public final class InstrumentClientImpl implements InstrumentClient {
         this.address = Objects.requireNonNull(address);
         this.protocol = Objects.requireNonNull(protocol);
         this.config = Objects.requireNonNull(config);
+        this.requestExecutor =
+                new ThreadPoolExecutor(
+                        1,
+                        1,
+                        0L,
+                        TimeUnit.MILLISECONDS,
+                        new ArrayBlockingQueue<>(config.asyncRequestQueueCapacity()),
+                        r -> {
+                            Thread t = new Thread(r, "instrument-request");
+                            t.setDaemon(true);
+                            return t;
+                        },
+                        new ThreadPoolExecutor.AbortPolicy());
         this.connection = new TcpConnection(address, config);
         this.encoder = protocol.newEncoder();
         this.decoder = protocol.newDecoder();
@@ -398,7 +415,11 @@ public final class InstrumentClientImpl implements InstrumentClient {
                 notifyInterceptorsAfterResponse(command, response, latency);
                 return response;
             } catch (Exception e) {
-                if (requestContext.idempotency() != CommandIdempotency.IDEMPOTENT || attempts >= reconnectPolicy.maxAttempts()) {
+                // 只对明确的连接故障执行自动重试；参数错误、并发占用、响应超时等不应被误当作网络故障。
+                // 响应超时意味着设备可能已经执行命令，是否重试必须由调用方显式决定。
+                if (!(e instanceof ConnectionException)
+                    || requestContext.idempotency() != CommandIdempotency.IDEMPOTENT
+                    || attempts >= reconnectPolicy.maxAttempts()) {
                     diagnostics.recordRequestCompleted(cmdSummary, false, Duration.ZERO);
                     diagnostics.recordError(e.getClass().getSimpleName() + ": " + e.getMessage());
                     notifyInterceptorsAfterFailure(command, e);
@@ -528,7 +549,24 @@ public final class InstrumentClientImpl implements InstrumentClient {
 
     @Override
     public CompletableFuture<Response> requestAsync(Command command, ResponseMatcher matcher, Duration timeout, CommandIdempotency idempotency) {
-        return CompletableFuture.supplyAsync(() -> request(command, matcher, timeout, idempotency), requestExecutor);
+        Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(matcher, "matcher");
+        Objects.requireNonNull(timeout, "timeout");
+        Objects.requireNonNull(idempotency, "idempotency");
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        try {
+            requestExecutor.execute(() -> {
+                try {
+                    future.complete(request(command, matcher, timeout, idempotency));
+                } catch (Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+        } catch (RejectedExecutionException rejected) {
+            future.completeExceptionally(new RejectedExecutionException(
+                "asynchronous request queue is full or client is closed", rejected));
+        }
+        return future;
     }
 
     /**

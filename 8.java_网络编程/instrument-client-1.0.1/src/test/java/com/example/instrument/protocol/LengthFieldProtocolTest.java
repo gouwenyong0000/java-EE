@@ -636,4 +636,15 @@ class LengthFieldProtocolTest {
 
         assertDoesNotThrow(() -> p.newEncoder().encode(Command.of(big)));
     }
+
+    @Test
+    @DisplayName("解码器拒绝非法数组切片参数")
+    void decoderRejectsInvalidSlice() {
+        ProtocolDecoder decoder = LengthFieldProtocol.defaults(StandardCharsets.UTF_8).newDecoder();
+        byte[] bytes = new byte[4];
+        assertThrows(IndexOutOfBoundsException.class, () -> decoder.decode(bytes, -1, 1));
+        assertThrows(IndexOutOfBoundsException.class, () -> decoder.decode(bytes, 2, 3));
+        assertThrows(IndexOutOfBoundsException.class, () -> decoder.decode(bytes, 0, -1));
+    }
+
 }
