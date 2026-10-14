@@ -308,7 +308,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
         if (!reconnectPolicy.enabled() || reconnectScheduled.getAndSet(true)) {
             return;
         }
-        reconnectAttempt = 0;
+        reconnectAttempt = 0;// 重连开始前设置为 0
         scheduleNextReconnect(cause);
     }
 
@@ -349,18 +349,22 @@ public final class InstrumentClientImpl implements InstrumentClient {
         diagnostics.recordReconnect();
         fireReconnectingEvent(attempt, delay, cause);
 
-        scheduler.schedule(() -> {
-            if (closed || reconnectSuppressed) {
-                reconnectScheduled.set(false);
-                return;
-            }
-            try {
-                connect();
-                reconnectScheduled.set(false);
-            } catch (Throwable e) {
-                scheduleNextReconnect(e);
-            }
-        }, delay.toMillis(), TimeUnit.MILLISECONDS);
+        // 提交一个一次性任务，该任务在给定延迟后启用。
+        scheduler.schedule(
+                () -> {
+                    if (closed || reconnectSuppressed) {
+                        reconnectScheduled.set(false);
+                        return;
+                    }
+                    try {
+                        connect();
+                        reconnectScheduled.set(false);
+                    } catch (Throwable e) {
+                        scheduleNextReconnect(e); // 递归调度下一次重连
+                    }
+                },
+                delay.toMillis(),
+                TimeUnit.MILLISECONDS);
     }
 
     /**
