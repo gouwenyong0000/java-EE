@@ -184,19 +184,21 @@ public final class InstrumentClientImpl implements InstrumentClient {
     /**
      * 连接到服务器。
      *
-     * <p>连接流程：</p>
-     * <ol>
-     *   <li>检查是否已关闭（终态保护）</li>
-     *   <li>解除重连抑制（允许网络异常时自动重连）</li>
-     *   <li>幂等检查：已连接则直接返回</li>
-     *   <li>建立 TCP 连接</li>
-     *   <li>重置解码器状态（清除旧连接的残留数据）</li>
-     *   <li>启动接收线程（持续读取 TCP 流）</li>
-     *   <li>重置重连计数器</li>
-     * </ol>
+     * <h2>功能概述</h2>
+     * <p>建立与服务器的 TCP 连接，启动数据接收线程，使客户端进入可通信状态。</p>
      *
-     * <p>注意：decoder.reset() 必须在 startReceiver() 之前调用，
-     * 否则接收线程可能用旧状态解码新连接的数据。</p>
+     * <h2>线程模型</h2>
+     * <p>在主线程执行，持有 lifecycleLock 完成连接过程。</p>
+     *
+     * <h2>关键设计</h2>
+     * <ul>
+     *   <li><b>幂等性</b>：已连接时直接返回，不重复建立连接</li>
+     *   <li><b>重连控制</b>：设置 reconnectSuppressed = false，解除重连抑制</li>
+     *   <li><b>状态重置</b>：decoder.reset() 在 startReceiver() 之前调用，避免用旧状态解码新数据</li>
+     * </ul>
+     *
+     * <h2>代码核心步骤</h2>
+     * <p>检查 closed → 解除重连抑制 → 幂等检查 → 建立 TCP → 重置解码器 → 启动接收线程 → 重置计数器</p>
      */
     @Override
     public void connect() {
@@ -209,10 +211,15 @@ public final class InstrumentClientImpl implements InstrumentClient {
                 return;
             }
             log.info("connecting to {}", address);
+
+            // 建立 TCP 连接
             connection.connect();
+
+            // 重置解码器状态，清除旧连接的残留数据
             decoder.reset();
-            startReceiver();
-            reconnectAttempt = 0;
+            startReceiver();// 启动接收线程，开始读取 TCP 流
+            reconnectAttempt = 0;// 成功连接后重置重连尝试次数
+
             diagnostics.recordConnectionStateChange(ConnectionState.CONNECTED);
             notifyConnected();
             log.info("connected to {} successfully", address);
