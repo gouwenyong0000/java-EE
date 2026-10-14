@@ -221,7 +221,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
             reconnectAttempt = 0;// 成功连接后重置重连尝试次数
 
             diagnostics.recordConnectionStateChange(ConnectionState.CONNECTED);
-            notifyConnected();
+            fireConnectedEvent();
             log.info("connected to {} successfully", address);
         } finally {
             lifecycleLock.unlock();
@@ -282,7 +282,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
             diagnostics.recordError("receiver: " + cause.toString());
             connection.disconnect();
             requestManager.fail(new ConnectionException("connection lost: " + address, cause));
-            notifyDisconnected(cause);
+            fireDisconnectedEvent(cause);
 
             if (!reconnectSuppressed) {
                 scheduleReconnect(cause);
@@ -340,14 +340,14 @@ public final class InstrumentClientImpl implements InstrumentClient {
         if (!reconnectPolicy.canAttempt(attempt)) {
             reconnectScheduled.set(false);
             log.error("reconnect to {} failed after {} attempts", address, attempt - 1, cause);
-            notifyReconnectFailed(cause);
+            fireReconnectFailedEvent(cause);
             return;
         }
 
         Duration delay = reconnectPolicy.delay(attempt);
         log.info("reconnecting to {} attempt={}/{} delay={}", address, attempt, reconnectPolicy.maxAttempts(), delay);
         diagnostics.recordReconnect();
-        notifyReconnecting(attempt, delay, cause);
+        fireReconnectingEvent(attempt, delay, cause);
 
         scheduler.schedule(() -> {
             if (closed || reconnectSuppressed) {
@@ -395,7 +395,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
             connection.disconnect();
             requestManager.fail(new ConnectionException("client disconnected"));
             diagnostics.recordConnectionStateChange(ConnectionState.DIS_CONNECTED);
-            notifyDisconnected(null);
+            fireDisconnectedEvent(null);
         } finally {
             lifecycleLock.unlock();
         }
@@ -429,7 +429,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
         Objects.requireNonNull(timeout, "timeout");
         Objects.requireNonNull(idempotency, "idempotency");
 
-        notifyInterceptorsBeforeRequest(command, idempotency);
+        fireInterceptorsBeforeRequestEvent(command, idempotency);
         long startNanos = System.nanoTime();
         String cmdSummary = command.toString();
         diagnostics.recordRequestSent(cmdSummary, startNanos);
@@ -442,7 +442,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
                 Response response = executeOnce(requestContext);
                 Duration latency = Duration.ofNanos(System.nanoTime() - startNanos);
                 diagnostics.recordRequestCompleted(cmdSummary, true, latency);
-                notifyInterceptorsAfterResponse(command, response, latency);
+                fireInterceptorsAfterResponseEvent(command, response, latency);
                 return response;
             } catch (Exception e) {
                 // 只对明确的连接故障执行自动重试；参数错误、并发占用、响应超时等不应被误当作网络故障。
@@ -452,7 +452,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
                     || attempts >= reconnectPolicy.maxAttempts()) {
                     diagnostics.recordRequestCompleted(cmdSummary, false, Duration.ZERO);
                     diagnostics.recordError(e.getClass().getSimpleName() + ": " + e.getMessage());
-                    notifyInterceptorsAfterFailure(command, e);
+                    fireInterceptorsAfterFailureEvent(command, e);
                     throw e;
                 }
                 attempts++;
@@ -569,7 +569,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
             decoder.reset();
             connection.connect();
             startReceiver();
-            notifyConnected();
+            fireConnectedEvent();
         } catch (ConnectionException e) {
             throw e;
         } finally {
@@ -706,7 +706,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
         }
     }
 
-    private void notifyInterceptorsBeforeRequest(Command command, CommandIdempotency idempotency) {
+    private void fireInterceptorsBeforeRequestEvent(Command command, CommandIdempotency idempotency) {
         for (var interceptor : interceptors) {
             try {
                 interceptor.beforeRequest(command, idempotency);
@@ -716,7 +716,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
         }
     }
 
-    private void notifyInterceptorsAfterResponse(Command command, Response response, Duration latency) {
+    private void fireInterceptorsAfterResponseEvent(Command command, Response response, Duration latency) {
         for (var interceptor : interceptors) {
             try {
                 interceptor.afterResponse(command, response, latency);
@@ -726,7 +726,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
         }
     }
 
-    private void notifyInterceptorsAfterFailure(Command command, Throwable throwable) {
+    private void fireInterceptorsAfterFailureEvent(Command command, Throwable throwable) {
         for (var interceptor : interceptors) {
             try {
                 interceptor.afterFailure(command, throwable);
@@ -736,25 +736,25 @@ public final class InstrumentClientImpl implements InstrumentClient {
         }
     }
 
-    private void notifyConnected() {
+    private void fireConnectedEvent() {
         for (var l : connectionListeners) {
             try { l.onConnected(); } catch (Throwable ignored) {}
         }
     }
 
-    private void notifyDisconnected(Throwable cause) {
+    private void fireDisconnectedEvent(Throwable cause) {
         for (var l : connectionListeners) {
             try { l.onDisconnected(cause); } catch (Throwable ignored) {}
         }
     }
 
-    private void notifyReconnecting(int attempt, Duration delay, Throwable cause) {
+    private void fireReconnectingEvent(int attempt, Duration delay, Throwable cause) {
         for (var l : connectionListeners) {
             try { l.onReconnecting(attempt, delay, cause); } catch (Throwable ignored) {}
         }
     }
 
-    private void notifyReconnectFailed(Throwable cause) {
+    private void fireReconnectFailedEvent(Throwable cause) {
         for (var l : connectionListeners) {
             try { l.onReconnectFailed(cause); } catch (Throwable ignored) {}
         }
