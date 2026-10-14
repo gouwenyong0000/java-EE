@@ -94,7 +94,6 @@ final class Receiver implements Runnable {
      */
     @Override
     public void run() {
-        running = true;
         log.debug("receiver started, bufferSize={}", buffer.length);
 
         try {
@@ -120,6 +119,9 @@ final class Receiver implements Runnable {
 
                 List<com.example.instrument.core.model.Response> frames = decoder.decode(buffer, 0, n);
                 for (var frame : frames) {
+                    if (!running) {
+                        break;
+                    }
                     dispatcher.dispatch(frame);
                 }
             }
