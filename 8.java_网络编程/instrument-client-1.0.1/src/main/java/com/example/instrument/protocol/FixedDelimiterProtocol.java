@@ -198,7 +198,7 @@ public final class FixedDelimiterProtocol implements Protocol {
                 byte[] body = Arrays.copyOfRange(bytes, start, pos);
                 out.add(new Response(frame, body));
 
-                start = frameEnd;// 更新起始位置，跳过当前帧
+                start = frameEnd;// 更新起始位置，继续查找下一个分隔符
             }
 
             // 保留未处理的字节（可能是分隔符的一部分或不完整帧）
