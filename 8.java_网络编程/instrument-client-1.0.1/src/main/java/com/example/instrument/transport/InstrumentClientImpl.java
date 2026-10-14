@@ -275,9 +275,6 @@ public final class InstrumentClientImpl implements InstrumentClient {
 
         lifecycleLock.lock();
         try {
-            if (!connection.isConnected()) {
-                // 连接已断开
-            }
             log.warn("receiver failed on {}: {}", address, cause.toString());
             diagnostics.recordError("receiver: " + cause.toString());
             connection.disconnect();
