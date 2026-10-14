@@ -11,6 +11,7 @@ import java.util.Objects;
 
 /**
  * 行分隔符协议实现，使用指定的字节序列作为帧分隔符。
+ * 有状态的增量解码器
  *
  * <p>协议格式：</p>
  * <pre>
@@ -174,38 +175,42 @@ public final class FixedDelimiterProtocol implements Protocol {
 
             buffer.write(data, offset, length);
 
-            if (buffer.size() > max + delimiter.length) {
-                throw new ProtocolException("line frame exceeds max length: " + max);
-            }
-
-            byte[] bytes = buffer.toByteArray();
+            byte[] bytes = buffer.toByteArray();// 复制缓冲区数据，避免修改原始数据 包括 【本次+历史数据】
             List<Response> out = new ArrayList<>();
             int start = 0;
 
             while (true) {
-                int pos = indexOf(bytes, delimiter, start);
+                int pos = indexOf(bytes, delimiter, start);// 查找分隔符相对起始 偏移量
+
+                // 未找到
                 if (pos < 0) {
                     break;
+                }
+
+                // 检查帧长度是否超过最大限制
+                if (pos - start > max) {
+                    throw new ProtocolException("line frame exceeds max length: " + max);
                 }
 
                 int frameEnd = pos + delimiter.length;
                 byte[] frame = Arrays.copyOfRange(bytes, start, frameEnd);
                 byte[] body = Arrays.copyOfRange(bytes, start, pos);
                 out.add(new Response(frame, body));
-                start = frameEnd;
+
+                start = frameEnd;// 更新起始位置，跳过当前帧
             }
 
+            // 保留未处理的字节（可能是分隔符的一部分或不完整帧）
             if (start > 0) {
                 buffer.reset();
                 buffer.write(bytes, start, bytes.length - start);
             }
 
-            if (buffer.size() > max) {
-                throw new ProtocolException("line frame exceeds max length: " + max);
-            }
 
             return out;
         }
+
+  
 
         /**
          * 在字节数组中查找目标序列。

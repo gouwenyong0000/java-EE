@@ -109,6 +109,36 @@ class FixedDelimiterProtocolTest {
     }
 
     @Test
+    @DisplayName("粘包总长度可超过单帧上限 —— 每帧分别校验长度")
+    void stickyFramesRespectPerFrameLimit() {
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(4);
+        ProtocolDecoder d = p.newDecoder();
+
+        byte[] data = "1234\r\n5678\r\n".getBytes(StandardCharsets.UTF_8);
+        List<Response> results = d.decode(data, 0, data.length);
+
+        assertEquals(2, results.size());
+        assertEquals("1234", results.get(0).text(StandardCharsets.UTF_8));
+        assertEquals("5678", results.get(1).text(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("最大长度帧的分隔符拆包 —— 暂存分隔符前缀不计入帧体")
+    void maxLengthFrameWithFragmentedDelimiter() {
+        FixedDelimiterProtocol p = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8).withMaxFrameLength(4);
+        ProtocolDecoder d = p.newDecoder();
+
+        byte[] firstPart = "1234\r".getBytes(StandardCharsets.UTF_8);
+        assertTrue(d.decode(firstPart, 0, firstPart.length).isEmpty());
+
+        byte[] delimiterRemainder = "\n".getBytes(StandardCharsets.UTF_8);
+        List<Response> results = d.decode(delimiterRemainder, 0, delimiterRemainder.length);
+
+        assertEquals(1, results.size());
+        assertEquals("1234", results.get(0).text(StandardCharsets.UTF_8));
+    }
+
+    @Test
     @DisplayName("withMaxFrameLength 返回新实例 —— 原实例不受影响")
     void withMaxFrameLengthCreatesCopy() {
         FixedDelimiterProtocol original = FixedDelimiterProtocol.crlf(StandardCharsets.UTF_8);

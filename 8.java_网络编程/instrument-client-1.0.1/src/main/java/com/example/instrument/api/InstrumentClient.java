@@ -93,8 +93,8 @@ public interface InstrumentClient extends AutoCloseable {
     /**
      * 异步发送命令并返回 CompletableFuture。
      *
-     * 该方法在独立的线程池中执行请求，不会阻塞调用线程。
-     * 适用于需要并发发送多个请求的场景。
+     * 该方法在独立的线程池中执行请求，不会阻塞调用线程。多个异步请求可以并发提交，
+     * 但当前协议没有请求 ID，因此同一客户端上的请求会串行发送并等待响应。
      *
      * @param command    要发送的命令，不能为空
      * @param matcher    用于匹配响应的匹配器，不能为空

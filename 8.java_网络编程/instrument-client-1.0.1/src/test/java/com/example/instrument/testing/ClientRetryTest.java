@@ -18,6 +18,7 @@ import com.example.instrument.transport.reconnect.ReconnectConfig;
 
 import org.junit.jupiter.api.*;
 
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
@@ -235,5 +236,33 @@ class ClientRetryTest {
         int countAfterClose = reconnectCount.get();
         Thread.sleep(500);
         assertEquals(countAfterClose, reconnectCount.get(), "close 后不应再触发重连");
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("持续连接失败 —— 幂等请求按退避策略重试至配置上限")
+    void t05_idempotentRetryUsesBackoffAndAttemptLimit() throws Exception {
+        int unavailablePort;
+        try (ServerSocket unused = new ServerSocket(0)) {
+            unavailablePort = unused.getLocalPort();
+        }
+
+        client = InstrumentClients.tcp("localhost", unavailablePort, protocol,
+            ClientConfig.builder()
+                .connectTimeout(Duration.ofMillis(200))
+                .reconnect(new ReconnectConfig(true, 2, Duration.ofMillis(40), Duration.ofMillis(40), 0))
+                .build());
+
+        long startedAt = System.nanoTime();
+        assertThrows(ConnectionException.class, () -> client.request(
+            Command.text("IDN", StandardCharsets.UTF_8),
+            ResponseMatcher.any(),
+            Duration.ofSeconds(1),
+            CommandIdempotency.IDEMPOTENT
+        ));
+        long elapsedMillis = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+
+        assertTrue(elapsedMillis >= 70,
+            "两次失败的重连尝试都应应用 40ms 退避，实际耗时: " + elapsedMillis + "ms");
     }
 }

@@ -82,7 +82,6 @@ public final class InstrumentClientImpl implements InstrumentClient {
     private final ClientConfig config;
     private final TcpConnection connection;
     private final ProtocolEncoder encoder;
-    private final ProtocolDecoder decoder;
     private final RequestManager requestManager = new RequestManager();
     private final ClientMetrics metrics = new ClientMetrics();
     private final ClientDiagnostics diagnostics;
@@ -175,7 +174,6 @@ public final class InstrumentClientImpl implements InstrumentClient {
                         new ThreadPoolExecutor.AbortPolicy());
         this.connection = new TcpConnection(address, config);
         this.encoder = protocol.newEncoder();
-        this.decoder = protocol.newDecoder();
         this.diagnostics = new ClientDiagnostics(address);
         this.dispatcher = new ResponseDispatcher(requestManager, config, metrics);
         this.reconnectPolicy = new ReconnectPolicy(config.reconnect());
@@ -194,7 +192,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
      * <ul>
      *   <li><b>幂等性</b>：已连接时直接返回，不重复建立连接</li>
      *   <li><b>重连控制</b>：设置 reconnectSuppressed = false，解除重连抑制</li>
-     *   <li><b>状态重置</b>：decoder.reset() 在 startReceiver() 之前调用，避免用旧状态解码新数据</li>
+     *   <li><b>解码状态隔离</b>：startReceiver() 为新连接创建独立解码器，避免残留旧帧数据</li>
      * </ul>
      *
      * <h2>代码核心步骤</h2>
@@ -215,8 +213,6 @@ public final class InstrumentClientImpl implements InstrumentClient {
             // 建立 TCP 连接
             connection.connect();
 
-            // 重置解码器状态，清除旧连接的残留数据
-            decoder.reset();
             startReceiver();// 启动接收线程，开始读取 TCP 流
             reconnectAttempt = 0;// 成功连接后重置重连尝试次数
 
@@ -246,7 +242,7 @@ public final class InstrumentClientImpl implements InstrumentClient {
         if (old != null) {
             old.stop();
         }
-        Receiver r = new Receiver(connection, decoder, dispatcher, config.receiveBufferSize(), this::onReceiverFailure);
+        Receiver r = new Receiver(connection, protocol.newDecoder(), dispatcher,config.receiveBufferSize(), this::onReceiverFailure);
         receiver = r;
         Thread t = new Thread(r, "instrument-receiver");
         t.setDaemon(true);
@@ -420,8 +416,8 @@ public final class InstrumentClientImpl implements InstrumentClient {
      * <p>重试上限：最多重试 reconnectPolicy.maxAttempts() 次，
      * 超过上限后即使命令是 IDEMPOTENT 也会抛出异常。</p>
      *
-     * <p>注意：每次重试都会调用 reconnectForRetry()，这会断开旧连接、
-     * 建立新连接、重启接收线程。重试的延迟由重连策略的退避算法决定。</p>
+     * <p>每次重试都会按重连策略的退避延迟重新连接；连接成功后再重发命令。
+     * 重试只针对连接异常，不会因响应超时而重发。</p>
      */
     @Override
     public Response request(Command command, ResponseMatcher matcher, Duration timeout, CommandIdempotency idempotency) {
@@ -450,14 +446,37 @@ public final class InstrumentClientImpl implements InstrumentClient {
                 // 响应超时意味着设备可能已经执行命令，是否重试必须由调用方显式决定。
                 if (!(e instanceof ConnectionException)
                     || requestContext.idempotency() != CommandIdempotency.IDEMPOTENT
+                    || !reconnectPolicy.enabled()
                     || attempts >= reconnectPolicy.maxAttempts()) {
                     diagnostics.recordRequestCompleted(cmdSummary, false, Duration.ZERO);
                     diagnostics.recordError(e.getClass().getSimpleName() + ": " + e.getMessage());
                     fireInterceptorsAfterFailureEvent(command, e);
                     throw e;
                 }
-                attempts++;
-                reconnectForRetry();
+
+                ConnectionException retryFailure = (ConnectionException) e;
+                boolean reconnected = false;
+                while (attempts < reconnectPolicy.maxAttempts()) {
+                    attempts++;
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(reconnectPolicy.delay(attempts).toMillis());
+                        reconnectForRetry();
+                        reconnected = true;
+                        break;
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        retryFailure = new ConnectionException("request retry interrupted", interrupted);
+                        break;
+                    } catch (ConnectionException reconnectFailure) {
+                        retryFailure = reconnectFailure;
+                    }
+                }
+                if (!reconnected) {
+                    diagnostics.recordRequestCompleted(cmdSummary, false, Duration.ZERO);
+                    diagnostics.recordError(retryFailure.getClass().getSimpleName() + ": " + retryFailure.getMessage());
+                    fireInterceptorsAfterFailureEvent(command, retryFailure);
+                    throw retryFailure;
+                }
             }
         }
     }
@@ -567,7 +586,6 @@ public final class InstrumentClientImpl implements InstrumentClient {
             }
             reconnectSuppressed = false;
             connection.disconnect();
-            decoder.reset();
             connection.connect();
             startReceiver();
             fireConnectedEvent();
@@ -794,7 +812,6 @@ public final class InstrumentClientImpl implements InstrumentClient {
             Receiver r = receiver;
             if (r != null) r.stop();
             connection.close();
-            decoder.reset();
             requestManager.fail(new ConnectionException("client closed"));
             diagnostics.recordConnectionStateChange(ConnectionState.CLOSED);
         } finally {

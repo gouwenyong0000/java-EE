@@ -26,7 +26,7 @@ import java.util.function.Consumer;
  * <p>生命周期：</p>
  * <ol>
  *   <li>创建时指定连接、解码器、分发器等组件</li>
- *   <li>调用 start() 启动接收线程</li>
+ *   <li>由客户端将 Receiver 提交到接收线程执行</li>
  *   <li>接收线程持续读取数据，直到 stop() 被调用或连接断开</li>
  *   <li>发生错误时调用 errorHandler 回调</li>
  * </ol>
@@ -50,7 +50,7 @@ final class Receiver implements Runnable {
     private final ResponseDispatcher dispatcher;
     private final byte[] buffer;
     private final Consumer<Throwable> errorHandler;
-    private volatile boolean running;
+    private volatile boolean running = true;
 
     /**
      * 构造函数。
