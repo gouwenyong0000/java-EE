@@ -26,31 +26,44 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * InstrumentClient 接口的主要实现类。
  *
- * <p>架构概述：</p>
- * <p>该类是客户端的核心实现，整合了连接管理、协议编解码和请求处理。
- * 主要组件如下：</p>
+ * <h2>一、架构概述</h2>
+ * <p>该类是客户端的核心实现，整合了连接管理、协议编解码和请求处理。</p>
+ * <p>核心组件：</p>
  * <ul>
- *   <li>TcpConnection：底层 TCP 连接</li>
- *   <li>ProtocolEncoder/ProtocolDecoder：协议编解码</li>
- *   <li>RequestManager：请求生命周期管理</li>
- *   <li>ResponseDispatcher：响应分发</li>
- *   <li>Receiver：数据接收线程</li>
+ *   <li>TcpConnection：底层 TCP 连接管理</li>
+ *   <li>ProtocolEncoder/ProtocolDecoder：协议消息的编码与解码</li>
+ *   <li>RequestManager： Pending 请求的生命周期管理</li>
+ *   <li>ResponseDispatcher：将接收到的响应分发给对应的 Pending 请求</li>
+ *   <li>Receiver：独立线程，持续从 TCP 连接读取并解码数据</li>
+ *   <li>ReconnectPolicy：重连策略（指数退避+抖动）</li>
  * </ul>
  *
- * <p>线程模型：</p>
+ * <h2>二、线程模型</h2>
  * <ul>
- *   <li>主线程：发起请求、连接管理</li>
- *   <li>Receiver 线程：持续从连接读取数据并解码</li>
- *   <li>请求执行器：单线程池，执行异步请求</li>
- *   <li>重连调度器：单线程池，处理重连延迟</li>
+ *   <li><b>主线程</b>：发起 connect/disconnect/request 等操作</li>
+ *   <li><b>Receiver 线程</b>：Daemon 线程，持续从 TCP 流读取数据并通过 Dispatcher 分发</li>
+ *   <li><b>requestExecutor</b>：单线程池，执行 requestAsync() 的异步请求</li>
+ *   <li><b>scheduler</b>：单线程调度器，执行重连延迟任务</li>
  * </ul>
  *
- * <p>关键设计：</p>
+ * <h2>三、关键设计</h2>
  * <ul>
- *   <li>双锁策略：requestLock 用于请求级同步，lifecycleLock 用于连接生命周期同步</li>
- *   <li>幂等重试：IDEMPOTENT 命令在连接断开时会自动重试</li>
- *   <li>优雅关闭：使用 volatile 标志位协调各线程退出</li>
+ *   <li><b>双锁策略</b>：
+ *     <ul>
+ *       <li>requestLock 保护"检查 pending → 注册 → 写入命令"的原子操作，防止并发请求抢占响应通道</li>
+ *       <li>lifecycleLock 保护连接生命周期操作，防止多线程同时操作 Socket 导致状态不一致</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>幂等重试</b>：IDEMPOTENT 命令在连接异常时自动重连重试</li>
+ *   <li><b>优雅关闭</b>：volatile 标志位协调各线程有序退出</li>
+ *   <li><b>先注册后写入</b>：避免快速响在 write 返回前被误判为异步数据</li>
  * </ul>
+ *
+ * <h2>四、代码核心步骤</h2>
+ * <p><b>连接流程 (connect)</b>：检查关闭状态 → 解除重连抑制 → 建立 TCP → 重置解码器 → 启动接收线程 → 重置计数器</p>
+ * <p><b>请求流程 (executeOnce)</b>：检查 pending → 注册请求 → 写入命令 → 等待响应 → 超时/异常处理</p>
+ * <p><b>重连流程 (scheduleNextReconnect)</b>：检查上限 → 计算退避延迟 → 延迟调度 → connect 失败则递归重试</p>
+ * <p><b>关闭流程 (close)</b>：CAS 设置 closed → 停止接收线程 → 关闭连接 → 失败 pending 请求 → 关闭线程池</p>
  *
  * @see InstrumentClient
  * @see TcpConnection
@@ -61,6 +74,9 @@ public final class InstrumentClientImpl implements InstrumentClient {
 
     private static final Logger log = LoggerFactory.getLogger(InstrumentClientImpl.class);
 
+    /**
+     * ========== 核心组件（架构概述） ==========
+     */
     private final InetSocketAddress address;
     private final Protocol protocol;
     private final ClientConfig config;
@@ -74,21 +90,17 @@ public final class InstrumentClientImpl implements InstrumentClient {
     private final ReconnectPolicy reconnectPolicy;
 
     /**
-     * 双锁设计：
-     * - requestLock：保护"检查 pending → 注册 → 写入命令"这一原子操作，
-     *   防止并发请求互相抢占响应通道（协议没有请求 ID，只能串行匹配）。
-     * - lifecycleLock：保护连接生命周期（connect/disconnect/reconnect），
-     *   防止多线程同时操作 Socket 导致状态不一致。
+     * ========== 双锁策略（关键设计） ==========
+     * requestLock：保护"检查 pending → 注册 → 写入命令"的原子操作，防止并发请求抢占响应通道
+     * lifecycleLock：保护连接生命周期操作，防止多线程同时操作 Socket 导致状态不一致
      */
     private final ReentrantLock requestLock = new ReentrantLock(true);
     private final ReentrantLock lifecycleLock = new ReentrantLock(true);
 
     /**
-     * 线程池：
-     * - requestExecutor：单线程池，用于执行 requestAsync() 的异步请求，
-     *   避免阻塞调用方线程，同时保证异步请求之间不会互相干扰。
-     * - scheduler：单线程调度器，用于执行重连延迟任务，
-     *   确保重连尝试按退避策略有序进行。
+     * ========== 线程池（线程模型） ==========
+     * requestExecutor：单线程池，执行 requestAsync() 的异步请求，避免阻塞调用方线程
+     * scheduler：单线程调度器，执行重连延迟任务，确保重连按退避策略有序进行
      */
     private final ExecutorService requestExecutor;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -97,33 +109,44 @@ public final class InstrumentClientImpl implements InstrumentClient {
         return t;
     });
 
+    /**
+     * ========== 事件监听器（架构概述） ==========
+     */
     private final CopyOnWriteArrayList<ConnectionListener> connectionListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<ClientInterceptor> interceptors = new CopyOnWriteArrayList<>();
 
     /**
-     * 重连调度标志：CAS 原子操作确保同一时刻只有一个重连任务在调度中，
-     * 防止 receiver 线程和主线程同时触发重连导致重复调度。
+     * ========== 重连调度标志（关键设计） ==========
+     * CAS 原子操作确保同一时刻只有一个重连任务在调度中，防止重复调度
      */
     private final AtomicBoolean reconnectScheduled = new AtomicBoolean();
 
     /**
-     * 接收线程相关字段（volatile 保证跨线程可见性）：
-     * - receiver：当前活跃的接收器实例，disconnect/reconnect 时替换。
-     * - receiverThread：接收线程引用，用于调试和状态诊断。
+     * ========== 接收线程（线程模型） ==========
+     * receiver：当前活跃的接收器实例，disconnect/reconnect 时替换
+     * receiverThread：接收线程引用，用于调试和状态诊断
      */
     private volatile Receiver receiver;
     private volatile Thread receiverThread;
 
     /**
-     * 生命周期标志：
-     * - closed：终态标志，一旦为 true 则所有操作都应拒绝（CAS 保证只关闭一次）。
-     * - reconnectSuppressed：控制是否允许自动重连。
-     *   初始为 true（未连接时不重连），connect() 时设为 false，disconnect() 时设为 true。
-     *   用于区分"用户主动断开"和"网络异常断开"两种场景。
-     * - reconnectAttempt：当前重连尝试次数，每次成功连接后重置为 0。
+     * ========== 生命周期标志（关键设计） ==========
      */
+    /** closed：终态标志，CAS 保证只关闭一次*/
     private volatile boolean closed;
+
+    /**
+     * reconnectSuppressed：控制是否允许自动重连
+     * <p>控制场景：</p>
+     * <ul>
+     *   <li>true（抑制）：用户主动调用 disconnect()、close() 时设置，阻止自动重连</li>
+     *   <li>false（允许）：connect()、reconnectForRetry() 时设置，允许网络异常后自动重连</li>
+     * </ul>
+     * <p>初始值 true：未连接时不进行重连，只有显式调用 connect() 后才允许自动重连</p>
+     */
     private volatile boolean reconnectSuppressed = true;
+
+    /** reconnectAttempt：当前重连尝试次数，成功连接后重置为 0*/
     private volatile int reconnectAttempt;
 
     /**
