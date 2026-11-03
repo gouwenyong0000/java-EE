@@ -278,18 +278,18 @@ public final class TcpConnection implements Connection {
 
             Socket s = new Socket();
             try {
-                s.setTcpNoDelay(config.tcpNoDelay());
-                s.setKeepAlive(config.keepAlive());
-                s.setReceiveBufferSize(config.receiveBufferSize());
-                s.setSendBufferSize(config.sendBufferSize());
-                s.setSoTimeout(config.socketReadTimeoutMillis());
-                s.setReuseAddress(true);
+                s.setTcpNoDelay(config.tcpNoDelay());// 关闭 Nagle 算法，立即发送数据
+                s.setKeepAlive(config.keepAlive());// 保持连接，防止超时断开
+                s.setReceiveBufferSize(config.receiveBufferSize());// 设置接收缓冲区大小
+                s.setSendBufferSize(config.sendBufferSize());// 设置发送缓冲区大小
+                s.setSoTimeout(config.socketReadTimeoutMillis());// 设置读取超时时间
+                s.setReuseAddress(true);// 允许地址重用，用于快速重连
                 if (config.soLingerSeconds() >= 0) {
-                    s.setSoLinger(true, config.soLingerSeconds());
+                    s.setSoLinger(true, config.soLingerSeconds());// 设置 SO_LINGER 选项，用于连接关闭时的等待时间
                 }
 
-                long timeoutMillis = Math.max(1L, Math.min((long) Integer.MAX_VALUE, config.connectTimeout().toMillis()));
-                s.connect(address, (int) timeoutMillis);
+                long connectTimeoutMs = Math.max(1L, Math.min((long) Integer.MAX_VALUE, config.connectTimeout().toMillis()));
+                s.connect(address, (int) connectTimeoutMs);// 发起 TCP 三次握手，设置超时时间(毫秒)
 
                 // 先在局部变量中完成初始化，再一次性发布连接状态，避免失败时留下半初始化字段。
                 InputStream newInput = s.getInputStream();
