@@ -8,6 +8,7 @@ import com.example.instrument.core.metrics.ClientMetrics;
 import com.example.instrument.protocol.FixedDelimiterProtocol;
 import com.example.instrument.transport.tcp.Connection;
 
+import com.example.instrument.transport.tcp.ConnectionState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -2,7 +2,6 @@ package com.example.instrument.transport.tcp;
 
 import com.example.instrument.core.config.ClientConfig;
 import com.example.instrument.core.exception.ConnectionException;
-import com.example.instrument.transport.ConnectionState;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

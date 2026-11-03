@@ -1,7 +1,7 @@
 package com.example.instrument.core.diagnostics;
 
 import com.example.instrument.core.metrics.ClientMetrics;
-import com.example.instrument.transport.ConnectionState;
+import com.example.instrument.transport.tcp.ConnectionState;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;

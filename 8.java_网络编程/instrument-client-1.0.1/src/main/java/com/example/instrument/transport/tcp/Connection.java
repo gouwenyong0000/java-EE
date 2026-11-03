@@ -1,7 +1,5 @@
 package com.example.instrument.transport.tcp;
 
-import com.example.instrument.transport.ConnectionState;
-
 import java.io.IOException;
 
 /**
