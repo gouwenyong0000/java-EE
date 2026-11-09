@@ -8,60 +8,57 @@
 >
 > 目标是建立“数字表示 → 整数编码 → Java 类型规则 → 位运算 → 实际编解码 → 浮点数与网络字节序”的学习路径。
 
-## 新目录大纲
+## 修订后的目录
+
+> 本目录按正文现有内容重排。原文中“补充”“归档”等临时说明不再作为正式章节；“Java 解惑”独立放入附录，避免打断主线。
 
 ### 第一篇 基础篇：数字与进制表示
+1. 计算机中的 bit、Byte、机器数、真值与有符号/无符号数
+2. 进制表示与按权展开
+3. 二进制、八进制、十进制、十六进制的相互转换
+4. Java 进制字面量、字符串解析与格式化
+5. 科学计数法、`BigInteger` 与 `BigDecimal`
 
-1. 计算机数字基础：bit、Byte、机器数、真值、有符号数与无符号数
-2. 进制系统：十进制、二进制、八进制、十六进制及按权展开
-3. 进制转换：二进制、八进制、十进制、十六进制之间的转换
-4. Java 进制表示与转换：字面量、字符串解析、数值格式化
-5. 补充：科学计数法、BigInteger、BigDecimal 与进制转换常见问题
-
-### 第二篇 编码篇：整数机器表示
-
-6. 原码、反码、补码的定义与编码示例
-7. 补码的数学原理与形成过程
-8. 补码还原真值、位权与取值范围
+### 第二篇 编码篇：整数的机器表示
+6. 原码、反码、补码的定义与示例
+7. 补码的模运算原理、负数补码的求法
+8. 补码位权、真值还原与取值范围
 
 ### 第三篇 Java 数据类型篇
-
-9. Java 基本数据类型与位宽
-10. 数据类型宽化、窄化、符号扩展与零扩展
-11. Java 整数运算规则、溢出与字面量陷阱
-12. 补充：包装类与常用转换 API
-13. 补充：Java 类型转换、整数、浮点数及其他常见问题解惑
+9. Java 八种基本类型及其取值范围
+10. 整数类型的宽化、窄化、符号扩展与零扩展
+11. 整数与浮点数之间的转换
+12. 包装类、无符号 API 与数值转换
 
 ### 第四篇 位运算篇
-
-14. Java 位运算基础与运算符总览
-15. 逻辑位运算符：`&`、`|`、`^`、`~`
-16. 位移运算符：`<<`、`>>`、`>>>`
-17. 位掩码与特定位操作：置位、清零、翻转
-18. 位状态校验、连续/分散位字段与寄存器位
-19. 补充：常用运算符技巧
+13. Java 位运算规则与运算符总览
+14. 按位与、或、异或、取反
+15. 左移、算术右移、逻辑右移
+16. 位掩码：置位、清零、翻转、提取与校验
+17. 连续/分散位字段及寄存器位操作
 
 ### 第五篇 实战篇：Java 位运算应用
-
-20. 常用位运算技巧：奇偶、2 的幂、取模、除法、最低位 1、对齐等
-21. Java 字节操作：`0xFF`、有符号 byte、整数拆分与拼装
-22. 二进制数据编解码：`int`、`long` 与 `byte[]` 转换
-23. 位运算工具类与 JDK 源码案例
-24. 实际开发注意事项与典型应用
+18. `0xFF`、有符号 `byte` 与无符号字节处理
+19. 整数与 `byte[]` 的拆分、拼装
+20. `int`、`long`、`float` 与字节数组的转换
+21. 位运算技巧、对齐计算与 JDK 源码案例
+22. 实际开发注意事项
 
 ### 第六篇 进阶篇：浮点数与网络数据表示
+23. IEEE 754 浮点数结构与特殊值
+24. `float` 与 `byte[]` 互转
+25. 大端序、小端序与网络字节序
 
-25. IEEE 754 浮点数标准
-26. Float 与 byte 数组互相转换
-27. 字节序（Big-Endian / Little-Endian）与网络编程
+### 附录
+A. 《Java 解惑》相关谜题：溢出、字面量、移位、浮点数与类型转换
+B. 常见结论速查与易错点
+
 
 ---
 
 # 第一篇 基础篇：数字与进制表示
 
-## 基础篇 数字与表示
-
-### 第一章 计算机底层基础
+## 第一章 计算机底层基础
 
 #### 位（bit）与字节（byte）
 
@@ -98,21 +95,21 @@
 
 > 为什么需要将“真值”转化为“机器数（补码）”存储？
 >
-> 1. **统一加法器电路**：通过将减法转化为加上一个负数（即 `A - B = A + (-B)`），使得 CPU 内部只需要设计极其精简的加法器电路，而无需专门配备减法器。
+> 1. **简化整数加减运算电路**：在固定宽度补码运算中，减法可转化为加上减数的补码（`A - B = A + (-B)`，并丢弃最高位之外的进位），从而让加法器电路同时承担加法和减法。实际处理器仍可能有专门的加减控制逻辑，不能理解为 CPU 完全没有减法相关硬件。
 > 2. **消除“零”的歧义**：在原码和反码中，`+0` 和 `-0` 存在两种不同的二进制表现形式。采用补码后，`0` 的表示具有**唯一性**（即 `00000000`）。
 > 3. **扩展负数表示范围**：8位二进制的原码能表示的范围是 `[-127, +127]`，而补码消除了 `-0` 的浪费，使得 `10000000` 能够额外表示 `-128`，从而将范围扩展为 `[-128, +127]`。
 
 #### 无符号数与有符号数
 
 - **无符号数 (Unsigned)**：所有二进制位都用于表示数值大小，只能表示非负数（$\ge 0$）。
-- **有符号数 (Signed)**：最高位作为**符号位**（`0` 表示正数或零，`1` 表示负数）。
+- **有符号数 (Signed)**：本笔记讨论的 Java 整数采用二进制补码解释，最高位为权值为负的位（可直观称为符号位）：`0` 对应非负数，`1` 对应负数。注意，最高位为 1 的位模式并不意味着所有语言/类型都采用相同解释。
   - **Java 特性**：Java 中的 4 种整型（`byte, short, int, long`）**全部是有符号数**。若需要将其作为无符号数处理，需依赖包装类的特定 API（如 `Byte.toUnsignedInt(b)`）。
 
 
 
 
 
-### 第二章 进制系统详解
+## 第二章 进制系统详解
 
 #### 任意进制的数学表达（按权展开）
 
@@ -282,15 +279,34 @@ $$
 ###### Java 实现
 
 ```java
-public static double convert(String binary) {
-    if (!binary.contains(".")) return Integer.parseInt(binary, 2);
-    String[] parts = binary.split("\\.");
-    int integerValue = Integer.parseInt(parts[0], 2);
-    double frac = 0;
-    for (int i = 0; i < parts[1].length(); i++)
-        frac += (parts[1].charAt(i) - '0') * Math.pow(2, -(i + 1));
-    return integerValue + frac;
-}
+// 教学示例：仅处理非负、格式正确且整数部分可由 int 表示的二进制字符串。
+// 生产代码还应校验空串、多个小数点、非法字符、溢出及精度需求。
+    /**
+     * 二进制字符串转 double。
+     * 例如 "101.101" -> 5.625
+     */
+    public static double convert(String binary) {
+        String[] parts = binary.split("\\.", -1);
+        if (parts.length > 2 || parts[0].isEmpty()) {
+            throw new IllegalArgumentException("非法二进制数");
+        }
+        // 整数部分 原理：直接解析为十进制整数
+        int integerValue = Integer.parseInt(parts[0], 2);   
+        // 小数部分 原理：将每个二进制位乘以 2 的负指数，累加起来
+        double fraction = 0.0;
+        if (parts.length == 2) {
+            for (int i = 0; i < parts[1].length(); i++) {
+                char c = parts[1].charAt(i);
+                if (c != '0' && c != '1') {
+                    throw new IllegalArgumentException("非法二进制字符: " + c);
+                }
+                if (c == '1') {
+                    fraction += Math.scalb(1.0, -(i + 1));
+                }
+            }
+        }
+        return integerValue + fraction;
+    }
 ```
 
 ##### 十进制-->二进制数
@@ -423,7 +439,7 @@ public class DecimalToBinary {
   }
 
   public static String convert(String decimal) {
-    // 分割整数和小数部分
+  // 分割整数和小数部分
     String[] parts = decimal.split("\\.");
     String integerStr = parts[0];
     String fractionalStr = parts.length > 1 ? parts[1] : "";
@@ -887,8 +903,6 @@ $(N)comp = (N)inv + 1$
 
 
 
-<!-- 原文内容归档：第9—10章：类型转换、整数运算规则与相关示例；原始行 1034-1564 -->
-
 ### 数据类型宽化与窄化
 
 #### 位宽扩展
@@ -1227,7 +1241,7 @@ byte b = 57;//0x39
 int i = b; // i 的值为 57   0x39
 
 byte b1 = -71;//0xB9
-int i1 = b; // i 的值为 -71 0xFFFFFFB9
+int i1 = b1; // i 的值为 -71 0xFFFFFFB9
 补码：0xFFFFFFB9
 反码：0xFFFFFFB8
 原码：0x00000047 = 71
@@ -1336,93 +1350,11 @@ char c = (char)(b & 0xff);// char c = (char) b;为有符号扩展
 
 
 
-####  ((byte)0x90 == 0x90)?
+### 参考
 
-答案是不等的，尽管外表看起来是成立的，但是它却等于false。为了比较byte数值(byte)0x90和int数值0x90，Java通过拓宽原生类型将byte提升为int，然后比较这两个int数值。因为byte是一个有符号类型，所以这个转换执行的是符号扩展，将负的byte数值提升为了在数字上相等的int值（10010000?111111111111111111111111 10010000）。在本例中，该转换将(byte)0x90提升为int数值-112，它不等于int数值的0x90，即+144。
-
-> 0x90   表示int  144，补码：10010000  
->
-> (byte)0x90  :  强制转换成byte，截取后最高位成为符号位 ，表示值：-112
->
-> ((byte)0x90 == 0x90)： 强转后byte与int运行提升为int，符号位扩展后还是 -112 ！=144
-
-解决办法：使用一个屏蔽码来消除符号扩展的影响，从而将byte转型为int。
-
-```java
-((byte)0x90 & 0xff)== 0x90  
-```
-
-#### int整数相乘溢出
-
-我们计算一天中的微秒数：
-
-```java
-long microsPerDay = 24 * 60 * 60 * 1000 * 1000;// 正确结果应为：86400000000  
-System.out.println(microsPerDay);// 实际上为：500654080  
-```
-
-问题在于计算过程中溢出了。这个计算式完全是以int运算来执行的，并且只有在运算完成之后，其结果才被提升为long，而此时已经太迟：计算已经溢出。
-
-解决方法使计算表达式的第一个因子明确为long型，这样可以强制表达式中所有的后续计算都用long运算来完成，这样结果就不会溢出：
-
-```java
-long microsPerDay = 24L * 60 * 60 * 1000 * 1000;  
-```
-
-####  负的十六进制与八进制字面常量
-
-“数字字面常量”的类型都是int型，而不管他们是几进制，所以“2147483648”、“0x180000000（十六进制，共33位，所以超过了整数的取值范围）”字面常量是错误的，编译时会报超过[int的取值范围](https://so.csdn.net/so/search?q=int的取值范围&spm=1001.2101.3001.7020)了，所以要确定以long来表示
-
-“2147483648L”、“0x180000000L”。
-
-十进制字面常量只有一个特性，即所有的十进制字面常量都是正数，如果想写一个负的十进制，则需要在正的十进制字面常量前加上“-”即可。
-
-十六进制或八进制字面常量可就不一定是正数或负数，是正还是负，则要根据当前情况看：如果十六进制和八进制字面常量的最高位被设置成了1，那么它们就是负数：
-
-```java
-System.out.println(0x80);//128   
-//0x81看作是int型，最高位(第32位)为0，所以是正数  
-System.out.println(0x81);//129   
-System.out.println(0x8001);//32769  
-System.out.println(0x70000001);//1879048193   
-//字面量0x80000001为int型，最高位(第32位)为1，所以是负数  
-System.out.println(0x80000001);//-2147483647  
-//字面量0x80000001L强制转为long型，最高位（第64位）为0，所以是正数  
-System.out.println(0x80000001L);//2147483649  
-//最小int型  
-System.out.println(0x80000000);//-2147483648  
-//只要超过32位，就需要在字面常量后加L强转long，否则编译时出错  
-System.out.println(0x8000000000000000L);//-9223372036854775808  
-```
-
-从上面可以看出，十六进制的字面常量表示的是int型，如果超过32位，则需要在后面加“L”，否则编译过不过。如
-
-果为32，则为负int正数，超过32位，则为long型，但需明确指定为long。
-
-```java
-System.out.println(Long.toHexString(0x100000000L + 0xcafebabe));// cafebabe  
-```
-
-结果为什么不是0x1cafebabe？该程序执行的加法是一个混合类型的计算：左操作数是long型，而右操作数是int类型。为了执行该计算，Java将int类型的数值用拓宽原生类型转换提升为long类型，然后对两个long类型数值相加。因为int是有符号的整数类型，所以这个转换执行的是符号扩展。
-
-这个加法的右操作数0xcafebabe为32位，将被提升为long类型的数值0xffffffffcafebabeL，之后这个数值加上了左操
-
-作0x100000000L。当视为int类型时，经过符号扩展之后的右操作数的高32位是-1，而左操作数的第32位是1，两个数值相加得到了0：
-
-```java
-0x 0xffffffffcafebabeL
-+0x 0000000100000000L
------------------------------
-0x 00000000cafebabeL
-```
-
-如果要得到正确的结果0x1cafebabe，则需在第二个操作数组后加上“L”明确看作是正的long型即可，此时相加时拓
-
-展符号位就为0：
-
-```java
-System.out.println(Long.toHexString(0x100000000L + 0xcafebabeL));// 1cafebabe  
-```
++ 解惑3： int整数相乘溢出
++ 解惑24 字节与int超范围比较的隐式符号位扩展
++ 解惑5：十六进制字面量隐藏负数
 
 
 
@@ -1529,299 +1461,7 @@ double d  = num.doubleValue();
 
 
 
-## Java解惑
 
-### 解惑3： int整数相乘溢出
-
-本题与前文“[int 整数相乘溢出](#int整数相乘溢出)”重复，完整示例和解决方案统一保留在前文。
-
-### 解惑5：十六进制字面量隐藏负数
-
-本题与前文“[负的十六进制与八进制字面常量](#负的十六进制与八进制字面常量)”是同一知识点，完整案例、符号扩展过程和修正代码统一保留在前文。
-
-### 解惑6：多重转换——窄数字类型提升时的符号扩展与零扩展
-
-本题与前文“[窄数字类型提升至宽类型时使用符号位扩展还是零扩展](#窄数字类型提升至宽类型时使用符号位扩展还是零扩展)”内容重复，完整推导和示例统一保留在前文。本节不再重复全文。
-
-### 解惑24 字节与int超范围比较的隐式符号位扩展
-
-```java
-class BigDelight {
-    public static void main(String[] args) {
-        for (byte b = Byte.MIN_VALUE; b < Byte.MAX_VALUE; b++) {
-            if (b == 0x90)
-                System.out.print("Joy!");
-        }
-    }
-}
-```
-
-这个例子会打印什么呢？直觉上当然会打印的是Joy！但实际上==两边不会相等。
-
-
-
-简单地说， 0x90是一个int常量，它超出了byte数值的范围。这与直觉是相悖的，因为0x90是一个两位的十六进制字面常量，每一个十六进制位都占据4个比特的位置，所以整个数值也只占据8个比特，即1个byte。问题在于byte是有符号类型。常量0x90是一个正的最高位被置位的8位int数值。合法的byte数值是从-128到+127，但是int常量0x90等于+144。
-
-
-
-一个byte与一个int进行的比较是一个混合类型比较。如果你把byte数值想像为苹果，把int数值想像为桔子，那么该程序就是在拿苹果与桔子比较。请考虑表达式（（byte） 0x90 == 0x90），尽管外表看起来是成立的，但是它却等于false。为了比较byte数值(byte) 0x90和int数值0x90, Java通过拓宽原生类型转换将byte提升为 int[JLS 5.1.2]，然后比较这两个int数值。因为byte是一个有符号类型，所以这个转换执行的是符号扩展，将负的byte数值提升为了在数字上相等的int数值。在本例中，该转换将**`(byte)0x90`提升为int数值-112，**它不等于**int数值`0x90`，即+144**。
-
- 
-
-解决的办法有两种，一是把0x90装换为byte，这样这个值肯定是在Byte的最大值和最小值之间。第二种方法是以前提到过的通过 `(b & 0xff)`来实现无符号的扩展。混合类型比较真心害人。
-
-
-
-### **解惑27 变幻莫测的i值**
-
-
-
-与谜题26中的程序一样，下面的程序也包含了一个记录在终止前有多少次迭代的循环。与那个程序不同的是，这个程序使用的是左移操作符（<<）。你的任务照旧是要指出这个程序将打印什么。当你阅读这个程序时，请记住 Java 使用的是基于2的补码的二进制算术运算，因此-1在任何有符号的整数类型中（byte、short、int或long）的表示都是所有的位被置位：
-
-```java
-public class Shifty {
-  public static void main(String[] args) {
-    int i = 0;
-    while (-1 << i != 0)
-      i++;
-    System.out.println(i);
-  }
-}
-```
-
-
-
-常量-1是所有32位都被置位的int数值（0xffffffff）。左移操作符将0移入到由移位所空出的右边的最低位，因此表达式（-1 << i）将i最右边的位设置为0，并保持其余的32 - i位为1。很明显，这个循环将完成32次迭代，因为-1 << i对任何小于32的i来说都不等于0。你可能期望终止条件测试在i等于32时返回false，从而使程序打印32，**但是它打印的并不是32。实际上，它不会打印任何东西，而是进入了一个无限循环。**
-
-问题在于（-1 << 32）等于-1而不是0，**因为移位操作符之使用其右操作数的低5位作为移位长度，或者是低6位**，如果其左操作数是一个long类数值[JLS 15.19]。
-
-> 这条规则作用于全部的三个移位操作符：<<、>>和>>>。移位长度总是介于0到31之间，如果左操作数是long类型的，则介于0到63之间。这个长度是对32取余的，如果左操作数是long类型的，则对64取余。如果试图对一个int数值移位32位，或者是对一个long数值移位64位，都只能返回这个数值自身的值。没有任何移位长度可以让一个int数值丢弃其所有的32位，或者是让一个long数值丢弃其所有的64位。
-
-幸运的是，有一个非常容易的方式能够订正该问题。我们不是让-1重复地移位不同的移位长度，而是将前一次移位操作的结果保存起来，并且让它在每一次迭代时都向左再移1位。下面这个版本的程序就可以打印出我们所期望的32：
-
-```java
-public class Shifty {
-  public static void main(String[] args) {
-    int distance = 0;
-    for (int val = -1; val != 0; val <<= 1)
-      distance++;
-    System.out.println(distance);
-  }
-}
-```
-
-这个订正过的程序说明了一条普遍的原则：如果可能的话，移位长度应该是常量。如果移位长度紧盯着你不放，那么你让其值超过31，或者如果左操作数是long类型的，让其值超过63的可能性就会大大降低。当然，你并不可能总是可以使用常量的移位长度。当你必须使用一个非常量的移位长度时，请确保你的程序可以应付这种容易产生问题的情况，或者压根就不会碰到这种情况。
-
-前面提到的移位操作符的行为还有另外一个令人震惊的结果。很多程序员都希望具有负的移位长度的右移操作符可以起到左移操作符的作用，反之亦然。但是情况并非如此。右移操作符总是起到右移的作用，而左移操作符也总是起到左移的作用。负的移位长度通过只保留低5位而剔除其他位的方式被转换成了正的移位长度——如果左操作数是long类型的，则保留低6位。因此，如果要将一个int数值左移，其移位长度为-1，那么移位的效果是它被左移了31位。
-
-**总之，移位长度是对32取余的，或者如果左操作数是long类型的，则对64取余**。因此，使用任何移位操作符和移位长度，都不可能将一个数值的所有位全部移走。同时，我们也不可能用右移操作符来执行左移操作，反之亦然。如果可能的话，请使用常量的移位长度，如果移位长度不能设为常量，那么就要千万当心。
-语言设计者可能应该考虑将移位长度限制在从0到以位为单位的类型尺寸的范围内，并且修改移位长度为类型尺寸时的语义，让其返回0。尽管这可以避免在本谜题中所展示的混乱情况，但是它可能会带来负面的执行结果，因为Java的移位操作符的语义正是许多处理器上的移位指令的语义。
-
-```java
-System.out.println(1 << 35);
-System.out.println(1 << 3);
-// 两者结果相同
-
-System.out.println(1L << 35);
-System.out.println(1L << 3);
-// 两者结果不同
-```
-
-
-
-### 谜题28：循环者 毗邻的浮点数值增量小于 空隙
-
-下面的谜题以及随后的五个谜题对你来说是扭转了局面，它们不是向你展示某些代码，然后询问你这些代码将做些什么，它们要让你去写代码，但是数量会很少。这些谜题被称为“循环者（looper）”。你眼前会展示出一个循环，它看起来应该很快就终止的，而你的任务就是写一个变量声明，在将它作用于该循环之上时，使得该循环无限循环下去。例如，考虑下面的for循环：
-
-```java
-for (int i = start; i <= start + 1; i++) {}
-```
-
-看起来它好像应该只迭代两次，但是通过利用在谜题26中所展示的溢出行为，可以使它无限循环下去。下面的的声明就采用了这项技巧：
-
-```java
-int start = Integer.MAX_VALUE - 1;
-```
-
-
-
-现在该轮到你了。什么样的声明能够让下面的循环变成一个无限循环？
-`while (i == i + 1) {}`
-仔细查看这个while循环，它真的好像应该立即终止。一个数字永远不会等于它自己加1，对吗？嗯，如果这个数字是无穷大的，又会怎样呢？Java强制要求使用IEEE 754浮点数算术运算[IEEE 754]，它可以让你用一个double或float来表示无穷大。正如我们在学校里面学到的，无穷大加1还是无穷大。如果i在循环开始之前被初始化为无穷大，那么终止条件测试(i == i + 1)就会被计算为true，从而使循环永远都不会终止。
-
-你可以用任何被计算为无穷大的浮点算术表达式来初始化i，例如：
-`double i = 1.0 / 0.0;`
-不过，你最好是能够利用标准类库为你提供的常量：
-`double i = Double.POSITIVE_INFINITY;`
-
-
-
-事实上，你不必将i初始化为无穷大以确保循环永远执行。任何足够大的浮点数都可以实现这一目的，例如：
-`double i = 1.0e40;`
-这样做之所以可以起作用，是因为**一个浮点数值越大，它和其后继数值之间的间隔就越大。浮点数的这种分布是用固定数量的有效位来表示它们的必然结果。对一个足够大的浮点数加1不会改变它的值，因为1是不足以“填补它与其后继者之间的空隙”。**
-
-浮点数操作返回的是最接近其精确的数学结果的浮点数值。一旦毗邻的浮点数值之间的距离大于2，那么对其中的一个浮点数值加1将不会产生任何效果，因为其结果没有达到两个数值之间的一半。对于float类型，加1不会产生任何效果的最小级数是225，即33,554,432；而对于double类型，最小级数是254，大约是1.8 × 1016。
-毗邻的浮点数值之间的距离被称为一个ulp，它是“最小单位（unit in the last place）”的首字母缩写词。在5.0版中，引入了Math.ulp方法来计算float或double数值的ulp。
-
-总之，用一个double或一个float数值来表示无穷大是可以的。大多数人在第一次听到这句话时，多少都会有一点吃惊，可能是因为我们无法用任何整数类型来表示无穷大的原因。第二点，将一个很小的浮点数加到一个很大的浮点数上时，将不会改变大的浮点数的值。这过于违背直觉了，因为对实际的数字来说这是不成立的。我们应该记住二进制浮点算术只是对实际算术的一种近似。
-
-
-
-### 谜题29：Nan  一个不等于自身的数
-
-请提供一个对i的声明，将下面的循环转变为一个无限循环：
-
-```java
-while (i != i) {}
-```
-
-
-
-这个循环可能比前一个还要使人感到困惑。不管在它前面作何种声明，它看起来确实应该立即终止。一个数字总是等于它自己，对吗？
-对，但是IEEE 754浮点算术保留了一个特殊的值用来表示一个不是数字的数量[IEEE 754]。这个值就是NaN（“不是一个数字（Not a Number）”的缩写），对于所有没有良好的数字定义的浮点计算，例如0.0/0.0，其值都是它。规范中描述道，NaN不等于任何浮点数值，包括它自身在内[JLS 15.21.1]。因此，如果i在循环开始之前被初始化为NaN，那么终止条件测试(i != i)的计算结果就是true，循环就永远不会终止。很奇怪但却是事实。
-你可以用任何计算结果为NaN的浮点算术表达式来初始化i，例如：
-`double i = 0.0 / 0.0;`
-同样，为了表达清晰，你可以使用标准类库提供的常量：
-`double i = Double.NaN;`
-NaN还有其他的惊人之处。任何浮点操作，只要它的一个或多个操作数为NaN，那么其结果为NaN。这条规则是非常合理的，但是它却具有奇怪的结果。例如，下面的程序将打印false：
-
-```java
-class Test {
-  public static void main(String[] args) {
-    double i = 0.0 / 0.0;
-    System.out.println(i - i == 0);
-  }
-}
-```
-
-
-
-这条计算NaN的规则所基于的原理是：一旦一个计算产生了NaN，它就被损坏了，没有任何更进一步的计算可以修复这样的损坏。NaN值意图使受损的计算继续执行下去，直到方便处理这种情况的地方为止。
-总之，float和double类型都有一个特殊的NaN值，用来表示不是数字的数量。对于涉及NaN值的计算，其规则很简单也很明智，但是这些规则的结果可能是违背直觉的。
-
-
-
-### 谜题31：复合赋值隐式转换中的窄化宽化
-
-请提供一个对i的声明，将下面的循环转变为一个无限循环：
-
-```java
-while (i != 0) {
-  i >>>= 1;
-}
-```
-
-
-
-回想一下，**>>>=是对应于无符号右移操作符的赋值操作符。0被从左移入到由移位操作而空出来的位上，即使被移位的负数也是如此。**
-
-这个循环比前面三个循环要稍微复杂一点，因为其循环体非空。在其循环题中，i的值由它右移一位之后的值所替代。为了使移位合法，i必须是一个整数类型（byte、char、short、int或long）。无符号右移操作符把0从左边移入，因此看起来这个循环执行迭代的次数与最大的整数类型所占据的位数相同，即64次。如果你在循环的前面放置如下的声明，那么这确实就是将要发生的事情：
-`long i = -1; // -1L has all 64 bits set`
-
-
-
-你怎样才能将它转变为一个无限循环呢？解决本谜题的**关键在于`>>>=`是一个复合赋值操作符**。（复合赋值操作符包括`*=、/=、%=、+=、-=、<<=、>>=、>>>=、&=、^=和|=`。）有关混合操作符的一个不幸的事实是，**它们可能会自动地执行窄化原始类型转换**[JLS 15.26.2]，这种转换把一种数字类型转换成了另一种更缺乏表示能力的类型。**窄化原始类型转换可能会丢失级数的信息，或者是数值的精度[JLS 5.1.3]**。
-
-
-
-让我们更具体一些，假设你在循环的前面放置了下面的声明：
-`short i = -1;`
-因为i的初始值**（(short)0xffff）**是非0的，所以循环体会被执行。在执行**移位操作**时，**第一步是将i提升为int类型**。所有算数操作都会对short、byte和char类型的操作数执行这样的提升。这种提升是一个拓宽原始类型转换，因此没有任何信息会丢失。这种提升执行的是符号扩展，**因此所产生的int数值是0xffffffff**。然后，这个数值右移1位，但不使用符号扩展，**因此产生了int数值0x7fffffff**。最后，这个数值被存回到i中。**为了将int数值存入short变量，Java执行的是可怕的窄化原始类型转换，它直接将高16位截掉。这样就只剩下(short)0xffff了，我们又回到了开始处**。循环的第二次以及后续的迭代行为都是一样的，因此循环将永远不会终止。
-
-
-
-如果你将i声明为一个short或byte变量，并且初始化为任何负数，那么这种行为也会发生。如果你声明i为一个char，那么你将无法得到无限循环，因为char是无符号的，所以发生在移位之前的拓宽原始类型转换不会执行符号扩展。
-
-总之，**不要在short、byte或char类型的变量之上使用复合赋值操作符。因为这样的表达式执行的是混合类型算术运算，它容易造成混乱。更糟的是，它们执行将隐式地执行会丢失信息的窄化转型，其结果是灾难性的。**
-对语言设计者的教训是语言不应该自动地执行窄化转换。还有一点值得好好争论的是，Java是否应该禁止在short、byte和char变量上使用复合赋值操作符。
-
-
-
-### 谜题34：float类型和int转换问题
-
-与谜题26和27中的程序一样，下面的程序有一个单重的循环，它记录迭代的次数，并在循环终止时打印这个数。那么，这个程序会打印出什么呢？
-
-```java
-public class Count {
-  public static void main(String[] args) {
-    final int START = 2000000000;
-    int count = 0;
-    for (float f = START; f < START + 50; f++)
-      count++;
-    System.out.println(count);
-  }
-}
-```
-
-
-
-表面的分析也许会认为这个程序将打印50，毕竟，循环变量（f）被初始化为2,000,000,000，而终止值比初始值大50，并且这个循环具有传统的“半开”形式：它使用的是 < 操作符，这是的它包括初始值但是不包括终止值。
-
-然而，这种分析遗漏了关键的一点：**循环变量是float类型的，而非int类型的**。回想一下谜题28，很明显，增量操作（f++）不能正常工作。F的初始值接近于Integer.MAX_VALUE，因此它需要用31位来精确表示，而float类型只能提供24位的精度。**对如此巨大的一个float数值进行增量操作将不会改变其值**。因此，**这个程序看起来应该无限地循环下去，因为f永远也不可能解决其终止值。但是，如果你运行该程序，就会发现它并没有无限循环下去，事实上，它立即就终止了，并打印出0。怎么回事呢？**
-
-
-
-问题在于终止条件测试失败了，其方式与增量操作失败的方式非常相似。这个循环只有在循环索引f比(float)(START + 50)小的情况下才运行。在将一个int与一个float进行比较时，会自动执行从int到float的提升[JLS 15.20.1]。遗憾的是，这种提升是会导致精度丢失的三种拓宽原始类型转换的一种[JLS 5.1.2]。（另外两个是从long到float和从long到double。）
-
-f的初始值太大了，以至于在对其加上50，然后将结果转型为float时，所产生的数值等于直接将f转换成float的数值。换句话说，`(float)2000000000 == 2000000050`，因此表达式`f < START + 50`即使是在循环体第一次执行之前就是false，所以，循环体也就永远的不到机会去运行。
-订正这个程序非常简单，只需将循环变量的类型从float修改为int即可。这样就避免了所有与浮点数计算有关的不精确性：
-
-```java
-for (int f = START; f < START + 50; f++)
-     count++;
-```
-
-
-
-如果不使用计算机，你如何才能知道2,000,000,050与2,000,000,000有相同的float表示呢？关键是要观察到2,000,000,000有10个因子都是2：它是一个2乘以9个10，而每个10都是5×2。这意味着2,000,000,000的二进制表示是以10个0结尾的。50的二进制表示只需要6位，所以将50加到2,000,000,000上不会对右边6位之外的其他为产生影响。特别是，从右边数过来的第7位和第8位仍旧是0。提升这个31位的int到具有24位精度的float会在第7位和第8位之间四舍五入，从而直接丢弃最右边的7位。而最右边的6位是2,000,000,000与2,000,000,050位以不同之处，因此它们的float表示是相同的。
-
-
-
-这个谜题寓意很简单：**不要使用浮点数作为循环索引，因为它会导致无法预测的行为。如果你在循环体内需要一个浮点数，那么请使用int或long循环索引，并将其转换为float或double。在将一个int或long转换成一个float或double时，你可能会丢失精度，但是至少它不会影响到循环本身。当你使用浮点数时，要使用double而不是float，除非你肯定float提供了足够的精度，并且存在强制性的性能需求迫使你使用float。适合使用float而不是double的时刻是非常非常少的。**
-
-对语言设计者的教训，仍然是悄悄地丢失精度对程序员来说是非常令人迷惑的。请查看谜题31有关这一点的深入讨论。
-
-
-
-### 谜题59：整型字面常量的前面加上一个0；这会使它变成一个八进制字面常量
-
-下面的程序在计算一个int数组中的元素两两之间的差，将这些差置于一个集合中，然后打印该集合的尺寸大小。那么，这个程序将打印出什么呢？
-
-```java
-import java.util.*;
-public class Differences {
-  public static void main(String[ ] args) {
-    int vals[ ] = { 789, 678, 567, 456, 345, 234, 123, 012 };
-    Set diffs = new HashSet();
-    for (int i = 0; i < vals.length; i++)
-      for (int j = i; j < vals.length; j++)
-        diffs.add(vals[i] - vals[j]);
-    System.out.println(diffs.size());
-  }
-}
-```
-
-
-
-外层循环迭代数组中的每一个元素，而内层循环从外层循环当前迭代到的元素开始迭代到数组中的最后一个元素。因此，这个嵌套的循环将遍历数组中每一种可能的两两组合。（元素可以与其自身组成一对。）这个嵌套循环中的每一次迭代都计算了一对元素之间的差（总是正的），并将这个差存储到了集合中，集合是可以消除重复元素的。因此，本谜题就带来了一个问题，在由vals数组中的元素结成的对中，有多少唯一的正的差存在呢？
-
-当你仔细观察程序中的数组时，会发现其构成模式非常明显：**连续两个元素之间的差总是111**。因此，两个元素之间的差是它们在数组之间的偏移量之差的函数。如果两个元素是相同的，那么它们的差就是0；如果两个元素是相邻的，那么它们的差就是111；如果两个元素被另一个元素分割开了，那么它们的差就是222；以此类推。看起来不同的差的数量与元素间不同的距离的数量是相等的，也就是等于数组的尺寸，即8。**如果你运行该程序，就会发现它打印的是14。怎么回事呢？**
-
-
-
-
-
-上面的分析有一个小的漏洞。要想了解清楚这个缺陷，我们可以通过将println语句中的.size()这几个字符移除掉，来打印出集合中的内容。这么做会产生下面的输出：
-[111,222,446,557,668,113,335,444,779,224,0,333,555,666]
-这些数字并非都是111的倍数。在vals数组中肯定有两个毗邻的元素的差是113。如果你观察该数组的声明，不可能很清楚地发现原因所在：
-`int vals[ ] = { 789, 678, 567, 456, 345, 234, 123, 012 };`
-但是如果你打印数组的内容，你就会看见下面的内容：
-`[789,678,567,456,345,234,123,10]`
-为什么数组中的最后一个元素是10而不是12呢？**因为以0开头的整数类型字面常量将被解释成为八进制数值[JLS 3.10.1]。这个隐晦的结构是从C编程语言那里遗留下来东西**，C语言产生于1970年代，那时八进制比现在要通用得多。
-
-一旦你知道了012 == 10，就会很清楚为什么该程序打印出了14：有6个不涉及最后一个元素的唯一的非0差，有7个涉及最后一个元素的非0差，还有0，加在一起正好是14个唯一的差。订正该程序的方法更加明显：将八进制整型字面常量012替换为十进制整型字面常量12。如果你这么做了，该程序将打印出我们所期望的8。
-
-本谜题的教训很简单：千万不要在一个整型字面常量的前面加上一个0；这会使它变成一个八进制字面常量。有意识地使用八进制整型字面常量的情况相当少见，你应该对所有的这种特殊用法增加注释。对语言设计者来说，在决定应该包含什么特性时，应该考虑到其限制条件。当有所迟疑时，应该将它剔除在外。
 
 
 
@@ -2230,7 +1870,7 @@ System.out.println(-12 >>> 2);          // 1073741821
 
 > **Java中的无符号左移运算符**
 >
-> 与无符号右移不同，Java 中没有“<<<”运算符，因为逻辑 (<<) 和算术左移 (<<<) 操作是相同的。
+ > Java 没有 `<<<` 运算符。左移 `<<` 的右侧始终补 0；在固定宽度二进制运算中，所谓逻辑左移与算术左移的位移动作相同，因此无需另设运算符。
 
 
 
@@ -2601,8 +2241,6 @@ mask:  0b00101010
 
 # 第五篇 实战篇：Java 位运算应用
 
-<!-- 原文内容归档：第17—19章：开发注意事项、字节操作、转换工具类与 JDK 源码案例；原始行 1573-2051 -->
-
 ## 实战篇 Java中位运算的应用
 
 ### 开发注意事项
@@ -2945,50 +2583,92 @@ Term 4: 11111111 11111111 11111111 11010010
 
 ```java
 public class BitOperationsUtil {
-    
+
     /**
-     * byte[4] → int（大端）
+     * 将4字节数组转换为int类型
+     * @param b 长度为4的字节数组
+     * @param bigEndian true表示大端序（高位字节在前），false表示小端序（低位字节在前）
+     * @return 转换后的int值
+     * @throws IllegalArgumentException 如果字节数组长度不为4
      */
-    private static int byteArrayToInt(byte[] b) {
+    public static int byteArrayToInt(byte[] b, boolean bigEndian) {
         if (b.length != 4) {
             throw new IllegalArgumentException("The byte array must have a length of exactly 4");
         }
-        //这个函数将一个字节数组 b 中的四个字节按顺序组合成一个32位的整数。
-        // 每个字节通过左移操作符 << 与 accum 进行合并，然后使用按位或操作符 | 进行合并。
-        return ((b[0] & 0xFF) << 24) |
-                ((b[1] & 0xFF) << 16) |
-                ((b[2] & 0xFF) << 8) |
-                (b[3] & 0xFF);
+        if (bigEndian) {
+            // 大端序：字节数组的第一个字节是最高有效位
+            // b[0] << 24：将第一个字节左移24位到int的最高8位
+            // b[1] << 16：将第二个字节左移16位到int的次高8位
+            // b[2] << 8：将第三个字节左移8位到int的次低8位
+            // b[3]：第四个字节直接作为int的最低8位
+            // & 0xFF：将byte提升为int时避免符号扩展问题（byte为有符号类型，范围-128~127）
+            return ((b[0] & 0xFF) << 24) |
+                   ((b[1] & 0xFF) << 16) |
+                   ((b[2] & 0xFF) << 8) |
+                   (b[3] & 0xFF);
+        } else {
+            // 小端序：字节数组的第一个字节是最低有效位
+            // b[0]：第一个字节直接作为int的最低8位
+            // b[1] << 8：将第二个字节左移8位
+            // b[2] << 16：将第三个字节左移16位
+            // b[3] << 24：将第四个字节左移24位到int的最高8位
+            return (b[0] & 0xFF) |
+                   ((b[1] & 0xFF) << 8) |
+                   ((b[2] & 0xFF) << 16) |
+                   ((b[3] & 0xFF) << 24);
+        }
     }
 
     /**
-     *int → byte[4]（大端）
+     * 将int类型转换为4字节数组
+     * @param value 要转换的int值
+     * @param bigEndian true表示大端序（高位字节在前），false表示小端序（低位字节在前）
+     * @return 长度为4的字节数组
      */
-    public static byte[] intToByteArray(int value) {
-       return new byte[]{
-            (byte)((value >> 24) & 0xFF),
-            (byte)((value >> 16) & 0xFF),
-            (byte)((value >> 8) & 0xFF),
-            (byte)(value & 0xFF)
-        };
+    public static byte[] intToByteArray(int value, boolean bigEndian) {
+        byte[] b = new byte[4];
+        if (bigEndian) {
+            // 大端序：最高有效字节排在字节数组前面
+            // value >> 24：右移24位得到最高8位
+            // (byte) 强制转换将int截断为低8位（丢弃高位）
+            b[0] = (byte) (value >> 24);  // 提取最高8位
+            b[1] = (byte) (value >> 16);  // 提取次高8位
+            b[2] = (byte) (value >> 8);   // 提取次低8位
+            b[3] = (byte) value;          // 提取最低8位
+        } else {
+            // 小端序：最低有效字节排在字节数组前面
+            b[0] = (byte) value;          // 提取最低8位
+            b[1] = (byte) (value >> 8);   // 提取次低8位
+            b[2] = (byte) (value >> 16);  // 提取次高8位
+            b[3] = (byte) (value >> 24);  // 提取最高8位
+        }
+        return b;
     }
-    
-    //实现小端序（Little-Endian），则字节顺序会相反
-    public static byte[] intToByteArrayLE(int value) {
-       return new byte[]{
-            (byte)(value & 0xFF),
-            (byte)((value >> 8) & 0xFF),
-            (byte)((value >> 16) & 0xFF),
-            (byte)((value >> 24) & 0xFF)
-        };
-	}
 
     /**
-     *  byte[4] → float
+     * 将4字节数组转换为float类型（IEEE 754单精度浮点数）
+     * @param b 长度为4的字节数组
+     * @param bigEndian true表示大端序，false表示小端序
+     * @return 转换后的float值
      */
-    public static float bytesToFloat(byte[] b) {
-        int accum = byteArrayToInt(b);
-        return Float.intBitsToFloat(accum);
+    public static float bytesToFloat(byte[] b, boolean bigEndian) {
+        // 步骤1：先将字节数组转换为int（该int的位模式表示float）
+        int bits = byteArrayToInt(b, bigEndian);
+        // 步骤2：Float.intBitsToFloat将int的位模式按IEEE 754解释为float
+        return Float.intBitsToFloat(bits);
+    }
+
+    /**
+     * 将float类型转换为4字节数组（IEEE 754单精度浮点数）
+     * @param value 要转换的float值
+     * @param bigEndian true表示大端序，false表示小端序
+     * @return 长度为4的字节数组
+     */
+    public static byte[] floatToByteArray(float value, boolean bigEndian) {
+        // 步骤1：Float.floatToIntBits将float按IEEE 754转换为int位模式
+        int bits = Float.floatToIntBits(value);
+        // 步骤2：将int位模式转换为字节数组
+        return intToByteArray(bits, bigEndian);
     }
 }
 ```
@@ -2996,44 +2676,182 @@ public class BitOperationsUtil {
 测试
 
 ```java
-@Test
-    public void testBytesToFloat() {
-        // 测试用例1：正常情况
-        byte[] bytes = {0x01, 0x02, 0x03, 0x04};
-        float result = Bit2.bytesToFloat(bytes);
+package com.example.instrument;
 
-        assertEquals("The float value should be 16843009", 16843009f, result);
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("BitOperationsUtil 测试类")
+class BitOperationsUtilTest {
+
+    @Test
+    @DisplayName("大端序 byte[]→int：验证字节数组 {0x12,0x34,0x56,0x78} 转换为 int 0x12345678")
+    void testByteArrayToIntBigEndian() {
+        byte[] bytes = {(byte) 0x12, (byte) 0x34, (byte) 0x56, (byte) 0x78};
+        int result = BitOperationsUtil.byteArrayToInt(bytes, true);
+        assertEquals(0x12345678, result);
     }
 
     @Test
-    public void testByteArrayToInt() {
-        // 测试用例1：正常情况
-        byte[] bytes = {0x01, 0x02, 0x03, 0x04};
-        int result = Bit2.byteArrayToInt(bytes);
-        assertEquals(, "The int value should be 16843009", 16843009, result);
-
-
+    @DisplayName("小端序 byte[]→int：验证字节数组 {0x12,0x34,0x56,0x78} 转换为 int 0x78563412")
+    void testByteArrayToIntLittleEndian() {
+        byte[] bytes = {(byte) 0x12, (byte) 0x34, (byte) 0x56, (byte) 0x78};
+        int result = BitOperationsUtil.byteArrayToInt(bytes, false);
+        assertEquals(0x78563412, result);
     }
 
     @Test
-    public void testIntToByteArray() {
-        // 测试用例1：正常情况
-        int value = 16843009;
-        byte[] result = Bit2.intToByteArray(value);
-        assertArrayEquals("The byte array should be {1, 2, 3, 4}", new byte[]{(byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04}, result);
-
-        // 测试用例2：边界情况
-        value = 0;
-        result = Bit2.intToByteArray(value);
-        assertArrayEquals("The byte array should be {0, 0, 0, 0}", new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00}, result);
-
-        // 测试用例3：边界情况
-        value = Integer.MAX_VALUE;
-        result = Bit2.intToByteArray(value);
-        assertArrayEquals("The byte array should be {255, 255, 255, 255}", new byte[]{(byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff}, result);
+    @DisplayName("大端序 int→byte[]：验证 int 0x12345678 转换为字节数组 {0x12,0x34,0x56,0x78}")
+    void testIntToByteArrayBigEndian() {
+        byte[] result = BitOperationsUtil.intToByteArray(0x12345678, true);
+        assertEquals((byte) 0x12, result[0]);
+        assertEquals((byte) 0x34, result[1]);
+        assertEquals((byte) 0x56, result[2]);
+        assertEquals((byte) 0x78, result[3]);
     }
 
+    @Test
+    @DisplayName("小端序 int→byte[]：验证 int 0x12345678 转换为字节数组 {0x78,0x56,0x34,0x12}")
+    void testIntToByteArrayLittleEndian() {
+        byte[] result = BitOperationsUtil.intToByteArray(0x12345678, false);
+        assertEquals((byte) 0x78, result[0]);
+        assertEquals((byte) 0x56, result[1]);
+        assertEquals((byte) 0x34, result[2]);
+        assertEquals((byte) 0x12, result[3]);
+    }
+
+    @Test
+    @DisplayName("int 大端序往返转换：验证 int→byte[]→int 往返一致性，原始值 0xDEADBEEF")
+    void testIntRoundTripBigEndian() {
+        int original = 0xDEADBEEF;
+        byte[] bytes = BitOperationsUtil.intToByteArray(original, true);
+        int result = BitOperationsUtil.byteArrayToInt(bytes, true);
+        assertEquals(original, result);
+    }
+
+    @Test
+    @DisplayName("int 小端序往返转换：验证 int→byte[]→int 往返一致性，原始值 0xDEADBEEF")
+    void testIntRoundTripLittleEndian() {
+        int original = 0xDEADBEEF;
+        byte[] bytes = BitOperationsUtil.intToByteArray(original, false);
+        int result = BitOperationsUtil.byteArrayToInt(bytes, false);
+        assertEquals(original, result);
+    }
+
+    @Test
+    @DisplayName("大端序 byte[]→float：验证字节数组 {0x3F,0x80,0x00,0x00} 转换为 float 1.0f（IEEE 754）")
+    void testBytesToFloatBigEndian() {
+        byte[] bytes = {(byte) 0x3F, (byte) 0x80, (byte) 0x00, (byte) 0x00};
+        float result = BitOperationsUtil.bytesToFloat(bytes, true);
+        assertEquals(1.0f, result, 0.0f);
+    }
+
+    @Test
+    @DisplayName("小端序 byte[]→float：验证字节数组 {0x00,0x00,0x80,0x3F} 转换为 float 1.0f（IEEE 754 小端）")
+    void testBytesToFloatLittleEndian() {
+        byte[] bytes = {(byte) 0x00, (byte) 0x00, (byte) 0x80, (byte) 0x3F};
+        float result = BitOperationsUtil.bytesToFloat(bytes, false);
+        assertEquals(1.0f, result, 0.0f);
+    }
+
+    @Test
+    @DisplayName("大端序 float→byte[]：验证 float 1.0f 转换为字节数组 {0x3F,0x80,0x00,0x00}（IEEE 754）")
+    void testFloatToByteArrayBigEndian() {
+        byte[] result = BitOperationsUtil.floatToByteArray(1.0f, true);
+        assertEquals((byte) 0x3F, result[0]);
+        assertEquals((byte) 0x80, result[1]);
+        assertEquals((byte) 0x00, result[2]);
+        assertEquals((byte) 0x00, result[3]);
+    }
+
+    @Test
+    @DisplayName("小端序 float→byte[]：验证 float 1.0f 转换为字节数组 {0x00,0x00,0x80,0x3F}（IEEE 754 小端）")
+    void testFloatToByteArrayLittleEndian() {
+        byte[] result = BitOperationsUtil.floatToByteArray(1.0f, false);
+        assertEquals((byte) 0x00, result[0]);
+        assertEquals((byte) 0x00, result[1]);
+        assertEquals((byte) 0x80, result[2]);
+        assertEquals((byte) 0x3F, result[3]);
+    }
+
+    @Test
+    @DisplayName("float 大端序往返转换：验证 float→byte[]→float 往返一致性，原始值 3.1415926f")
+    void testFloatRoundTripBigEndian() {
+        float original = 3.1415926f;
+        byte[] bytes = BitOperationsUtil.floatToByteArray(original, true);
+        float result = BitOperationsUtil.bytesToFloat(bytes, true);
+        assertEquals(original, result, 0.0f);
+    }
+
+    @Test
+    @DisplayName("float 小端序往返转换：验证 float→byte[]→float 往返一致性，原始值 3.1415926f")
+    void testFloatRoundTripLittleEndian() {
+        float original = 3.1415926f;
+        byte[] bytes = BitOperationsUtil.floatToByteArray(original, false);
+        float result = BitOperationsUtil.bytesToFloat(bytes, false);
+        assertEquals(original, result, 0.0f);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, -1, 127, -128, 32767, -32768, 2147483647, -2147483648})
+    @DisplayName("int 边界值往返测试：验证 0, 1, -1, 127, -128, 32767, -32768, MAX_VALUE, MIN_VALUE 的往返转换一致性")
+    void testIntEdgeCases(int value) {
+        byte[] bigEndian = BitOperationsUtil.intToByteArray(value, true);
+        int bigEndianResult = BitOperationsUtil.byteArrayToInt(bigEndian, true);
+        assertEquals(value, bigEndianResult);
+
+        byte[] littleEndian = BitOperationsUtil.intToByteArray(value, false);
+        int littleEndianResult = BitOperationsUtil.byteArrayToInt(littleEndian, false);
+        assertEquals(value, littleEndianResult);
+    }
+
+    @ParameterizedTest
+    @ValueSource(floats = {0.0f, -0.0f, 1.0f, -1.0f, Float.MAX_VALUE, Float.MIN_VALUE, Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY})
+    @DisplayName("float 边界值往返测试：验证 0.0f, -0.0f, 1.0f, -1.0f, MAX_VALUE, MIN_VALUE, NaN, +∞, -∞ 的往返转换一致性")
+    void testFloatEdgeCases(float value) {
+        byte[] bigEndian = BitOperationsUtil.floatToByteArray(value, true);
+        float bigEndianResult = BitOperationsUtil.bytesToFloat(bigEndian, true);
+        if (Float.isNaN(value)) {
+            assertTrue(Float.isNaN(bigEndianResult));
+        } else {
+            assertEquals(value, bigEndianResult, 0.0f);
+        }
+
+        byte[] littleEndian = BitOperationsUtil.floatToByteArray(value, false);
+        float littleEndianResult = BitOperationsUtil.bytesToFloat(littleEndian, false);
+        if (Float.isNaN(value)) {
+            assertTrue(Float.isNaN(littleEndianResult));
+        } else {
+            assertEquals(value, littleEndianResult, 0.0f);
+        }
+    }
+
+    @Test
+    @DisplayName("异常处理测试：验证长度不为4的字节数组抛出 IllegalArgumentException")
+    void testByteArrayToIntInvalidLength() {
+        byte[] invalidBytes = {(byte) 0x12, (byte) 0x34};
+        assertThrows(IllegalArgumentException.class, () -> {
+            BitOperationsUtil.byteArrayToInt(invalidBytes, true);
+        });
+    }
+
+    @Test
+    @DisplayName("大小端对比测试：验证同一字节数组 {0x01,0x02,0x03,0x04} 大端序转换结果 0x01020304 与小端序转换结果 0x04030201 不同")
+    void testBigEndianVsLittleEndian() {
+        byte[] bytes = {(byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04};
+
+        int bigEndianResult = BitOperationsUtil.byteArrayToInt(bytes, true);
+        int littleEndianResult = BitOperationsUtil.byteArrayToInt(bytes, false);
+
+        assertEquals(0x01020304, bigEndianResult);
+        assertEquals(0x04030201, littleEndianResult);
+        assertNotEquals(bigEndianResult, littleEndianResult);
+    }
+}
 ```
 
 
@@ -3104,7 +2922,7 @@ public class BitOperationsUtil {
   - `n % 8` 等价于 `n & 7`（因为2^3 - 1 = 7）
     - 例：`15 % 8 = 7`，`15 & 7 = 7`（15的二进制`1111`，与`0111`按位与得`0111`）
 
-- **适用场景**：哈希表索引计算、循环数组下标、快速模运算等。
+- **适用场景**：哈希表索引计算、循环数组下标等。前提是模数为 2 的幂；对负数要明确采用 Java `%` 的“向零截断余数”还是数学意义上的非负模。
 
 > Hashmap扩容：hash值对数组长度（2的幂次）取余计算索引位置
 >
@@ -3145,7 +2963,7 @@ public class BitOperationsUtil {
 #### 3. **判断是否为2的幂**
 
 - **原理**：2的幂的二进制只有一个1，其余位为0（如4=`100`，8=`1000`）。`n & (n-1)`可以清除最低位的1，如果结果为0，则`n`是2的幂。
-- **公式**：`n & (n-1) == 0`（且`n > 0`）
+- **公式**：`(n & (n - 1)) == 0`（且 `n > 0`）。Java 中应使用括号明确运算顺序。
 - **例子**：
   - `8 & 7 = 0`（8的二进制`1000`，7是`0111`，结果`0000`，是2的幂）
   - `6 & 5 = 4`（6的二进制`110`，5是`101`，结果`100`，不是2的幂）
@@ -3206,7 +3024,7 @@ public class BitOperationsUtil {
 
 #### 9. 对齐 N 字节
 
-**位运算写法（O (1) 最优解，无乘法除法，最快）**
+**位运算写法（常见的常数时间写法）**
 
 ```java
 // 核心公式：向上 8 字节对齐
@@ -3283,8 +3101,9 @@ int aligned = ((size + 7) / 8) * 8;
 int aligned = (size + 7) & ~7;
 ```
 
-- 位运算**无除法、无乘法**，是底层操作，性能远超算术运算
-- 嵌入式、网络编程、高性能框架**全部使用位运算对齐**
+- 位运算写法能清晰表达“向上对齐到 2 的幂边界”的操作。
+- 不应笼统声称它一定比乘除法快；JIT 可能优化两种写法，实际性能取决于平台、上下文和编译结果。
+- 该公式要求 `N` 为正的 2 的幂，并且 `size + N - 1` 不发生整数溢出；若输入可能为负数或接近类型上限，应先校验，或使用 `long` 并进行溢出检查。
 
 ------
 
@@ -3294,6 +3113,366 @@ int aligned = (size + 7) & ~7;
 2. 适用：`long` 数组、内存缓冲区、网络包、二进制协议对齐
 3. 通用公式：`(size + N-1) & ~(N-1)`（N 必须是 2 的幂）
 4. 优点：极快、简洁、底层通用
+
+# Java解惑
+
+### 解惑3： int整数相乘溢出
+
+我们计算一天中的微秒数：
+
+```java
+long microsPerDay = 24 * 60 * 60 * 1000 * 1000;// 正确结果应为：86400000000  
+System.out.println(microsPerDay);// 实际上为：500654080  
+```
+
+问题在于计算过程中溢出了。这个计算式完全是以int运算来执行的，并且只有在运算完成之后，其结果才被提升为long，而此时已经太迟：计算已经溢出。
+
+解决方法使计算表达式的第一个因子明确为long型，这样可以强制表达式中所有的后续计算都用long运算来完成，这样结果就不会溢出：
+
+```java
+long microsPerDay = 24L * 60 * 60 * 1000 * 1000;  
+```
+
+
+
+### 解惑5：十六进制字面量隐藏负数
+
+“数字字面常量”的类型都是int型，而不管他们是几进制，所以“2147483648”、“0x180000000（十六进制，共33位，所以超过了整数的取值范围）”字面常量是错误的，编译时会报超过[int的取值范围](https://so.csdn.net/so/search?q=int的取值范围&spm=1001.2101.3001.7020)了，所以要确定以long来表示“2147483648L”、“0x180000000L”。
+
+十进制字面常量只有一个特性，即所有的十进制字面常量都是正数，如果想写一个负的十进制，则需要在正的十进制字面常量前加上“-”即可。
+
+十六进制或八进制字面常量可就不一定是正数或负数，是正还是负，则要根据当前情况看：如果十六进制和八进制字面常量的最高位被设置成了1，那么它们就是负数：
+
+```java
+System.out.println(0x80);//128   
+//0x81看作是int型，最高位(第32位)为0，所以是正数  
+System.out.println(0x81);//129   
+System.out.println(0x8001);//32769  
+System.out.println(0x70000001);//1879048193   
+//字面量0x80000001为int型，最高位(第32位)为1，所以是负数  
+System.out.println(0x80000001);//-2147483647  
+//字面量0x80000001L强制转为long型，最高位（第64位）为0，所以是正数  
+System.out.println(0x80000001L);//2147483649  
+//最小int型  
+System.out.println(0x80000000);//-2147483648  
+//只要超过32位，就需要在字面常量后加L强转long，否则编译时出错  
+System.out.println(0x8000000000000000L);//-9223372036854775808  
+```
+
+从上面可以看出，十六进制的字面常量表示的是int型，如果超过32位，则需要在后面加“L”，否则编译过不过。如
+
+果为32，则为负int正数，超过32位，则为long型，但需明确指定为long。
+
+```java
+System.out.println(Long.toHexString(0x100000000L + 0xcafebabe));// cafebabe  
+```
+
+结果为什么不是0x1cafebabe？该程序执行的加法是一个混合类型的计算：左操作数是long型，而右操作数是int类型。为了执行该计算，Java将int类型的数值用拓宽原生类型转换提升为long类型，然后对两个long类型数值相加。因为int是有符号的整数类型，所以这个转换执行的是符号扩展。
+
+这个加法的右操作数0xcafebabe为32位，将被提升为long类型的数值0xffffffffcafebabeL，之后这个数值加上了左操
+
+作0x100000000L。当视为int类型时，经过符号扩展之后的右操作数的高32位是-1，而左操作数的第32位是1，两个数值相加得到了0：
+
+```java
+0x 0xffffffffcafebabeL
++0x 0000000100000000L
+-----------------------------
+0x 00000000cafebabeL
+```
+
+如果要得到正确的结果0x1cafebabe，则需在第二个操作数组后加上“L”明确看作是正的long型即可，此时相加时拓
+
+展符号位就为0：
+
+```java
+System.out.println(Long.toHexString(0x100000000L + 0xcafebabeL));// 1cafebabe  
+```
+
+
+
+### 解惑6：多重转换——窄数字类型提升时的符号扩展与零扩展
+
+本题与前文“[窄数字类型提升至宽类型时使用符号位扩展还是零扩展](#窄数字类型提升至宽类型时使用符号位扩展还是零扩展)”内容重复，完整推导和示例统一保留在前文。本节不再重复全文。
+
+### 解惑24 字节与int超范围比较的隐式符号位扩展
+
+```java
+class BigDelight {
+    public static void main(String[] args) {
+        for (byte b = Byte.MIN_VALUE; b < Byte.MAX_VALUE; b++) {
+            if (b == 0x90)
+                System.out.print("Joy!");
+        }
+    }
+}
+```
+
+这个例子会打印什么呢？直觉上当然会打印的是Joy！但实际上==两边不会相等。
+
+
+
+简单地说， 0x90是一个int常量，它超出了byte数值的范围。这与直觉是相悖的，因为0x90是一个两位的十六进制字面常量，每一个十六进制位都占据4个比特的位置，所以整个数值也只占据8个比特，即1个byte。问题在于byte是有符号类型。常量0x90是一个正的最高位被置位的8位int数值。合法的byte数值是从-128到+127，但是int常量0x90等于+144。
+
+
+
+一个byte与一个int进行的比较是一个混合类型比较。如果你把byte数值想像为苹果，把int数值想像为桔子，那么该程序就是在拿苹果与桔子比较。请考虑表达式（（byte） 0x90 == 0x90），尽管外表看起来是成立的，但是它却等于false。为了比较byte数值(byte) 0x90和int数值0x90, Java通过拓宽原生类型转换将byte提升为 int[JLS 5.1.2]，然后比较这两个int数值。因为byte是一个有符号类型，所以这个转换执行的是符号扩展，将负的byte数值提升为了在数字上相等的int数值。在本例中，该转换将**`(byte)0x90`提升为int数值-112，**它不等于**int数值`0x90`，即+144**。
+
+ 
+
+解决的办法有两种，一是把0x90装换为byte，这样这个值肯定是在Byte的最大值和最小值之间。第二种方法是以前提到过的通过 `(b & 0xff)`来实现无符号的扩展。混合类型比较真心害人。
+
+
+
+### **解惑27 变幻莫测的i值**
+
+
+
+与谜题26中的程序一样，下面的程序也包含了一个记录在终止前有多少次迭代的循环。与那个程序不同的是，这个程序使用的是左移操作符（<<）。你的任务照旧是要指出这个程序将打印什么。当你阅读这个程序时，请记住 Java 使用的是基于2的补码的二进制算术运算，因此-1在任何有符号的整数类型中（byte、short、int或long）的表示都是所有的位被置位：
+
+```java
+public class Shifty {
+  public static void main(String[] args) {
+    int i = 0;
+    while (-1 << i != 0)
+      i++;
+    System.out.println(i);
+  }
+}
+```
+
+
+
+常量-1是所有32位都被置位的int数值（0xffffffff）。左移操作符将0移入到由移位所空出的右边的最低位，因此表达式（-1 << i）将i最右边的位设置为0，并保持其余的32 - i位为1。很明显，这个循环将完成32次迭代，因为-1 << i对任何小于32的i来说都不等于0。你可能期望终止条件测试在i等于32时返回false，从而使程序打印32，**但是它打印的并不是32。实际上，它不会打印任何东西，而是进入了一个无限循环。**
+
+问题在于（-1 << 32）等于-1而不是0，**因为移位操作符之使用其右操作数的低5位作为移位长度，或者是低6位**，如果其左操作数是一个long类数值[JLS 15.19]。
+
+> 这条规则作用于全部的三个移位操作符：<<、>>和>>>。移位长度总是介于0到31之间，如果左操作数是long类型的，则介于0到63之间。这个长度是对32取余的，如果左操作数是long类型的，则对64取余。如果试图对一个int数值移位32位，或者是对一个long数值移位64位，都只能返回这个数值自身的值。没有任何移位长度可以让一个int数值丢弃其所有的32位，或者是让一个long数值丢弃其所有的64位。
+
+幸运的是，有一个非常容易的方式能够订正该问题。我们不是让-1重复地移位不同的移位长度，而是将前一次移位操作的结果保存起来，并且让它在每一次迭代时都向左再移1位。下面这个版本的程序就可以打印出我们所期望的32：
+
+```java
+public class Shifty {
+  public static void main(String[] args) {
+    int distance = 0;
+    for (int val = -1; val != 0; val <<= 1)
+      distance++;
+    System.out.println(distance);
+  }
+}
+```
+
+这个订正过的程序说明了一条普遍的原则：如果可能的话，移位长度应该是常量。如果移位长度紧盯着你不放，那么你让其值超过31，或者如果左操作数是long类型的，让其值超过63的可能性就会大大降低。当然，你并不可能总是可以使用常量的移位长度。当你必须使用一个非常量的移位长度时，请确保你的程序可以应付这种容易产生问题的情况，或者压根就不会碰到这种情况。
+
+前面提到的移位操作符的行为还有另外一个令人震惊的结果。很多程序员都希望具有负的移位长度的右移操作符可以起到左移操作符的作用，反之亦然。但是情况并非如此。右移操作符总是起到右移的作用，而左移操作符也总是起到左移的作用。负的移位长度通过只保留低5位而剔除其他位的方式被转换成了正的移位长度——如果左操作数是long类型的，则保留低6位。因此，如果要将一个int数值左移，其移位长度为-1，那么移位的效果是它被左移了31位。
+
+**总之，移位长度是对32取余的，或者如果左操作数是long类型的，则对64取余**。因此，使用任何移位操作符和移位长度，都不可能将一个数值的所有位全部移走。同时，我们也不可能用右移操作符来执行左移操作，反之亦然。如果可能的话，请使用常量的移位长度，如果移位长度不能设为常量，那么就要千万当心。
+语言设计者可能应该考虑将移位长度限制在从0到以位为单位的类型尺寸的范围内，并且修改移位长度为类型尺寸时的语义，让其返回0。尽管这可以避免在本谜题中所展示的混乱情况，但是它可能会带来负面的执行结果，因为Java的移位操作符的语义正是许多处理器上的移位指令的语义。
+
+```java
+System.out.println(1 << 35);
+System.out.println(1 << 3);
+// 两者结果相同
+
+System.out.println(1L << 35);
+System.out.println(1L << 3);
+// 两者结果不同
+```
+
+
+
+### 谜题28：循环者 毗邻的浮点数值增量小于 空隙
+
+下面的谜题以及随后的五个谜题对你来说是扭转了局面，它们不是向你展示某些代码，然后询问你这些代码将做些什么，它们要让你去写代码，但是数量会很少。这些谜题被称为“循环者（looper）”。你眼前会展示出一个循环，它看起来应该很快就终止的，而你的任务就是写一个变量声明，在将它作用于该循环之上时，使得该循环无限循环下去。例如，考虑下面的for循环：
+
+```java
+for (int i = start; i <= start + 1; i++) {}
+```
+
+看起来它好像应该只迭代两次，但是通过利用在谜题26中所展示的溢出行为，可以使它无限循环下去。下面的的声明就采用了这项技巧：
+
+```java
+int start = Integer.MAX_VALUE - 1;
+```
+
+
+
+现在该轮到你了。什么样的声明能够让下面的循环变成一个无限循环？
+`while (i == i + 1) {}`
+仔细查看这个while循环，它真的好像应该立即终止。一个数字永远不会等于它自己加1，对吗？嗯，如果这个数字是无穷大的，又会怎样呢？Java强制要求使用IEEE 754浮点数算术运算[IEEE 754]，它可以让你用一个double或float来表示无穷大。正如我们在学校里面学到的，无穷大加1还是无穷大。如果i在循环开始之前被初始化为无穷大，那么终止条件测试(i == i + 1)就会被计算为true，从而使循环永远都不会终止。
+
+你可以用任何被计算为无穷大的浮点算术表达式来初始化i，例如：
+`double i = 1.0 / 0.0;`
+不过，你最好是能够利用标准类库为你提供的常量：
+`double i = Double.POSITIVE_INFINITY;`
+
+
+
+事实上，你不必将i初始化为无穷大以确保循环永远执行。任何足够大的浮点数都可以实现这一目的，例如：
+`double i = 1.0e40;`
+这样做之所以可以起作用，是因为**一个浮点数值越大，它和其后继数值之间的间隔就越大。浮点数的这种分布是用固定数量的有效位来表示它们的必然结果。对一个足够大的浮点数加1不会改变它的值，因为1是不足以“填补它与其后继者之间的空隙”。**
+
+浮点数操作返回的是最接近其精确的数学结果的浮点数值。一旦毗邻的浮点数值之间的距离大于2，那么对其中的一个浮点数值加1将不会产生任何效果，因为其结果没有达到两个数值之间的一半。对于float类型，加1不会产生任何效果的最小级数是225，即33,554,432；而对于double类型，最小级数是254，大约是1.8 × 1016。
+毗邻的浮点数值之间的距离被称为一个ulp，它是“最小单位（unit in the last place）”的首字母缩写词。在5.0版中，引入了Math.ulp方法来计算float或double数值的ulp。
+
+总之，用一个double或一个float数值来表示无穷大是可以的。大多数人在第一次听到这句话时，多少都会有一点吃惊，可能是因为我们无法用任何整数类型来表示无穷大的原因。第二点，将一个很小的浮点数加到一个很大的浮点数上时，将不会改变大的浮点数的值。这过于违背直觉了，因为对实际的数字来说这是不成立的。我们应该记住二进制浮点算术只是对实际算术的一种近似。
+
+
+
+### 谜题29：Nan  一个不等于自身的数
+
+请提供一个对i的声明，将下面的循环转变为一个无限循环：
+
+```java
+while (i != i) {}
+```
+
+
+
+这个循环可能比前一个还要使人感到困惑。不管在它前面作何种声明，它看起来确实应该立即终止。一个数字总是等于它自己，对吗？
+对，但是IEEE 754浮点算术保留了一个特殊的值用来表示一个不是数字的数量[IEEE 754]。这个值就是NaN（“不是一个数字（Not a Number）”的缩写），对于所有没有良好的数字定义的浮点计算，例如0.0/0.0，其值都是它。规范中描述道，NaN不等于任何浮点数值，包括它自身在内[JLS 15.21.1]。因此，如果i在循环开始之前被初始化为NaN，那么终止条件测试(i != i)的计算结果就是true，循环就永远不会终止。很奇怪但却是事实。
+你可以用任何计算结果为NaN的浮点算术表达式来初始化i，例如：
+`double i = 0.0 / 0.0;`
+同样，为了表达清晰，你可以使用标准类库提供的常量：
+`double i = Double.NaN;`
+NaN还有其他的惊人之处。任何浮点操作，只要它的一个或多个操作数为NaN，那么其结果为NaN。这条规则是非常合理的，但是它却具有奇怪的结果。例如，下面的程序将打印false：
+
+```java
+class Test {
+  public static void main(String[] args) {
+    double i = 0.0 / 0.0;
+    System.out.println(i - i == 0);
+  }
+}
+```
+
+
+
+这条计算NaN的规则所基于的原理是：一旦一个计算产生了NaN，它就被损坏了，没有任何更进一步的计算可以修复这样的损坏。NaN值意图使受损的计算继续执行下去，直到方便处理这种情况的地方为止。
+总之，float和double类型都有一个特殊的NaN值，用来表示不是数字的数量。对于涉及NaN值的计算，其规则很简单也很明智，但是这些规则的结果可能是违背直觉的。
+
+
+
+### 谜题31：复合赋值隐式转换中的窄化宽化
+
+请提供一个对i的声明，将下面的循环转变为一个无限循环：
+
+```java
+while (i != 0) {
+  i >>>= 1;
+}
+```
+
+
+
+回想一下，**>>>=是对应于无符号右移操作符的赋值操作符。0被从左移入到由移位操作而空出来的位上，即使被移位的负数也是如此。**
+
+这个循环比前面三个循环要稍微复杂一点，因为其循环体非空。在其循环题中，i的值由它右移一位之后的值所替代。为了使移位合法，i必须是一个整数类型（byte、char、short、int或long）。无符号右移操作符把0从左边移入，因此看起来这个循环执行迭代的次数与最大的整数类型所占据的位数相同，即64次。如果你在循环的前面放置如下的声明，那么这确实就是将要发生的事情：
+`long i = -1; // -1L has all 64 bits set`
+
+
+
+你怎样才能将它转变为一个无限循环呢？解决本谜题的**关键在于`>>>=`是一个复合赋值操作符**。（复合赋值操作符包括`*=、/=、%=、+=、-=、<<=、>>=、>>>=、&=、^=和|=`。）有关混合操作符的一个不幸的事实是，**它们可能会自动地执行窄化原始类型转换**[JLS 15.26.2]，这种转换把一种数字类型转换成了另一种更缺乏表示能力的类型。**窄化原始类型转换可能会丢失级数的信息，或者是数值的精度[JLS 5.1.3]**。
+
+
+
+让我们更具体一些，假设你在循环的前面放置了下面的声明：
+`short i = -1;`
+因为i的初始值**（(short)0xffff）**是非0的，所以循环体会被执行。在执行**移位操作**时，**第一步是将i提升为int类型**。所有算数操作都会对short、byte和char类型的操作数执行这样的提升。这种提升是一个拓宽原始类型转换，因此没有任何信息会丢失。这种提升执行的是符号扩展，**因此所产生的int数值是0xffffffff**。然后，这个数值右移1位，但不使用符号扩展，**因此产生了int数值0x7fffffff**。最后，这个数值被存回到i中。**为了将int数值存入short变量，Java执行的是可怕的窄化原始类型转换，它直接将高16位截掉。这样就只剩下(short)0xffff了，我们又回到了开始处**。循环的第二次以及后续的迭代行为都是一样的，因此循环将永远不会终止。
+
+
+
+如果你将i声明为一个short或byte变量，并且初始化为任何负数，那么这种行为也会发生。如果你声明i为一个char，那么你将无法得到无限循环，因为char是无符号的，所以发生在移位之前的拓宽原始类型转换不会执行符号扩展。
+
+总之，**不要在short、byte或char类型的变量之上使用复合赋值操作符。因为这样的表达式执行的是混合类型算术运算，它容易造成混乱。更糟的是，它们执行将隐式地执行会丢失信息的窄化转型，其结果是灾难性的。**
+对语言设计者的教训是语言不应该自动地执行窄化转换。还有一点值得好好争论的是，Java是否应该禁止在short、byte和char变量上使用复合赋值操作符。
+
+
+
+### 谜题34：float类型和int转换问题
+
+与谜题26和27中的程序一样，下面的程序有一个单重的循环，它记录迭代的次数，并在循环终止时打印这个数。那么，这个程序会打印出什么呢？
+
+```java
+public class Count {
+  public static void main(String[] args) {
+    final int START = 2000000000;
+    int count = 0;
+    for (float f = START; f < START + 50; f++)
+      count++;
+    System.out.println(count);
+  }
+}
+```
+
+
+
+表面的分析也许会认为这个程序将打印50，毕竟，循环变量（f）被初始化为2,000,000,000，而终止值比初始值大50，并且这个循环具有传统的“半开”形式：它使用的是 < 操作符，这是的它包括初始值但是不包括终止值。
+
+然而，这种分析遗漏了关键的一点：**循环变量是float类型的，而非int类型的**。回想一下谜题28，很明显，增量操作（f++）不能正常工作。F的初始值接近于Integer.MAX_VALUE，因此它需要用31位来精确表示，而float类型只能提供24位的精度。**对如此巨大的一个float数值进行增量操作将不会改变其值**。因此，**这个程序看起来应该无限地循环下去，因为f永远也不可能解决其终止值。但是，如果你运行该程序，就会发现它并没有无限循环下去，事实上，它立即就终止了，并打印出0。怎么回事呢？**
+
+
+
+问题在于终止条件测试失败了，其方式与增量操作失败的方式非常相似。这个循环只有在循环索引f比(float)(START + 50)小的情况下才运行。在将一个int与一个float进行比较时，会自动执行从int到float的提升[JLS 15.20.1]。遗憾的是，这种提升是会导致精度丢失的三种拓宽原始类型转换的一种[JLS 5.1.2]。（另外两个是从long到float和从long到double。）
+
+f的初始值太大了，以至于在对其加上50，然后将结果转型为float时，所产生的数值等于直接将f转换成float的数值。换句话说，`(float)2000000000 == 2000000050`，因此表达式`f < START + 50`即使是在循环体第一次执行之前就是false，所以，循环体也就永远的不到机会去运行。
+订正这个程序非常简单，只需将循环变量的类型从float修改为int即可。这样就避免了所有与浮点数计算有关的不精确性：
+
+```java
+for (int f = START; f < START + 50; f++)
+     count++;
+```
+
+
+
+如果不使用计算机，你如何才能知道2,000,000,050与2,000,000,000有相同的float表示呢？关键是要观察到2,000,000,000有10个因子都是2：它是一个2乘以9个10，而每个10都是5×2。这意味着2,000,000,000的二进制表示是以10个0结尾的。50的二进制表示只需要6位，所以将50加到2,000,000,000上不会对右边6位之外的其他为产生影响。特别是，从右边数过来的第7位和第8位仍旧是0。提升这个31位的int到具有24位精度的float会在第7位和第8位之间四舍五入，从而直接丢弃最右边的7位。而最右边的6位是2,000,000,000与2,000,000,050位以不同之处，因此它们的float表示是相同的。
+
+
+
+这个谜题寓意很简单：**不要使用浮点数作为循环索引，因为它会导致无法预测的行为。如果你在循环体内需要一个浮点数，那么请使用int或long循环索引，并将其转换为float或double。在将一个int或long转换成一个float或double时，你可能会丢失精度，但是至少它不会影响到循环本身。当你使用浮点数时，要使用double而不是float，除非你肯定float提供了足够的精度，并且存在强制性的性能需求迫使你使用float。适合使用float而不是double的时刻是非常非常少的。**
+
+对语言设计者的教训，仍然是悄悄地丢失精度对程序员来说是非常令人迷惑的。请查看谜题31有关这一点的深入讨论。
+
+
+
+### 谜题59：整型字面常量的前面加上一个0；这会使它变成一个八进制字面常量
+
+下面的程序在计算一个int数组中的元素两两之间的差，将这些差置于一个集合中，然后打印该集合的尺寸大小。那么，这个程序将打印出什么呢？
+
+```java
+import java.util.*;
+public class Differences {
+  public static void main(String[ ] args) {
+    int vals[ ] = { 789, 678, 567, 456, 345, 234, 123, 012 };
+    Set diffs = new HashSet();
+    for (int i = 0; i < vals.length; i++)
+      for (int j = i; j < vals.length; j++)
+        diffs.add(vals[i] - vals[j]);
+    System.out.println(diffs.size());
+  }
+}
+```
+
+
+
+外层循环迭代数组中的每一个元素，而内层循环从外层循环当前迭代到的元素开始迭代到数组中的最后一个元素。因此，这个嵌套的循环将遍历数组中每一种可能的两两组合。（元素可以与其自身组成一对。）这个嵌套循环中的每一次迭代都计算了一对元素之间的差（总是正的），并将这个差存储到了集合中，集合是可以消除重复元素的。因此，本谜题就带来了一个问题，在由vals数组中的元素结成的对中，有多少唯一的正的差存在呢？
+
+当你仔细观察程序中的数组时，会发现其构成模式非常明显：**连续两个元素之间的差总是111**。因此，两个元素之间的差是它们在数组之间的偏移量之差的函数。如果两个元素是相同的，那么它们的差就是0；如果两个元素是相邻的，那么它们的差就是111；如果两个元素被另一个元素分割开了，那么它们的差就是222；以此类推。看起来不同的差的数量与元素间不同的距离的数量是相等的，也就是等于数组的尺寸，即8。**如果你运行该程序，就会发现它打印的是14。怎么回事呢？**
+
+
+
+
+
+上面的分析有一个小的漏洞。要想了解清楚这个缺陷，我们可以通过将println语句中的.size()这几个字符移除掉，来打印出集合中的内容。这么做会产生下面的输出：
+[111,222,446,557,668,113,335,444,779,224,0,333,555,666]
+这些数字并非都是111的倍数。在vals数组中肯定有两个毗邻的元素的差是113。如果你观察该数组的声明，不可能很清楚地发现原因所在：
+`int vals[ ] = { 789, 678, 567, 456, 345, 234, 123, 012 };`
+但是如果你打印数组的内容，你就会看见下面的内容：
+`[789,678,567,456,345,234,123,10]`
+为什么数组中的最后一个元素是10而不是12呢？**因为以0开头的整数类型字面常量将被解释成为八进制数值[JLS 3.10.1]。这个隐晦的结构是从C编程语言那里遗留下来东西**，C语言产生于1970年代，那时八进制比现在要通用得多。
+
+一旦你知道了012 == 10，就会很清楚为什么该程序打印出了14：有6个不涉及最后一个元素的唯一的非0差，有7个涉及最后一个元素的非0差，还有0，加在一起正好是14个唯一的差。订正该程序的方法更加明显：将八进制整型字面常量012替换为十进制整型字面常量12。如果你这么做了，该程序将打印出我们所期望的8。
+
+本谜题的教训很简单：千万不要在一个整型字面常量的前面加上一个0；这会使它变成一个八进制字面常量。有意识地使用八进制整型字面常量的情况相当少见，你应该对所有的这种特殊用法增加注释。对语言设计者来说，在决定应该包含什么特性时，应该考虑到其限制条件。当有所迟疑时，应该将它剔除在外。
 
 
 
@@ -3361,7 +3540,7 @@ int aligned = (size + 7) & ~7;
 **步骤 3:  规格化 (Normalization) 并确定指数 (Exponent) 和尾数 (Mantissa)**
 
 - **规格化:** 将二进制数表示为 `1.xxxx... × 2^指数` 的形式。  将小数点左移 6 位，得到 `1.111011011101001... × 2^6`
-- **尾数 (Mantissa):**  小数点后的部分 `111011011101001...`  单精度尾数部分为 23 位，我们需要截取或舍入到 23 位。 假设我们截取前 23 位： `11101101110100100000000`
+- **尾数 (Fraction):** 小数点后的部分需要按 IEEE 754 规定的舍入规则舍入到 23 位，不能简单截断。以下手算过程只用于理解规格化，最终位模式以 Java 的 `Float.floatToRawIntBits` 验证为准。
 - **指数 (Exponent):**  指数是 6。  对于单精度浮点数，指数偏移量 (bias) 是 127。  所以，存储的指数值是 `6 + 127 = 133`。  133 的二进制是 `10000101`。
 
 **步骤 4:  组合符号位、指数和尾数**
@@ -3625,9 +3804,11 @@ public class FloatByteConverter {
 
 ---
 
-#### 3. JVM 内部一律采用大端序
+#### 3. Java 与 JVM 中的字节序
 
-Java 屏蔽了底层操作系统的字节序差异，**JVM 内部一律采用大端序**。当需要与外部 C/C++ 原生库（JNI）或特定文件流进行二进制交互时，需借助 `ByteBuffer` 调整字节序：
+不能说“JVM 内部一律采用大端序”。Java 语言规范定义数值类型的值与运算语义，并不要求所有 JVM 对象在物理内存中的字段布局采用某一种统一字节序；对象布局也不是 Java 程序可依赖的协议格式。
+
+`ByteBuffer` 新建时的默认字节序是 `BIG_ENDIAN`。在文件、网络协议或 JNI 交互中，应根据协议/对端约定显式设置字节序，而不是假设 JVM 或 CPU 的本地字节序：
 
 ```java
 ByteBuffer buffer = ByteBuffer.allocate(4);
@@ -3652,42 +3833,146 @@ System.out.printf("0x%08X%n", buffer.getInt());
 | `ByteOrder.nativeOrder()`        | 获取当前 JVM 运行平台的本地字节序 |
 
 
+---
 
+# 修订补充：准确性、边界条件与完备性说明
 
+本节集中补足原文中容易误解或缺少前提的内容。正文中的示例主要用于学习原理；涉及协议、文件格式和生产代码时，应按本节的边界条件处理。
 
+## 1. Java 位运算的类型提升规则
 
+- `byte`、`short`、`char` 在执行一元数值提升或多数二元数值运算前，会先提升为 `int`。
+- `int` 的移位结果类型是 `int`；`long` 的移位结果类型是 `long`。`byte`、`short`、`char` 左操作数移位前提升为 `int`。
+- 移位距离只取右操作数的低位：`int` 使用 `distance & 0x1F`（0～31），`long` 使用 `distance & 0x3F`（0～63）。负移位距离也按低位掩码处理，不会自动反向移动。
+- `&`、`|`、`^` 既可用于整数位运算，也可用于 `boolean` 逻辑运算；对 `boolean` 操作数时不进行逐位整数运算。
+- `&&`、`||` 是短路逻辑运算符，与 `&`、`|` 不同。
 
+## 2. 位索引、掩码与字段提取的边界
 
+以下约定均以最低有效位为第 0 位：
 
+```java
+// int：位索引必须在 0..31；long：位索引必须在 0..63
+static int setBit(int value, int bit) {
+    if (bit < 0 || bit >= Integer.SIZE) {
+        throw new IllegalArgumentException("bit must be in [0, 31]");
+    }
+    return value | (1 << bit);
+}
 
+static int clearBit(int value, int bit) {
+    if (bit < 0 || bit >= Integer.SIZE) {
+        throw new IllegalArgumentException("bit must be in [0, 31]");
+    }
+    return value & ~(1 << bit);
+}
 
+static int extractField(int value, int offset, int width) {
+    if (width <= 0 || width > 32 || offset < 0 || offset + width > 32) {
+        throw new IllegalArgumentException("invalid bit range");
+    }
+    // width == 32 时不能直接用 (1 << width) - 1，因为移位距离会按 32 取模。
+    int mask = width == 32 ? -1 : (1 << width) - 1;
+    return (value >>> offset) & mask;
+}
+```
 
+字段写入还需要先清除原字段，再写入新值；并且要校验待写入值是否超出字段宽度。对于跨越符号位的字段，通常使用 `>>>` 提取无符号位模式。
 
+## 3. 整数运算溢出与安全边界
 
+Java 的 `byte`、`short`、`int`、`long` 整数运算不会自动抛出溢出异常；结果按对应位宽的二进制补码规则回绕。需要检查溢出时可使用：
 
+```java
+int sum = Math.addExact(a, b);
+int product = Math.multiplyExact(a, b);
+long longSum = Math.addExact(x, y);
+```
 
+`Math.addExact`、`subtractExact`、`multiplyExact` 等在溢出时抛出 `ArithmeticException`。不要把“位运算不会溢出”当作普遍结论：左移同样会丢弃移出位，结果按固定宽度保留。
 
+## 4. 负数除法、右移与取模不能混为一谈
 
+Java 整数除法向 0 截断，余数与被除数同号；算术右移 `>>` 对负数相当于向负无穷方向舍弃低位。因此：
 
+```java
+System.out.println(-9 / 8);   // -1
+System.out.println(-9 >> 3);   // -2
+System.out.println(-9 % 8);   // -1
+System.out.println(-9 & 7);    // 7
+```
 
+所以 `n >> k` 只在非负数场景下可直接视为 `n / 2^k`；`n & (2^k - 1)` 与 `n % 2^k` 的等价关系也不能直接推广到负数。
 
+## 5. 字节拆分与拼装：明确无符号解释和字节序
 
+Java 的 `byte` 是有符号 8 位类型，取值范围为 -128～127。读取二进制协议中的一个字节，若希望得到 0～255，应先转成无符号整数：
 
+```java
+int unsignedByte = bytes[index] & 0xFF;
+// 等价 API：Byte.toUnsignedInt(bytes[index])
+```
 
+大端序 `int` 拼装示例：
 
+```java
+int value = ((bytes[0] & 0xFF) << 24)
+          | ((bytes[1] & 0xFF) << 16)
+          | ((bytes[2] & 0xFF) << 8)
+          |  (bytes[3] & 0xFF);
+```
 
+上面的表达式还原的是 32 位位模式；如果最高位为 1，作为 Java `int` 输出时显示为负数，这是有符号解释导致的，并不代表字节拼装错误。
 
+`ByteBuffer` 默认使用 `BIG_ENDIAN`，但协议代码建议显式指定：
 
+```java
+ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+int value = buffer.getInt();
+```
 
+不要把 CPU 本地字节序、JVM 对象布局、`ByteBuffer` 默认字节序和网络协议字节序混为一谈。网络协议常约定大端序，但最终必须以协议文档为准。
 
+## 6. IEEE 754：原文示例需要注意的精度问题
 
+- `float` 有 24 位有效二进制精度（含隐藏的最高有效位），`double` 有 53 位有效二进制精度。
+- `float` 的正规数、非正规数（subnormal）、正负零、正负无穷和 NaN 都属于 IEEE 754 的表示范围。指数全 0 且尾数非 0 表示非正规数，原文特殊值表应补上这一项。
+- `Float.floatToIntBits` 会把所有 NaN 规范化为规范 NaN 位模式；若要尽可能保留 NaN 的原始 payload，应了解并使用 `Float.floatToRawIntBits`。
+- `123.456f` 的 32 位位模式为 `0x42F6E979`。手工转换小数时不能简单“截取前 23 位”作为最终编码；IEEE 754 采用规定的舍入规则，最后一位可能因舍入而进位。
+- `float` 转 `double` 是精确拓宽（可以精确表示该 `float` 的值），但打印出的十进制结果可能显示出 `float` 原有的二进制近似值。
 
+建议用 Java 验证位模式：
 
+```java
+float f = 123.456f;
+int bits = Float.floatToRawIntBits(f);
+System.out.printf("0x%08X%n", bits); // 0x42F6E979
+```
 
+## 7. 原文中应避免的性能绝对化表述
 
+位运算常用于掩码、协议解析、哈希、对齐等场景，但不能一概声称“位运算一定比乘除法快”或“所有高性能框架全部使用位运算”。现代 JVM 的 JIT 编译器会优化常见表达式，性能结论应通过 JMH 等基准测试验证。优先选择语义清晰、边界明确的写法。
 
+## 8. 目录与内容完备性评估
 
+当前笔记的主线总体合理：进制基础 → 整数编码 → Java 类型规则 → 位运算 → 字节编解码 → 浮点数/字节序，符合由理论到实践的学习顺序。但原目录与正文并不完全对应，且“Java 解惑”插在实战篇与进阶篇之间，章节层级混乱。修订目录已将其移至附录。
 
+若目标是“Java 位运算与二进制编解码”系统笔记，建议后续补齐以下内容，避免把笔记误认为已经覆盖所有相关知识：
 
+1. **运算符优先级与括号习惯**：例如 `value & mask == 0` 不是正确写法，应写成 `(value & mask) == 0`。
+2. **字段提取与写入的完整模板**：连续位域的 offset、width、mask 计算；写入前清除旧值；输入范围检查。
+3. **`long` 位掩码与 64 位边界**：`1L << bit`、`Long.SIZE`、`Long.MIN_VALUE`；避免 `1 << 32` 这种移位距离陷阱。
+4. **整数解析边界**：`parseInt`、`parseUnsignedInt`、`parseLong`、`parseUnsignedLong` 的范围、进制参数和前缀处理。
+5. **协议编解码设计**：字段宽度、字节序、符号解释、长度校验、校验和/CRC、非法输入和缓冲区边界。
+6. **测试策略**：正负数、0、最小值/最大值、最高位为 1、全 0/全 1、长度不足/超长、大小端互逆、随机往返测试。
+7. **浮点数完整结构**：非正规数、舍入模式、NaN 比较规则、`-0.0` 与 `+0.0` 的区别。
 
+## 9. 重要勘误清单
 
+- “JVM 内部一律采用大端序”是错误表述，已改为 Java 数值语义与 `ByteBuffer` 字节序的区分。
+- “位运算通常一定比 `%`/乘除法快”属于没有依据的绝对化性能结论，已改为以语义和基准测试为准。
+- 补码的最高位应理解为负权位；“符号位”只是便于初学者理解的称呼，补码不是简单的符号位加绝对值。
+- 浮点数转整数不只是“截断”：Java 对 NaN、无穷大和超范围有限值有明确的 0/饱和规则；转成 `byte`、`short`、`char` 还会继续发生窄化。
+- 负数的 `>>`、`%` 与按掩码取模并不等价，必须明确适用范围。
+- 对齐公式 `(size + N - 1) & ~(N - 1)` 需要 `N` 是正的 2 的幂，并且加法不能溢出。
+- IEEE 754 特殊值说明应包含非正规数；手工构造浮点位模式必须考虑舍入，不能只截断尾数。
